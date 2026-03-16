@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 
@@ -53,13 +54,17 @@ def _run_pipeline(job_id: str, tif_path: str, tfw_path: str, job_dir: str):
         job.status = "taglio_tile"
         db.commit()
 
+        # Usa il modello sul disco persistente se disponibile
+        model_dir = UPLOAD_DIR  # model_best.pth viene scaricato qui all'avvio
+        cmd = [
+            sys.executable, CORE_SCRIPT,
+            "--tif",     tif_path,
+            "--tfw",     tfw_path,
+            "--outdir",  job_dir,
+            "--weights", model_dir,
+        ]
         result = subprocess.run(
-            [
-                "python", CORE_SCRIPT,
-                "--tif",    tif_path,
-                "--tfw",    tfw_path,
-                "--outdir", job_dir,
-            ],
+            cmd,
             capture_output=True,
             text=True,
         )
@@ -259,7 +264,7 @@ def download_result(
 # ---------------------------------------------------------------------------
 
 def _job_dict(j: models.Job) -> dict:
-    return {
+    d = {
         "id":               j.id,
         "status":           j.status,
         "tif_filename":     j.tif_filename,
@@ -269,3 +274,6 @@ def _job_dict(j: models.Job) -> dict:
         "created_at":       j.created_at.isoformat(),
         "completed_at":     j.completed_at.isoformat() if j.completed_at else None,
     }
+    if j.status == "errore":
+        d["log"] = j.log or "Nessun dettaglio disponibile."
+    return d
