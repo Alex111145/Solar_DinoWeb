@@ -1,0 +1,30 @@
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+# Database
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.9
+
+# Auth
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Payments
+stripe==10.10.0
+
+# Env vars
+python-dotenv==1.0.1
+
+# AI / inference (già installate nell'ambiente drone)
+# torch
+# detectron2
+# opencv-python
+# rasterio
+# numpy
+# pandas
+# geopandas
+# shapely
+# pyproj
+# simplekml

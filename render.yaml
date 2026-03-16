@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: solardino-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: PRICE_PER_PANEL
+        value: "0.01"
+      - key: PRICE_SINGLE_EUR
+        value: "15.00"
+      - key: PRICE_PACK5_EUR
+        value: "65.00"
+      - key: PRICE_PACK10_EUR
+        value: "120.00"
+      - key: PRICE_PACK20_EUR
+        value: "220.00"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_SINGLE
+        sync: false
+      - key: STRIPE_PRICE_PACK5
+        sync: false
+      - key: STRIPE_PRICE_PACK10
+        sync: false
+      - key: STRIPE_PRICE_PACK20
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: UPLOAD_DIR
+        value: "/opt/render/project/src/elaborazioni"
+    disk:
+      name: elaborazioni
+      mountPath: /opt/render/project/src/elaborazioni
+      sizeGB: 10
