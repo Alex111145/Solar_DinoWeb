@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -118,7 +120,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         ragione_sociale = rs,
         vat_number      = vat,
         password_hash   = auth_utils.hash_password(req.password),
-        credits         = 1,
+        credits         = 2,
         is_active       = True,
     )
     db.add(company)
@@ -137,7 +139,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(req: LoginRequest, db: Session = Depends(get_db)):
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     company = db.query(models.Company).filter(
         models.Company.email == req.email.lower().strip()
     ).first()
@@ -147,6 +149,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
     if not company.is_active:
         raise HTTPException(status_code=403, detail="Account disattivato. Contatta l'amministratore.")
+
+    # Salva IP (considera X-Forwarded-For per proxy/Render)
+    forwarded = request.headers.get("x-forwarded-for")
+    company.last_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
+    db.commit()
 
     token = auth_utils.create_token({"sub": str(company.id)})
     return {
@@ -162,13 +169,51 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(current: models.Company = Depends(auth_utils.get_current_company)):
     return {
-        "id": current.id,
-        "email": current.email,
-        "name": current.name,
-        "credits": current.credits,
-        "is_admin": current.email == auth_utils.ADMIN_EMAIL,
-        "created_at": current.created_at.isoformat(),
+        "id":              current.id,
+        "email":           current.email,
+        "name":            current.name,
+        "ragione_sociale": current.ragione_sociale or "",
+        "vat_number":      current.vat_number or "",
+        "credits":         current.credits,
+        "is_admin":        current.email == auth_utils.ADMIN_EMAIL,
+        "created_at":      current.created_at.isoformat(),
     }
+
+
+@router.delete("/me")
+def delete_account(
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    current.deleted_at = datetime.now(timezone.utc)
+    current.is_active  = False
+    db.commit()
+    return {"message": "Account eliminato"}
+
+
+@router.post("/change-email")
+def change_email(
+    body: dict,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    new_email = body.get("new_email", "").lower().strip()
+    password  = body.get("password", "")
+
+    if not new_email or "@" not in new_email:
+        raise HTTPException(status_code=400, detail="Email non valida")
+    if not auth_utils.verify_password(password, current.password_hash):
+        raise HTTPException(status_code=400, detail="Password errata")
+    if db.query(models.Company).filter(
+        models.Company.email == new_email,
+        models.Company.id != current.id,
+        models.Company.deleted_at.is_(None),
+    ).first():
+        raise HTTPException(status_code=400, detail="Email già in uso")
+
+    current.email = new_email
+    db.commit()
+    return {"message": "Email aggiornata"}
 
 
 @router.post("/change-password")

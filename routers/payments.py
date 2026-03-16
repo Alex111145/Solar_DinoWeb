@@ -1,9 +1,13 @@
 import os
+import shutil
+import uuid
 
 import stripe
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+import email_utils
 
 import auth_utils
 import models
@@ -137,3 +141,59 @@ async def stripe_webhook(
             db.close()
 
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Bonifico requests
+# ---------------------------------------------------------------------------
+
+RECEIPTS_DIR = os.getenv("UPLOAD_DIR", "elaborazioni") + "/ricevute"
+os.makedirs(RECEIPTS_DIR, exist_ok=True)
+
+
+@router.post("/bonifico-request", status_code=201)
+async def bonifico_request(
+    background_tasks: BackgroundTasks,
+    package: str = Form(...),
+    receipt: UploadFile = File(...),
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    pkg = PACKAGES.get(package)
+    if not pkg:
+        raise HTTPException(status_code=400, detail="Pacchetto non valido")
+
+    # Valida tipo file
+    allowed = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+    if receipt.content_type not in allowed:
+        raise HTTPException(status_code=400, detail="Formato non supportato. Usa JPG, PNG o PDF.")
+
+    # Salva ricevuta
+    ext = os.path.splitext(receipt.filename)[-1] or ".jpg"
+    filename = f"{current.id}_{uuid.uuid4().hex}{ext}"
+    path = os.path.join(RECEIPTS_DIR, filename)
+    with open(path, "wb") as f:
+        shutil.copyfileobj(receipt.file, f)
+
+    req = models.BonificoRequest(
+        company_id   = current.id,
+        package      = package,
+        credits      = pkg["credits"],
+        amount_eur   = pkg["price_eur"],
+        status       = "pending",
+        receipt_path = path,
+    )
+    db.add(req)
+    db.commit()
+
+    # Notifica email all'admin in background
+    background_tasks.add_task(
+        email_utils.notify_bonifico,
+        current.name,
+        current.email,
+        package,
+        pkg["price_eur"],
+        pkg["credits"],
+    )
+
+    return {"message": "Richiesta registrata. I crediti verranno accreditati dopo verifica del pagamento."}

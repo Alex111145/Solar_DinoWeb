@@ -25,16 +25,153 @@
   <div class="flex items-center gap-3">
     <span class="text-xl">☀️</span>
     <span class="font-bold text-white text-lg">SolarDino</span>
+    <button onclick="document.getElementById('infoModal').classList.remove('hidden')"
+      class="w-5 h-5 rounded-full bg-slate-700 border border-slate-600 text-slate-400 hover:text-white hover:border-amber-500 text-xs font-bold transition flex items-center justify-center">
+      i
+    </button>
   </div>
-  <div class="flex items-center gap-4">
+  <div class="flex items-center gap-3">
     <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
       <span class="text-amber-400 text-xs font-medium">Crediti:</span>
       <span id="creditsDisplay" class="text-amber-300 font-bold text-sm">—</span>
     </div>
-    <span id="userNameDisplay" class="text-slate-400 text-sm hidden md:block"></span>
-    <button onclick="logout()" class="text-slate-500 hover:text-red-400 text-sm transition">Esci</button>
+    <!-- Avatar profilo -->
+    <button onclick="toggleProfileMenu()" id="avatarBtn"
+      class="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-sm flex items-center justify-center transition relative">
+      <span id="avatarInitial">?</span>
+    </button>
   </div>
 </nav>
+
+<!-- ── PROFILE MODAL ── -->
+<div id="profileModal" class="hidden fixed inset-0 z-50 flex items-start justify-end px-4 pt-16" onclick="closeProfileIfOutside(event)">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[85vh] flex flex-col" onclick="event.stopPropagation()">
+
+    <!-- Header -->
+    <div class="bg-slate-900/60 px-6 py-5 flex items-center gap-4 border-b border-slate-700 flex-shrink-0">
+      <div class="w-12 h-12 rounded-full bg-amber-500 text-slate-900 font-bold text-lg flex items-center justify-center flex-shrink-0" id="profileAvatarBig">?</div>
+      <div class="min-w-0">
+        <p class="text-white font-semibold text-sm truncate" id="profileName">—</p>
+        <p class="text-slate-400 text-xs truncate" id="profileEmail">—</p>
+        <p class="text-amber-400 text-xs font-medium mt-0.5"><span id="profileCredits">—</span> crediti disponibili</p>
+      </div>
+      <button onclick="closeProfile()" class="ml-auto text-slate-500 hover:text-white transition text-lg flex-shrink-0">✕</button>
+    </div>
+
+    <!-- Sezioni scrollabili -->
+    <div class="p-4 space-y-2 overflow-y-auto">
+
+      <!-- Informazioni azienda -->
+      <details class="rounded-xl border border-slate-700 overflow-hidden">
+        <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer text-slate-300 hover:text-white hover:bg-slate-700/50 transition text-sm font-medium list-none">
+          <span>🏢</span> Informazioni azienda
+        </summary>
+        <div class="px-4 pb-4 pt-3 border-t border-slate-700 space-y-3">
+          <div>
+            <p class="text-slate-500 text-xs mb-0.5">Nome commerciale</p>
+            <p class="text-slate-200 text-sm font-medium" id="infoName">—</p>
+          </div>
+          <div>
+            <p class="text-slate-500 text-xs mb-0.5">Ragione sociale</p>
+            <p class="text-slate-200 text-sm font-medium" id="infoRagione">—</p>
+          </div>
+          <div>
+            <p class="text-slate-500 text-xs mb-0.5">Partita IVA</p>
+            <p class="text-slate-200 text-sm font-mono" id="infoVat">—</p>
+          </div>
+          <div>
+            <p class="text-slate-500 text-xs mb-0.5">Email</p>
+            <p class="text-slate-200 text-sm" id="infoEmail">—</p>
+          </div>
+          <div>
+            <p class="text-slate-500 text-xs mb-0.5">Account creato il</p>
+            <p class="text-slate-200 text-sm" id="infoCreatedAt">—</p>
+          </div>
+          <div class="pt-2 border-t border-slate-700/50">
+            <button onclick="cancelAccount()" class="w-full py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-sm transition">
+              🗑️ Elimina account
+            </button>
+            <div class="flex items-center justify-center gap-1.5 mt-1.5">
+              <p class="text-slate-600 text-xs">Potrai riaprirlo con la stessa Partita IVA.</p>
+              <div class="relative group">
+                <button class="w-4 h-4 rounded-full bg-slate-700 border border-slate-600 text-slate-500 text-xs font-bold flex items-center justify-center hover:border-amber-500 hover:text-amber-400 transition">i</button>
+                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-slate-900 border border-slate-600 rounded-xl px-3 py-2.5 text-xs text-slate-300 shadow-xl hidden group-hover:block z-50 pointer-events-none">
+                  <p class="font-semibold text-amber-400 mb-1">Attenzione</p>
+                  <p>Non riceverai il bonus di benvenuto (2 ortomosaici gratuiti) alla riapertura dell'account.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Cambia email -->
+      <details class="rounded-xl border border-slate-700 overflow-hidden">
+        <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer text-slate-300 hover:text-white hover:bg-slate-700/50 transition text-sm font-medium list-none">
+          <span>✉️</span> Cambia email
+        </summary>
+        <div class="px-4 pb-4 pt-3 space-y-3 border-t border-slate-700">
+          <input type="email" id="newEmailInput" placeholder="Nuova email" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
+          <input type="password" id="emailPwdInput" placeholder="Password attuale" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
+          <div id="emailMsg" class="hidden text-xs px-3 py-2 rounded-lg"></div>
+          <button onclick="changeEmail()" class="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition">Aggiorna email</button>
+        </div>
+      </details>
+
+      <!-- Cambia password -->
+      <details class="rounded-xl border border-slate-700 overflow-hidden">
+        <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer text-slate-300 hover:text-white hover:bg-slate-700/50 transition text-sm font-medium list-none">
+          <span>🔑</span> Cambia password
+        </summary>
+        <div class="px-4 pb-4 pt-3 space-y-3 border-t border-slate-700">
+          <input type="password" id="oldPwdInput" placeholder="Password attuale" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
+          <input type="password" id="newPwdInput" placeholder="Nuova password (min 8 caratteri)" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
+          <div id="pwdMsg" class="hidden text-xs px-3 py-2 rounded-lg"></div>
+          <button onclick="changePassword()" class="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition">Aggiorna password</button>
+        </div>
+      </details>
+
+      <!-- Esci -->
+      <button onclick="logout()"
+        class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700/50 transition text-sm font-medium">
+        <span>🚪</span> Esci dall'account
+      </button>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── INFO MODAL ── -->
+<div id="infoModal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4" style="background:rgba(0,0,0,.7)">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-white font-bold text-lg flex items-center gap-2"><span>🚁</span> Requisiti di ripresa</h3>
+      <button onclick="document.getElementById('infoModal').classList.add('hidden')" class="text-slate-500 hover:text-white text-xl transition">✕</button>
+    </div>
+    <ul class="space-y-4 text-sm">
+      <li class="flex items-start gap-3">
+        <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">↕</span>
+        <div><p class="text-white font-medium">Altezza max <strong>10 m</strong> dai pannelli</p><p class="text-slate-500 text-xs mt-0.5">Vola a bassa quota per garantire la risoluzione necessaria all'AI.</p></div>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">📐</span>
+        <div><p class="text-white font-medium">Telecamera a <strong>90° (nadir)</strong></p><p class="text-slate-500 text-xs mt-0.5">La camera deve essere perfettamente perpendicolare al suolo.</p></div>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">🗂</span>
+        <div><p class="text-white font-medium">File <strong>.TIF</strong> + <strong>.TFW</strong> (termico e RGB)</p><p class="text-slate-500 text-xs mt-0.5">Servono 4 file totali: ortomosaico termico + georiferimento, ortomosaico RGB + georiferimento.</p></div>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">☀️</span>
+        <div><p class="text-white font-medium">Ripresa nelle <strong>ore centrali</strong></p><p class="text-slate-500 text-xs mt-0.5">Dalle 10:00 alle 14:00 per massimizzare il contrasto termico sui pannelli difettosi.</p></div>
+      </li>
+      <li class="flex items-start gap-3">
+        <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">📡</span>
+        <div><p class="text-white font-medium">Sovrapposizione <strong>almeno 80%</strong></p><p class="text-slate-500 text-xs mt-0.5">Imposta il piano di volo con overlap frontale e laterale ≥ 80% per un ortomosaico completo.</p></div>
+      </li>
+    </ul>
+  </div>
+</div>
 
 <!-- ── PAYMENT BANNER ── -->
 <div id="paymentBanner" class="hidden mx-6 mt-4 px-4 py-3 rounded-xl border text-sm font-medium"></div>
@@ -48,107 +185,85 @@
     <p class="text-slate-500 text-sm mt-1">Carica i dati del drone per avviare l'elaborazione AI dei tuoi pannelli solari.</p>
   </div>
 
-  <!-- ── TOP GRID: Upload + Tip + ActiveJob ── -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- ── UPLOAD CARD (full width) ── -->
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+    <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <span>📡</span> Nuova Elaborazione
+    </h2>
 
-    <!-- Upload card (2 colonne) -->
-    <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-2xl p-6">
-      <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-        <span>📡</span> Nuova Elaborazione
-      </h2>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-        <!-- TIF Drop Zone -->
-        <div
-          id="dropTif"
-          ondragover="onDragOver(event,'dropTif')" ondragleave="onDragLeave('dropTif')" ondrop="onDrop(event,'tifInput','dropTif','tifLabel')"
-          class="border-2 border-dashed border-slate-600 rounded-xl p-5 text-center cursor-pointer hover:border-amber-500/50 transition"
-          onclick="document.getElementById('tifInput').click()"
-        >
-          <div class="text-3xl mb-2">🗺️</div>
-          <p id="tifLabel" class="text-slate-400 text-xs">Trascina qui <span class="text-amber-400 font-semibold">Ortomosaico .TIF</span><br/>o clicca per selezionare</p>
-          <input type="file" id="tifInput" accept=".tif,.tiff" class="hidden" onchange="onFileSelect('tifInput','tifLabel')"/>
-        </div>
-
-        <!-- TFW Drop Zone -->
-        <div
-          id="dropTfw"
-          ondragover="onDragOver(event,'dropTfw')" ondragleave="onDragLeave('dropTfw')" ondrop="onDrop(event,'tfwInput','dropTfw','tfwLabel')"
-          class="border-2 border-dashed border-slate-600 rounded-xl p-5 text-center cursor-pointer hover:border-amber-500/50 transition"
-          onclick="document.getElementById('tfwInput').click()"
-        >
-          <div class="text-3xl mb-2">📍</div>
-          <p id="tfwLabel" class="text-slate-400 text-xs">Trascina qui <span class="text-amber-400 font-semibold">File .TFW</span><br/>o clicca per selezionare</p>
-          <input type="file" id="tfwInput" accept=".tfw" class="hidden" onchange="onFileSelect('tfwInput','tfwLabel')"/>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Termico -->
+      <div>
+        <p class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">🌡️ Ortomosaico Termico</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div id="dropTifTermico" ondragover="onDragOver(event,'dropTifTermico')" ondragleave="onDragLeave('dropTifTermico')" ondrop="onDrop(event,'tifTermicoInput','dropTifTermico','tifTermicoLabel')"
+            class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tifTermicoInput').click()">
+            <div class="text-2xl mb-1">🗺️</div>
+            <p id="tifTermicoLabel" class="text-slate-400 text-xs">Termico <span class="text-amber-400 font-semibold">.TIF</span></p>
+            <input type="file" id="tifTermicoInput" accept=".tif,.tiff,.TIF,.TIFF" class="hidden" onchange="onFileSelect('tifTermicoInput','tifTermicoLabel')"/>
+          </div>
+          <div id="dropTfwTermico" ondragover="onDragOver(event,'dropTfwTermico')" ondragleave="onDragLeave('dropTfwTermico')" ondrop="onDrop(event,'tfwTermicoInput','dropTfwTermico','tfwTermicoLabel')"
+            class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tfwTermicoInput').click()">
+            <div class="text-2xl mb-1">📍</div>
+            <p id="tfwTermicoLabel" class="text-slate-400 text-xs">Termico <span class="text-amber-400 font-semibold">.TFW</span></p>
+            <input type="file" id="tfwTermicoInput" accept=".tfw,.TFW" class="hidden" onchange="onFileSelect('tfwTermicoInput','tfwTermicoLabel')"/>
+          </div>
         </div>
       </div>
 
-      <div id="uploadErr" class="hidden mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
-
-      <button
-        id="uploadBtn" onclick="uploadMission()"
-        class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition flex items-center justify-center gap-2"
-      >
-        <span id="uploadBtnText">🚀 Avvia Elaborazione AI</span>
-        <svg id="uploadSpinner" class="hidden animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-        </svg>
-      </button>
+      <!-- RGB -->
+      <div>
+        <p class="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">📷 Ortomosaico RGB</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div id="dropTifRgb" ondragover="onDragOver(event,'dropTifRgb')" ondragleave="onDragLeave('dropTifRgb')" ondrop="onDrop(event,'tifRgbInput','dropTifRgb','tifRgbLabel')"
+            class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tifRgbInput').click()">
+            <div class="text-2xl mb-1">🗺️</div>
+            <p id="tifRgbLabel" class="text-slate-400 text-xs">RGB <span class="text-amber-400 font-semibold">.TIF</span></p>
+            <input type="file" id="tifRgbInput" accept=".tif,.tiff,.TIF,.TIFF" class="hidden" onchange="onFileSelect('tifRgbInput','tifRgbLabel')"/>
+          </div>
+          <div id="dropTfwRgb" ondragover="onDragOver(event,'dropTfwRgb')" ondragleave="onDragLeave('dropTfwRgb')" ondrop="onDrop(event,'tfwRgbInput','dropTfwRgb','tfwRgbLabel')"
+            class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tfwRgbInput').click()">
+            <div class="text-2xl mb-1">📍</div>
+            <p id="tfwRgbLabel" class="text-slate-400 text-xs">RGB <span class="text-amber-400 font-semibold">.TFW</span></p>
+            <input type="file" id="tfwRgbInput" accept=".tfw,.TFW" class="hidden" onchange="onFileSelect('tfwRgbInput','tfwRgbLabel')"/>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Tip drone + active job -->
-    <div class="flex flex-col gap-4">
+    <div id="uploadErr" class="hidden mt-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
+    <p class="text-xs text-slate-500 mt-4 mb-3">Richiede <strong class="text-amber-400">1 credito</strong> per elaborazione (termico + RGB)</p>
 
-      <!-- Drone tip card -->
-      <div class="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="text-lg">🚁</span>
-          <p class="text-blue-300 font-semibold text-sm">Requisiti di ripresa</p>
+    <button id="uploadBtn" onclick="uploadMission()"
+      class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition flex items-center justify-center gap-2">
+      <span id="uploadBtnText">Avvia Elaborazione AI (1 credito)</span>
+      <svg id="uploadSpinner" class="hidden animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- ── ACTIVE JOB ── -->
+  <div id="activeJobCard" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-6">
+    <h2 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
+      <span>⚡</span> Elaborazione in Corso
+    </h2>
+    <div class="space-y-3">
+      <div>
+        <div class="flex justify-between text-xs text-slate-400 mb-1.5">
+          <span id="activeStatus">In coda...</span>
+          <span id="activePercent">0%</span>
         </div>
-        <ul class="space-y-3 text-xs">
-          <li class="flex items-center gap-3">
-            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">↕</span>
-            <span class="text-slate-400">Altezza max <strong class="text-slate-200">10 m</strong> dai pannelli</span>
-          </li>
-          <li class="flex items-center gap-3">
-            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">📐</span>
-            <span class="text-slate-400">Telecamera a <strong class="text-slate-200">90°</strong> (nadir)</span>
-          </li>
-          <li class="flex items-center gap-3">
-            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">🗂</span>
-            <span class="text-slate-400"><strong class="text-slate-200">.TIF</strong> + <strong class="text-slate-200">.TFW</strong></span>
-          </li>
-          <li class="flex items-center gap-3">
-            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">☀️</span>
-            <span class="text-slate-400">Ore <strong class="text-slate-200">centrali</strong> della giornata</span>
-          </li>
-        </ul>
-      </div>
-
-      <!-- Active job card -->
-      <div id="activeJobCard" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-5 flex-1">
-        <h2 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
-          <span>⚡</span> Elaborazione in Corso
-        </h2>
-        <div class="space-y-3">
-          <div>
-            <div class="flex justify-between text-xs text-slate-400 mb-1.5">
-              <span id="activeStatus">In coda...</span>
-              <span id="activePercent">0%</span>
-            </div>
-            <div class="w-full bg-slate-700 rounded-full h-2">
-              <div id="progressBar" class="bg-amber-500 h-2 rounded-full transition-all duration-700" style="width:5%"></div>
-            </div>
-          </div>
-          <div id="activeJobInfo" class="text-xs text-slate-500 space-y-1"></div>
-          <div id="downloadSection" class="hidden pt-1 space-y-2">
-            <p class="text-emerald-400 text-sm font-medium">✅ Elaborazione completata!</p>
-            <div class="grid grid-cols-2 gap-1.5" id="downloadButtons"></div>
-          </div>
+        <div class="w-full bg-slate-700 rounded-full h-2">
+          <div id="progressBar" class="bg-amber-500 h-2 rounded-full transition-all duration-700" style="width:5%"></div>
         </div>
       </div>
-
+      <div id="activeJobInfo" class="text-xs text-slate-500 space-y-1"></div>
+      <div id="downloadSection" class="hidden pt-1 space-y-2">
+        <p class="text-emerald-400 text-sm font-medium">✅ Elaborazione completata!</p>
+        <div class="grid grid-cols-2 gap-1.5" id="downloadButtons"></div>
+      </div>
     </div>
   </div>
 
@@ -166,13 +281,13 @@
     </div>
 
     <!-- Tabs pagamento -->
-    <div class="flex gap-1 mt-4 mb-4 border-b border-slate-700">
+    <div class="flex gap-2 mt-4 mb-4">
       <button id="tabStripe" onclick="switchPayTab('stripe')"
-        class="px-4 py-2 text-xs font-medium border-b-2 border-amber-500 text-amber-400 transition">
+        class="flex-1 py-3 rounded-xl text-sm font-semibold border-2 border-amber-500 bg-amber-500/10 text-amber-400 transition">
         💳 Carta di credito
       </button>
       <button id="tabBonifico" onclick="switchPayTab('bonifico')"
-        class="px-4 py-2 text-xs font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-300 transition">
+        class="flex-1 py-3 rounded-xl text-sm font-semibold border-2 border-slate-600 bg-transparent text-slate-500 hover:text-slate-300 hover:border-slate-500 transition">
         🏦 Bonifico bancario
       </button>
     </div>
@@ -185,25 +300,74 @@
     </div>
 
     <!-- Bonifico -->
-    <div id="panelBonifico" class="hidden">
-      <div class="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 space-y-4">
-        <p class="text-slate-300 text-sm">Effettua un bonifico bancario con i seguenti dati e invia la ricevuta via email. I crediti verranno aggiunti manualmente entro 24h lavorative.</p>
+    <div id="panelBonifico" class="hidden space-y-4">
+
+      <!-- Step 1: seleziona pacchetto -->
+      <p class="text-slate-400 text-sm font-medium">1. Seleziona il pacchetto che vuoi acquistare</p>
+      <div class="overflow-x-auto pkg-scroll pb-2">
+        <div class="flex gap-3 min-w-max" id="bonificoPackagesContainer">
+          <div class="text-slate-500 text-sm py-2">Caricamento...</div>
+        </div>
+      </div>
+
+      <!-- Step 2: dati bancari -->
+      <p class="text-slate-400 text-sm font-medium mt-2">2. Effettua il bonifico con questi dati</p>
+      <div class="bg-slate-900/60 border border-slate-700 rounded-2xl p-5 space-y-3">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <p class="text-slate-500 text-xs mb-1">Intestatario</p>
-            <p class="text-white font-medium">—</p>
+            <p class="text-white font-medium">Alessio Gervasini</p>
           </div>
           <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <p class="text-slate-500 text-xs mb-1">IBAN</p>
-            <p class="text-white font-mono font-medium tracking-wide">—</p>
+            <p class="text-white font-mono font-medium tracking-wide">IT15 U036 7401 6000 0427 2414 511</p>
           </div>
-          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 sm:col-span-2">
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <p class="text-slate-500 text-xs mb-1">BIC / SWIFT</p>
+            <p class="text-white font-mono font-medium">TRBKITMMXXX</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700" id="bonificoCausaleBox">
             <p class="text-slate-500 text-xs mb-1">Causale</p>
-            <p class="text-slate-300 text-xs">SolarDino — [nome azienda] — [numero ortomosaici]</p>
+            <p class="text-slate-300 text-xs" id="bonificoCausale">Seleziona prima un pacchetto</p>
           </div>
         </div>
-        <p class="text-slate-500 text-xs">Dopo il pagamento invia la ricevuta a <span class="text-amber-400">—</span></p>
       </div>
+
+      <!-- Step 3: carica ricevuta -->
+      <p class="text-slate-400 text-sm font-medium">3. Carica la ricevuta del pagamento</p>
+      <div id="bonificoErrMsg" class="hidden px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
+      <div id="bonificoOkMsg"  class="hidden px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium"></div>
+
+      <div id="dropReceipt" onclick="document.getElementById('receiptInput').click()"
+        ondragover="onDragOver(event,'dropReceipt')" ondragleave="onDragLeave('dropReceipt')"
+        ondrop="onDrop(event,'receiptInput','dropReceipt','receiptLabel')"
+        class="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-amber-500/50 transition">
+        <div class="text-3xl mb-2">🧾</div>
+        <p id="receiptLabel" class="text-slate-400 text-sm">Trascina la <span class="text-amber-400 font-semibold">ricevuta del bonifico</span><br/>
+          <span class="text-xs text-slate-500">JPG, PNG o PDF — max 10 MB</span></p>
+        <input type="file" id="receiptInput" accept="image/*,.pdf" class="hidden"
+          onchange="onFileSelect('receiptInput','receiptLabel'); validateReceipt()"/>
+      </div>
+
+      <!-- Anteprima verifica dati -->
+      <div id="receiptCheck" class="hidden bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-2 text-xs">
+        <p class="text-slate-400 font-semibold">Verifica dati pagamento:</p>
+        <div class="flex items-center gap-2" id="checkIban">
+          <span class="w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-xs">?</span>
+          <span class="text-slate-400">IBAN corretto: <strong>IT15 U036 7401 6000 0427 2414 511</strong></span>
+        </div>
+        <div class="flex items-center gap-2" id="checkImport">
+          <span class="w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-xs">?</span>
+          <span class="text-slate-400">Importo: corrisponde al pacchetto selezionato</span>
+        </div>
+        <p class="text-slate-600 text-xs mt-1">La ricevuta verrà verificata dall'amministratore prima dell'accredito.</p>
+      </div>
+
+      <button id="bonificoBtn" onclick="submitBonifico()"
+        class="w-full py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-semibold text-sm transition">
+        📤 Invia richiesta con ricevuta
+      </button>
+      <p class="text-slate-600 text-xs text-center">I crediti verranno accreditati automaticamente dopo verifica del pagamento.</p>
     </div>
   </div>
 
@@ -230,6 +394,26 @@
     </div>
   </div>
 
+  <!-- ── SUPPORTO ── -->
+  <div class="max-w-6xl mx-auto px-6 pb-10 mt-2">
+    <div class="bg-slate-800/50 border border-slate-700/50 rounded-2xl px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🛟</span>
+        <div>
+          <p class="text-white font-semibold text-sm">Hai bisogno di aiuto?</p>
+          <p class="text-slate-500 text-xs">Il nostro team risponde entro 24h lavorative.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap justify-center">
+        <a href="mailto:agervasini1@gmail.com"
+          class="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-400 text-sm font-medium transition">
+          ✉️ agervasini1@gmail.com
+        </a>
+      </div>
+    </div>
+    <p class="text-center text-slate-700 text-xs mt-4">SolarDino © 2026 — Tecnologia AI MaskDINO</p>
+  </div>
+
 </main>
 
 <script>
@@ -239,6 +423,69 @@ if (!token) { window.location.href = "/static/login.html"; }
 
 function authHeaders() { return { "Authorization": `Bearer ${token}` }; }
 function logout() { localStorage.clear(); window.location.href = "/static/login.html"; }
+
+// ── Profile modal ──────────────────────────────────────────────────────────────
+function toggleProfileMenu() {
+  document.getElementById("profileModal").classList.toggle("hidden");
+}
+function closeProfile() {
+  document.getElementById("profileModal").classList.add("hidden");
+}
+function closeProfileIfOutside(e) {
+  if (e.target === document.getElementById("profileModal")) closeProfile();
+}
+
+async function changeEmail() {
+  const newEmail = document.getElementById("newEmailInput").value.trim();
+  const pwd      = document.getElementById("emailPwdInput").value;
+  const msg      = document.getElementById("emailMsg");
+  msg.classList.add("hidden");
+  try {
+    const res  = await fetch("/auth/change-email", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ new_email: newEmail, password: pwd }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    msg.textContent = "✅ Email aggiornata!";
+    msg.className   = "text-xs px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400";
+    msg.classList.remove("hidden");
+    document.getElementById("profileEmail").textContent = newEmail;
+    localStorage.setItem("email", newEmail);
+    document.getElementById("newEmailInput").value = "";
+    document.getElementById("emailPwdInput").value = "";
+  } catch (err) {
+    msg.textContent = "❌ " + err.message;
+    msg.className   = "text-xs px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400";
+    msg.classList.remove("hidden");
+  }
+}
+
+async function changePassword() {
+  const oldPwd = document.getElementById("oldPwdInput").value;
+  const newPwd = document.getElementById("newPwdInput").value;
+  const msg    = document.getElementById("pwdMsg");
+  msg.classList.add("hidden");
+  try {
+    const res  = await fetch("/auth/change-password", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    msg.textContent = "✅ Password aggiornata!";
+    msg.className   = "text-xs px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400";
+    msg.classList.remove("hidden");
+    document.getElementById("oldPwdInput").value = "";
+    document.getElementById("newPwdInput").value = "";
+  } catch (err) {
+    msg.textContent = "❌ " + err.message;
+    msg.className   = "text-xs px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400";
+    msg.classList.remove("hidden");
+  }
+}
 
 // ── Payment banner ─────────────────────────────────────────────────────────────
 (function() {
@@ -261,6 +508,7 @@ async function init() {
   await refreshUserInfo();
   await loadHistory();
   await loadPackages();
+  await loadBonificoPackages();
 }
 
 async function refreshUserInfo() {
@@ -268,10 +516,30 @@ async function refreshUserInfo() {
     const res  = await fetch("/auth/me", { headers: authHeaders() });
     if (res.status === 401) { logout(); return; }
     const data = await res.json();
-    document.getElementById("creditsDisplay").textContent  = data.credits;
-    document.getElementById("welcomeName").textContent     = data.name;
-    document.getElementById("userNameDisplay").textContent = data.email;
+
+    document.getElementById("creditsDisplay").textContent = data.credits;
+    document.getElementById("welcomeName").textContent    = data.name;
     localStorage.setItem("credits", data.credits);
+    localStorage.setItem("name",    data.name);
+    localStorage.setItem("email",   data.email);
+
+    // Avatar iniziale
+    const initial = (data.name || "?")[0].toUpperCase();
+    document.getElementById("avatarInitial").textContent    = initial;
+    document.getElementById("profileAvatarBig").textContent = initial;
+    document.getElementById("profileName").textContent      = data.name;
+    document.getElementById("profileEmail").textContent     = data.email;
+    document.getElementById("profileCredits").textContent   = data.credits;
+
+    // Info azienda nel modal
+    document.getElementById("infoName").textContent      = data.name || "—";
+    document.getElementById("infoRagione").textContent   = data.ragione_sociale || "—";
+    document.getElementById("infoVat").textContent       = data.vat_number || "—";
+    document.getElementById("infoEmail").textContent     = data.email || "—";
+    document.getElementById("infoCreatedAt").textContent = data.created_at
+      ? new Date(data.created_at).toLocaleDateString("it-IT", { day:"2-digit", month:"long", year:"numeric" })
+      : "—";
+
     const alert = document.getElementById("noCreditsAlert");
     if (data.credits <= 0) alert.classList.remove("hidden");
     else alert.classList.add("hidden");
@@ -299,13 +567,15 @@ function onFileSelect(inputId, labelId) {
 let pollingInterval = null;
 
 async function uploadMission() {
-  const tifFile = document.getElementById("tifInput").files[0];
-  const tfwFile = document.getElementById("tfwInput").files[0];
-  const errBox  = document.getElementById("uploadErr");
+  const tifTermico = document.getElementById("tifTermicoInput").files[0];
+  const tfwTermico = document.getElementById("tfwTermicoInput").files[0];
+  const tifRgb     = document.getElementById("tifRgbInput").files[0];
+  const tfwRgb     = document.getElementById("tfwRgbInput").files[0];
+  const errBox     = document.getElementById("uploadErr");
   errBox.classList.add("hidden");
 
-  if (!tifFile || !tfwFile) {
-    errBox.textContent = "Seleziona entrambi i file (.tif e .tfw) prima di avviare.";
+  if (!tifTermico || !tfwTermico || !tifRgb || !tfwRgb) {
+    errBox.textContent = "Seleziona tutti e 4 i file: TIF termico, TFW termico, TIF RGB e TFW RGB.";
     errBox.classList.remove("hidden");
     return;
   }
@@ -325,8 +595,10 @@ async function uploadMission() {
   spin.classList.remove("hidden");
 
   const formData = new FormData();
-  formData.append("tif_file", tifFile);
-  formData.append("tfw_file", tfwFile);
+  formData.append("tif_termico", tifTermico);
+  formData.append("tfw_termico", tfwTermico);
+  formData.append("tif_rgb",     tifRgb);
+  formData.append("tfw_rgb",     tfwRgb);
 
   try {
     const res  = await fetch("/missions/upload", { method: "POST", headers: authHeaders(), body: formData });
@@ -334,13 +606,13 @@ async function uploadMission() {
     if (!res.ok) throw new Error(data.detail || "Errore upload");
     document.getElementById("creditsDisplay").textContent = data.credits_rimasti;
     localStorage.setItem("credits", data.credits_rimasti);
-    showActiveJob(data.job_id, tifFile.name);
+    showActiveJob(data.job_id, tifTermico.name);
     startPolling(data.job_id);
   } catch (err) {
     errBox.textContent = err.message;
     errBox.classList.remove("hidden");
   } finally {
-    btnTxt.textContent = "🚀 Avvia Elaborazione AI";
+    btnTxt.textContent = "Avvia Elaborazione AI (1 credito)";
     spin.classList.add("hidden");
     btn.disabled = false;
   }
@@ -464,8 +736,8 @@ function switchPayTab(tab) {
   const isStripe = tab === "stripe";
   document.getElementById("panelStripe").classList.toggle("hidden", !isStripe);
   document.getElementById("panelBonifico").classList.toggle("hidden", isStripe);
-  document.getElementById("tabStripe").className   = `px-4 py-2 text-xs font-medium border-b-2 transition ${isStripe  ? "border-amber-500 text-amber-400" : "border-transparent text-slate-500 hover:text-slate-300"}`;
-  document.getElementById("tabBonifico").className = `px-4 py-2 text-xs font-medium border-b-2 transition ${!isStripe ? "border-amber-500 text-amber-400" : "border-transparent text-slate-500 hover:text-slate-300"}`;
+  document.getElementById("tabStripe").className   = `flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition ${isStripe  ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-slate-600 bg-transparent text-slate-500 hover:text-slate-300 hover:border-slate-500"}`;
+  document.getElementById("tabBonifico").className = `flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition ${!isStripe ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-slate-600 bg-transparent text-slate-500 hover:text-slate-300 hover:border-slate-500"}`;
 }
 
 // ── Packages ──────────────────────────────────────────────────────────────────
@@ -484,8 +756,8 @@ async function loadPackages() {
         : `€${p.price_eur.toFixed(2).replace(".", ",")}`;
       const qty = p.credits === 1 ? "1 ortomosaico processato" : `${p.credits} ortomosaici processati`;
       return `
-        <div class="relative flex flex-col rounded-2xl border w-52 flex-shrink-0 ${isPopular ? "border-amber-500 bg-amber-500/5" : "border-slate-700 bg-slate-900/60"} p-5">
-          ${isPopular ? `<span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-amber-500 text-slate-900 text-xs font-bold whitespace-nowrap">Più popolare</span>` : ""}
+        <div class="flex flex-col rounded-2xl border w-52 flex-shrink-0 ${isPopular ? "border-amber-500 bg-amber-500/5" : "border-slate-700 bg-slate-900/60"} p-5">
+          ${isPopular ? `<span class="inline-block self-start mb-2 px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-900 text-xs font-bold">Più popolare</span>` : ""}
           <p class="text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">${p.label}</p>
           <p class="text-3xl font-extrabold text-white">${totalFmt}</p>
           <p class="text-slate-400 text-sm mt-1">${qty}</p>
@@ -514,6 +786,139 @@ async function buyPackage(pkg) {
     window.location.href = data.checkout_url;
   } catch (err) {
     alert("Acquisto non disponibile: " + err.message);
+  }
+}
+
+// ── Bonifico packages ──────────────────────────────────────────────────────────
+let selectedBonificoPackage = null;
+let bonificoPackagesData    = [];
+
+async function loadBonificoPackages() {
+  const container = document.getElementById("bonificoPackagesContainer");
+  try {
+    const res      = await fetch("/payments/packages");
+    bonificoPackagesData = await res.json();
+    renderBonificoPackages();
+  } catch (e) {
+    container.innerHTML = '<p class="text-slate-500 text-sm">Impossibile caricare i pacchetti.</p>';
+  }
+}
+
+function renderBonificoPackages() {
+  const container = document.getElementById("bonificoPackagesContainer");
+  container.innerHTML = bonificoPackagesData.map(p => {
+    const isSelected = selectedBonificoPackage === p.key;
+    const totalFmt   = p.price_eur % 1 === 0
+      ? `€${p.price_eur.toFixed(0)},00`
+      : `€${p.price_eur.toFixed(2).replace(".", ",")}`;
+    const qty = p.credits === 1 ? "1 ortomosaico" : `${p.credits} ortomosaici`;
+    return `
+      <button onclick="selectBonificoPackage('${p.key}')"
+        class="flex flex-col items-start rounded-xl border w-44 flex-shrink-0 p-4 transition
+          ${isSelected ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500"}">
+        <p class="text-xs font-medium uppercase tracking-wider mb-1 ${isSelected ? "text-amber-400" : "text-slate-500"}">${p.label}</p>
+        <p class="text-2xl font-extrabold">${totalFmt}</p>
+        <p class="text-xs mt-1 ${isSelected ? "text-amber-300" : "text-slate-500"}">${qty}</p>
+        ${isSelected ? '<span class="mt-2 text-xs font-bold">✓ Selezionato</span>' : ''}
+      </button>`;
+  }).join("");
+}
+
+function selectBonificoPackage(key) {
+  selectedBonificoPackage = key;
+  const pkg = bonificoPackagesData.find(p => p.key === key);
+  if (pkg) {
+    const name = localStorage.getItem("name") || "Azienda";
+    document.getElementById("bonificoCausale").textContent =
+      `SolarDino — ${name} — ${pkg.credits} ortomosaici`;
+  }
+  document.getElementById("bonificoOkMsg").classList.add("hidden");
+  document.getElementById("bonificoErrMsg").classList.add("hidden");
+  renderBonificoPackages();
+}
+
+function validateReceipt() {
+  const file = document.getElementById("receiptInput").files[0];
+  if (!file) return;
+  const check = document.getElementById("receiptCheck");
+  check.classList.remove("hidden");
+  // Controlla dimensione
+  if (file.size > 10 * 1024 * 1024) {
+    document.getElementById("bonificoErrMsg").textContent = "File troppo grande. Max 10 MB.";
+    document.getElementById("bonificoErrMsg").classList.remove("hidden");
+    return;
+  }
+  // Mostra checkmark visivi (non possiamo fare OCR lato client — verifica lato admin)
+  const ibanEl   = document.getElementById("checkIban");
+  const importEl = document.getElementById("checkImport");
+  const pkg = bonificoPackagesData.find(p => p.key === selectedBonificoPackage);
+  ibanEl.innerHTML   = `<span class="w-4 h-4 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xs">✓</span><span class="text-slate-300">Verifica IBAN <strong>IT15 U036 7401 6000 0427 2414 511</strong> sulla ricevuta</span>`;
+  importEl.innerHTML = `<span class="w-4 h-4 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xs">✓</span><span class="text-slate-300">Verifica importo <strong>${pkg ? "€" + pkg.price_eur.toFixed(2).replace(".",",") : "—"}</strong> sulla ricevuta</span>`;
+}
+
+async function submitBonifico() {
+  const errBox = document.getElementById("bonificoErrMsg");
+  const okBox  = document.getElementById("bonificoOkMsg");
+  errBox.classList.add("hidden");
+  okBox.classList.add("hidden");
+
+  if (!selectedBonificoPackage) {
+    errBox.textContent = "Seleziona prima un pacchetto.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+
+  const receipt = document.getElementById("receiptInput").files[0];
+  if (!receipt) {
+    errBox.textContent = "Carica la ricevuta del bonifico prima di inviare.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+
+  const btn = document.getElementById("bonificoBtn");
+  btn.disabled = true;
+  btn.textContent = "Invio in corso...";
+
+  try {
+    const formData = new FormData();
+    formData.append("package", selectedBonificoPackage);
+    formData.append("receipt", receipt);
+
+    const res  = await fetch("/payments/bonifico-request", {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    okBox.textContent = "✅ Richiesta inviata! I crediti verranno accreditati dopo verifica della ricevuta.";
+    okBox.classList.remove("hidden");
+    document.getElementById("receiptCheck").classList.add("hidden");
+    document.getElementById("receiptLabel").innerHTML = 'Trascina la <span class="text-amber-400 font-semibold">ricevuta del bonifico</span><br/><span class="text-xs text-slate-500">JPG, PNG o PDF — max 10 MB</span>';
+    document.getElementById("receiptInput").value = "";
+    selectedBonificoPackage = null;
+    renderBonificoPackages();
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove("hidden");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📤 Invia richiesta con ricevuta";
+  }
+}
+
+async function cancelAccount() {
+  const first = confirm("Sei sicuro di voler eliminare il tuo account?\nTutti i dati verranno disattivati.");
+  if (!first) return;
+  const second = confirm("Conferma definitiva: eliminare l'account?\nPotrai riaprirlo in futuro con la stessa Partita IVA.");
+  if (!second) return;
+  try {
+    const res = await fetch("/auth/me", { method: "DELETE", headers: authHeaders() });
+    if (!res.ok) throw new Error((await res.json()).detail);
+    localStorage.clear();
+    window.location.href = "/static/login.html";
+  } catch (err) {
+    alert("Errore: " + err.message);
   }
 }
 
