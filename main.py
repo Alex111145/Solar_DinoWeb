@@ -1,4 +1,5 @@
 import os
+import urllib.request
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv(override=True)  # carica .env e sovrascrive variabili già esistenti
@@ -55,6 +56,20 @@ async def lifespan(app: FastAPI):
             print(f"[STARTUP] Admin esistente: {admin_email}")
     finally:
         db.close()
+
+    # Scarica model_best.pth dal URL configurato (solo se non già presente su disco)
+    model_url = os.getenv("MODEL_PTH_URL", "")
+    upload_dir = os.getenv("UPLOAD_DIR", "elaborazioni")
+    model_path = os.path.join(upload_dir, "model_best.pth")
+    if model_url and not os.path.exists(model_path):
+        print(f"[STARTUP] Download model_best.pth → {model_path} ...")
+        os.makedirs(upload_dir, exist_ok=True)
+        urllib.request.urlretrieve(model_url, model_path)
+        print(f"[STARTUP] Modello scaricato ({os.path.getsize(model_path) // 1024 // 1024} MB)")
+    elif os.path.exists(model_path):
+        print(f"[STARTUP] Modello già presente: {model_path}")
+    else:
+        print("[STARTUP] MODEL_PTH_URL non configurato — modello non scaricato")
 
     yield  # server running
 

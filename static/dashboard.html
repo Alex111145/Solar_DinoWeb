@@ -143,11 +143,38 @@
 
 <!-- ── INFO MODAL ── -->
 <div id="infoModal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4" style="background:rgba(0,0,0,.7)">
-  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
     <div class="flex items-center justify-between mb-4">
-      <h3 class="text-white font-bold text-lg flex items-center gap-2"><span>🚁</span> Requisiti di ripresa</h3>
+      <h3 class="text-white font-bold text-lg flex items-center gap-2"><span>☀️</span> Cos'è SolarDino?</h3>
       <button onclick="document.getElementById('infoModal').classList.add('hidden')" class="text-slate-500 hover:text-white text-xl transition">✕</button>
     </div>
+
+    <!-- Descrizione progetto -->
+    <div class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 mb-5 space-y-2 text-sm">
+      <p class="text-slate-300 leading-relaxed">
+        <strong class="text-amber-400">SolarDino</strong> è una piattaforma B2B che utilizza l'intelligenza artificiale
+        <strong class="text-white">MaskDINO</strong> per analizzare automaticamente impianti fotovoltaici tramite ortomosaici termici e RGB acquisiti con drone.
+      </p>
+      <p class="text-slate-400 text-xs leading-relaxed">
+        Il sistema rileva pannelli, hotspot termici e aree degradate, restituendo i risultati geolocalizzati in formato JSON, CSV, KML e GeoJSON — pronti per report e manutenzione.
+      </p>
+      <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+        <div class="bg-slate-800 rounded-lg p-2 border border-slate-700">
+          <p class="text-amber-400 font-bold text-lg">AI</p>
+          <p class="text-slate-500 text-xs">MaskDINO</p>
+        </div>
+        <div class="bg-slate-800 rounded-lg p-2 border border-slate-700">
+          <p class="text-amber-400 font-bold text-lg">GPS</p>
+          <p class="text-slate-500 text-xs">Geolocalizzato</p>
+        </div>
+        <div class="bg-slate-800 rounded-lg p-2 border border-slate-700">
+          <p class="text-amber-400 font-bold text-lg">1 credit</p>
+          <p class="text-slate-500 text-xs">Per analisi</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-white font-semibold text-sm mb-3 flex items-center gap-2"><span>🚁</span> Requisiti di ripresa</p>
     <ul class="space-y-4 text-sm">
       <li class="flex items-start gap-3">
         <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">↕</span>
@@ -259,7 +286,17 @@
           <div id="progressBar" class="bg-amber-500 h-2 rounded-full transition-all duration-700" style="width:5%"></div>
         </div>
       </div>
+      <!-- Timer + ETA -->
+      <div id="jobTimingRow" class="hidden flex items-center gap-4 text-xs text-slate-500">
+        <span>⏱ Trascorso: <span id="elapsedTime" class="text-slate-400 font-mono">0:00</span></span>
+        <span id="etaRow" class="hidden">· Stima fine: <span id="etaTime" class="text-amber-400 font-medium"></span></span>
+      </div>
       <div id="activeJobInfo" class="text-xs text-slate-500 space-y-1"></div>
+      <!-- Log errore -->
+      <div id="errorLogBox" class="hidden mt-2 rounded-xl bg-red-900/20 border border-red-500/30 p-4">
+        <p class="text-red-400 text-xs font-semibold mb-2">Dettaglio errore:</p>
+        <pre id="errorLogText" class="text-red-300 text-xs overflow-x-auto whitespace-pre-wrap max-h-48 leading-relaxed"></pre>
+      </div>
       <div id="downloadSection" class="hidden pt-1 space-y-2">
         <p class="text-emerald-400 text-sm font-medium">✅ Elaborazione completata!</p>
         <div class="grid grid-cols-2 gap-1.5" id="downloadButtons"></div>
@@ -565,6 +602,42 @@ function onFileSelect(inputId, labelId) {
 
 // ── Upload mission ─────────────────────────────────────────────────────────────
 let pollingInterval = null;
+let elapsedInterval = null;
+let jobStartTime    = null;
+
+// ETA in minuti per fase (stima pessimistica)
+const PHASE_ETA_MIN = { taglio_tile: 5, inferenza: 60 };
+
+function formatElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+function startElapsedTimer() {
+  if (elapsedInterval) clearInterval(elapsedInterval);
+  jobStartTime = Date.now();
+  document.getElementById("jobTimingRow").classList.remove("hidden");
+  elapsedInterval = setInterval(() => {
+    document.getElementById("elapsedTime").textContent = formatElapsed(Date.now() - jobStartTime);
+  }, 1000);
+}
+
+function stopElapsedTimer() {
+  if (elapsedInterval) { clearInterval(elapsedInterval); elapsedInterval = null; }
+}
+
+function updateETA(status) {
+  const etaRow = document.getElementById("etaRow");
+  const etaEl  = document.getElementById("etaTime");
+  const etaMin = PHASE_ETA_MIN[status];
+  if (!etaMin || !jobStartTime) { etaRow.classList.add("hidden"); return; }
+  const elapsedMin = (Date.now() - jobStartTime) / 60000;
+  const remainMin  = Math.max(1, Math.round(etaMin - elapsedMin));
+  etaEl.textContent = remainMin <= 1 ? "< 1 min" : `~${remainMin} min`;
+  etaRow.classList.remove("hidden");
+}
 
 async function uploadMission() {
   const tifTermico = document.getElementById("tifTermicoInput").files[0];
@@ -621,17 +694,22 @@ async function uploadMission() {
 function showActiveJob(jobId, filename) {
   document.getElementById("activeJobCard").classList.remove("hidden");
   document.getElementById("downloadSection").classList.add("hidden");
+  document.getElementById("errorLogBox").classList.add("hidden");
+  document.getElementById("jobTimingRow").classList.add("hidden");
+  document.getElementById("etaRow").classList.add("hidden");
   document.getElementById("activeJobInfo").innerHTML =
     `<p>📁 <span class="text-slate-400">${filename}</span></p>
      <p>🔑 Job: <span class="text-slate-400 font-mono text-xs">${jobId.substring(0,8)}...</span></p>`;
+  document.getElementById("progressBar").classList.replace("bg-red-500", "bg-amber-500");
   updateProgress("in_coda", 5);
+  startElapsedTimer();
 }
 
 function updateProgress(status, pct) {
   const labels = {
     in_coda:     "⏳ In coda...",
-    taglio_tile: "✂️ Taglio ortomosaico...",
-    inferenza:   "🤖 Inferenza MaskDINO... (fino a 2h)",
+    taglio_tile: "✂️ Taglio ortomosaico in corso...",
+    inferenza:   "🤖 Inferenza MaskDINO in corso...",
     completato:  "✅ Completata",
     errore:      "❌ Errore durante l'elaborazione",
   };
@@ -640,6 +718,9 @@ function updateProgress(status, pct) {
   document.getElementById("progressBar").style.width   = pct >= 0 ? `${pct}%` : "100%";
   if (status === "errore") {
     document.getElementById("progressBar").classList.replace("bg-amber-500", "bg-red-500");
+    document.getElementById("etaRow").classList.add("hidden");
+  } else {
+    updateETA(status);
   }
 }
 
@@ -653,11 +734,19 @@ function startPolling(jobId) {
       updateProgress(data.status, PROGRESS[data.status] ?? 10);
       if (data.status === "completato") {
         clearInterval(pollingInterval);
+        stopElapsedTimer();
+        document.getElementById("etaRow").classList.add("hidden");
         showDownloadButtons(jobId, data);
         await loadHistory();
         await refreshUserInfo();
       } else if (data.status === "errore") {
         clearInterval(pollingInterval);
+        stopElapsedTimer();
+        document.getElementById("etaRow").classList.add("hidden");
+        if (data.log) {
+          document.getElementById("errorLogText").textContent = data.log;
+          document.getElementById("errorLogBox").classList.remove("hidden");
+        }
         await loadHistory();
       }
     } catch (e) {}
