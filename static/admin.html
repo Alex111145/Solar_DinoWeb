@@ -45,7 +45,7 @@
   </div>
 
   <!-- ── STATS ── -->
-  <div class="grid grid-cols-2 lg:grid-cols-5 gap-4" id="statsGrid">
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="statsGrid">
     <!-- injected by JS -->
   </div>
 
@@ -53,6 +53,7 @@
   <div class="flex gap-1 border-b border-slate-700">
     <button class="tab-btn tab-active px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('companies')">🏢 Aziende</button>
     <button class="tab-btn tab-inactive px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('usage')">📊 Utilizzo & Fatturazione</button>
+    <button class="tab-btn tab-inactive px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('bonifico')" id="bonificoTab">🏦 Bonifici <span id="bonificoBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-900 text-xs font-bold"></span></button>
   </div>
 
   <!-- ── COMPANIES TAB ── -->
@@ -65,9 +66,9 @@
               <th class="px-5 py-4 font-medium">Azienda</th>
               <th class="px-5 py-4 font-medium">Email</th>
               <th class="px-5 py-4 font-medium">Ortomosaici disp.</th>
-              <th class="px-5 py-4 font-medium">Elaborazioni</th>
               <th class="px-5 py-4 font-medium">Pannelli</th>
               <th class="px-5 py-4 font-medium">Dovuto €</th>
+              <th class="px-5 py-4 font-medium">Ultimo IP</th>
               <th class="px-5 py-4 font-medium">Stato</th>
               <th class="px-5 py-4 font-medium">Azioni</th>
             </tr>
@@ -83,8 +84,8 @@
   <!-- ── USAGE TAB ── -->
   <div id="tab-usage" class="hidden space-y-4">
     <div class="flex items-center justify-between">
-      <p class="text-slate-500 text-sm">Ultime 500 operazioni registrate.</p>
-      <button onclick="loadUsage()" class="text-xs text-amber-400 hover:text-amber-300 transition">🔄 Aggiorna</button>
+      <p class="text-slate-500 text-sm">Riepilogo fatturazione per azienda.</p>
+      <button onclick="usageLoaded=false; loadUsage();" class="text-xs text-amber-400 hover:text-amber-300 transition">🔄 Aggiorna</button>
     </div>
     <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
       <div class="overflow-x-auto">
@@ -92,15 +93,41 @@
           <thead>
             <tr class="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider text-left">
               <th class="px-5 py-4 font-medium">Azienda</th>
-              <th class="px-5 py-4 font-medium">Job ID</th>
-              <th class="px-5 py-4 font-medium">Pannelli</th>
-              <th class="px-5 py-4 font-medium">Crediti</th>
-              <th class="px-5 py-4 font-medium">Costo €</th>
-              <th class="px-5 py-4 font-medium">Data</th>
+              <th class="px-5 py-4 font-medium">Pannelli tot.</th>
+              <th class="px-5 py-4 font-medium">Importo dovuto</th>
+              <th class="px-5 py-4 font-medium">Pagamenti ricevuti</th>
             </tr>
           </thead>
           <tbody id="usageBody">
-            <tr><td colspan="6" class="py-10 text-center text-slate-600">Clicca su "Utilizzo & Fatturazione" per caricare.</td></tr>
+            <tr><td colspan="4" class="py-10 text-center text-slate-600">Clicca su "Utilizzo & Fatturazione" per caricare.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BONIFICO TAB ── -->
+  <div id="tab-bonifico" class="hidden space-y-4">
+    <div class="flex items-center justify-between">
+      <p class="text-slate-500 text-sm">Richieste bonifico pendenti — approva per accreditare i crediti automaticamente.</p>
+      <button onclick="loadBonifico()" class="text-xs text-amber-400 hover:text-amber-300 transition">🔄 Aggiorna</button>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider text-left">
+              <th class="px-5 py-4 font-medium">Azienda</th>
+              <th class="px-5 py-4 font-medium">Pacchetto</th>
+              <th class="px-5 py-4 font-medium">Crediti</th>
+              <th class="px-5 py-4 font-medium">Importo</th>
+              <th class="px-5 py-4 font-medium">Stato</th>
+              <th class="px-5 py-4 font-medium">Data</th>
+              <th class="px-5 py-4 font-medium">Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="bonificoBody">
+            <tr><td colspan="7" class="py-10 text-center text-slate-600">Clicca su "Bonifici" per caricare.</td></tr>
           </tbody>
         </table>
       </div>
@@ -222,18 +249,19 @@ async function loadStats() {
     const s = await res.json();
 
     const cards = [
-      { icon: "🏢", label: "Aziende",          value: s.total_companies },
-      { icon: "📡", label: "Elaborazioni Tot.", value: s.total_jobs },
-      { icon: "✅", label: "Completate",        value: s.completed_jobs },
-      { icon: "🔲", label: "Pannelli Rilevati", value: s.total_panels_detected.toLocaleString("it") },
-      { icon: "💶", label: "Fatturato Est.",    value: `€${s.total_revenue_eur.toLocaleString("it")}` },
+      { icon: "🏢", label: "Aziende",             value: s.total_companies },
+      { icon: "🔲", label: "Pannelli Rilevati",    value: s.total_panels_detected.toLocaleString("it") },
+      { icon: "💶", label: "Fatturato Totale",     value: `€${s.total_revenue_eur.toLocaleString("it")}` },
+      { icon: "📅", label: "Fatturato Questo Mese", value: `€${s.revenue_month_eur.toLocaleString("it")}` },
     ];
 
     grid.innerHTML = cards.map(c => `
-      <div class="bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4">
-        <div class="text-2xl mb-1">${c.icon}</div>
-        <div class="text-xl font-bold text-white">${c.value}</div>
-        <div class="text-xs text-slate-500 mt-0.5">${c.label}</div>
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl px-6 py-5 flex items-center gap-4">
+        <span class="text-3xl">${c.icon}</span>
+        <div>
+          <div class="text-2xl font-bold text-white">${c.value}</div>
+          <div class="text-xs text-slate-500 mt-0.5">${c.label}</div>
+        </div>
       </div>`).join("");
   } catch (e) {}
 }
@@ -262,11 +290,11 @@ async function loadCompanies() {
         <td class="px-5 py-4">
           <span class="font-bold ${c.credits <= 0 ? 'text-red-400' : 'text-amber-400'}">${c.credits}</span>
         </td>
-        <td class="px-5 py-4 text-slate-300">${c.jobs_completed}</td>
         <td class="px-5 py-4 text-slate-300">${c.panels_detected.toLocaleString("it")}</td>
         <td class="px-5 py-4 font-semibold ${c.amount_owed_eur > 0 ? 'text-emerald-400' : 'text-slate-500'}">
           €${c.amount_owed_eur.toLocaleString("it")}
         </td>
+        <td class="px-5 py-4 text-slate-500 text-xs font-mono">${c.last_ip}</td>
         <td class="px-5 py-4">
           <span class="px-2 py-0.5 rounded-md text-xs font-medium ${c.is_active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}">
             ${c.is_active ? 'Attiva' : 'Disattiva'}
@@ -294,44 +322,144 @@ async function loadCompanies() {
   }
 }
 
-// ── Usage ─────────────────────────────────────────────────────────────────────
+// ── Usage / Billing ───────────────────────────────────────────────────────────
 async function loadUsage() {
   const tbody = document.getElementById("usageBody");
-  tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-600">Caricamento...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-slate-600">Caricamento...</td></tr>';
   try {
-    const res  = await fetch("/admin/usage", { headers: authH() });
+    const res  = await fetch("/admin/billing", { headers: authH() });
     const rows = await res.json();
 
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-600">Nessun utilizzo registrato.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-slate-600">Nessun dato disponibile.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = rows.map(r => `
-      <tr class="border-b border-slate-700/50 hover:bg-slate-700/20 transition">
-        <td class="px-5 py-3 text-slate-300">${esc(r.company_name)}</td>
-        <td class="px-5 py-3 font-mono text-xs text-slate-500">${r.job_id}</td>
-        <td class="px-5 py-3 text-slate-300">${r.panels_count}</td>
-        <td class="px-5 py-3 text-amber-400">${r.credits_used}</td>
-        <td class="px-5 py-3 font-semibold text-emerald-400">€${r.cost_eur}</td>
-        <td class="px-5 py-3 text-xs text-slate-500">${new Date(r.created_at).toLocaleString("it-IT")}</td>
-      </tr>`).join("");
+    tbody.innerHTML = rows.map(r => {
+      const paymentsHtml = r.payments.length
+        ? r.payments.map(p => `
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="px-2 py-0.5 rounded-md text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">${p.method}</span>
+              <span class="text-emerald-400 font-semibold text-xs">€${p.amount_eur.toFixed(2).replace(".",",")}</span>
+              <span class="text-slate-500 text-xs">${new Date(p.date).toLocaleDateString("it-IT")}</span>
+              ${p.has_receipt
+                ? `<a href="/admin/bonifico-requests/${p.id}/receipt" target="_blank"
+                    class="px-2 py-0.5 rounded text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition">
+                    📎 Ricevuta
+                   </a>`
+                : ''}
+            </div>`).join("")
+        : '<span class="text-slate-600 text-xs italic">Nessun pagamento registrato</span>';
+
+      return `
+        <tr class="border-b border-slate-700/50 hover:bg-slate-700/20 transition align-top">
+          <td class="px-5 py-4">
+            <p class="text-white font-medium text-sm">${esc(r.name)}</p>
+            <p class="text-slate-500 text-xs">${esc(r.email)}</p>
+          </td>
+          <td class="px-5 py-4 text-slate-200 font-semibold">${r.panels_total.toLocaleString("it")}</td>
+          <td class="px-5 py-4 font-bold ${r.amount_due > 0 ? "text-emerald-400" : "text-slate-500"}">
+            €${r.amount_due.toFixed(2).replace(".",",")}
+          </td>
+          <td class="px-5 py-4 space-y-2">${paymentsHtml}</td>
+        </tr>`;
+    }).join("");
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-red-400 text-sm">Errore.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-red-400 text-sm">Errore caricamento.</td></tr>';
   }
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 let usageLoaded = false;
+let bonificoLoaded = false;
 function switchTab(name) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.replace("tab-active","tab-inactive") || b.classList.add("tab-inactive"));
   event.target.classList.replace("tab-inactive","tab-active");
 
-  document.getElementById("tab-companies").classList.add("hidden");
-  document.getElementById("tab-usage").classList.add("hidden");
+  ["companies","usage","bonifico"].forEach(t => {
+    document.getElementById(`tab-${t}`)?.classList.add("hidden");
+  });
   document.getElementById(`tab-${name}`).classList.remove("hidden");
 
-  if (name === "usage" && !usageLoaded) { usageLoaded = true; loadUsage(); }
+  if (name === "usage"    && !usageLoaded)    { usageLoaded    = true; loadUsage(); }
+  if (name === "bonifico" && !bonificoLoaded) { bonificoLoaded = true; loadBonifico(); }
+}
+
+// ── Bonifico requests ─────────────────────────────────────────────────────────
+async function loadBonifico() {
+  const tbody = document.getElementById("bonificoBody");
+  tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-600">Caricamento...</td></tr>';
+  try {
+    const res  = await fetch("/admin/bonifico-requests", { headers: authH() });
+    const rows = await res.json();
+
+    const badge   = document.getElementById("bonificoBadge");
+    const pending = rows.filter(r => r.status === "pending").length;
+    if (pending > 0) {
+      badge.textContent = pending;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="py-10 text-center text-slate-600">Nessuna richiesta.</td></tr>';
+      return;
+    }
+
+    const STATUS = {
+      pending:  '<span class="px-2 py-0.5 rounded-md text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">⏳ Pendente</span>',
+      approved: '<span class="px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">✅ Approvato</span>',
+      rejected: '<span class="px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30">❌ Rifiutato</span>',
+    };
+
+    tbody.innerHTML = rows.map(r => `
+      <tr class="border-b border-slate-700/50 hover:bg-slate-700/20 transition">
+        <td class="px-5 py-4 text-white font-medium">${esc(r.company_name)}</td>
+        <td class="px-5 py-4 text-slate-400 text-xs uppercase">${r.package}</td>
+        <td class="px-5 py-4 font-bold text-amber-400">${r.credits}</td>
+        <td class="px-5 py-4 text-emerald-400 font-semibold">€${r.amount_eur.toFixed(2).replace(".",",")}</td>
+        <td class="px-5 py-4">${STATUS[r.status] || r.status}</td>
+        <td class="px-5 py-4 text-xs text-slate-500">${new Date(r.created_at).toLocaleString("it-IT")}</td>
+        <td class="px-5 py-4">
+          ${r.status === "pending" ? `
+            <div class="flex gap-2">
+              <button onclick="approvaBonifico(${r.id})"
+                class="px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs border border-emerald-500/30 transition font-medium">
+                ✅ Approva
+              </button>
+              <button onclick="rifiutaBonifico(${r.id})"
+                class="px-3 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs border border-red-500/30 transition">
+                ✕ Rifiuta
+              </button>
+            </div>` : '<span class="text-slate-600 text-xs">—</span>'}
+        </td>
+      </tr>`).join("");
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-red-400 text-sm">Errore.</td></tr>';
+  }
+}
+
+async function approvaBonifico(id) {
+  if (!confirm("Approvare la richiesta e accreditare i crediti?")) return;
+  try {
+    const res = await fetch(`/admin/bonifico-requests/${id}/approve`, { method: "POST", headers: authH() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    bonificoLoaded = false;
+    loadBonifico();
+    loadCompanies();
+  } catch (e) { alert("Errore: " + e.message); }
+}
+
+async function rifiutaBonifico(id) {
+  if (!confirm("Rifiutare questa richiesta?")) return;
+  try {
+    const res = await fetch(`/admin/bonifico-requests/${id}/reject`, { method: "POST", headers: authH() });
+    if (!res.ok) throw new Error((await res.json()).detail);
+    bonificoLoaded = false;
+    loadBonifico();
+  } catch (e) { alert("Errore: " + e.message); }
 }
 
 // ── Create modal ──────────────────────────────────────────────────────────────
@@ -539,7 +667,7 @@ async function init() {
   const me = await res.json();
   if (!me.is_admin) { window.location.href = "/static/dashboard.html"; return; }
 
-  await Promise.all([loadStats(), loadCompanies()]);
+  await Promise.all([loadStats(), loadCompanies(), loadBonifico()]);
 }
 
 init();

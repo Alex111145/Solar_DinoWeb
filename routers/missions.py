@@ -126,8 +126,10 @@ def _run_pipeline(job_id: str, tif_path: str, tfw_path: str, job_dir: str):
 @router.post("/upload")
 async def upload_mission(
     background_tasks: BackgroundTasks,
-    tif_file: UploadFile = File(...),
-    tfw_file: UploadFile = File(...),
+    tif_termico: UploadFile = File(...),
+    tfw_termico: UploadFile = File(...),
+    tif_rgb:     UploadFile = File(...),
+    tfw_rgb:     UploadFile = File(...),
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
@@ -141,32 +143,44 @@ async def upload_mission(
     job_dir = os.path.join(UPLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
-    tif_path = os.path.join(job_dir, tif_file.filename)
-    tfw_path = os.path.join(job_dir, tfw_file.filename)
+    # Save all 4 files — normalizza estensione in minuscolo
+    def _norm(filename: str) -> str:
+        name, ext = os.path.splitext(filename)
+        return name + ext.lower()
 
-    with open(tif_path, "wb") as f:
-        shutil.copyfileobj(tif_file.file, f)
-    with open(tfw_path, "wb") as f:
-        shutil.copyfileobj(tfw_file.file, f)
+    tif_termico_path = os.path.join(job_dir, "termico_" + _norm(tif_termico.filename))
+    tfw_termico_path = os.path.join(job_dir, "termico_" + _norm(tfw_termico.filename))
+    tif_rgb_path     = os.path.join(job_dir, "rgb_"     + _norm(tif_rgb.filename))
+    tfw_rgb_path     = os.path.join(job_dir, "rgb_"     + _norm(tfw_rgb.filename))
 
-    # Deduct credit
+    for src, dst in [
+        (tif_termico, tif_termico_path),
+        (tfw_termico, tfw_termico_path),
+        (tif_rgb,     tif_rgb_path),
+        (tfw_rgb,     tfw_rgb_path),
+    ]:
+        with open(dst, "wb") as f:
+            shutil.copyfileobj(src.file, f)
+
+    # Deduct 1 credit
     current.credits -= 1
 
     job = models.Job(
         id           = job_id,
         company_id   = current.id,
         status       = "in_coda",
-        tif_filename = tif_file.filename,
+        tif_filename = tif_termico.filename,
     )
     db.add(job)
     db.commit()
 
-    background_tasks.add_task(_run_pipeline, job_id, tif_path, tfw_path, job_dir)
+    # Pipeline runs on the thermal ortomosaic
+    background_tasks.add_task(_run_pipeline, job_id, tif_termico_path, tfw_termico_path, job_dir)
 
     return {
-        "job_id":           job_id,
-        "message":          "Missione avviata con successo",
-        "credits_rimasti":  current.credits,
+        "job_id":          job_id,
+        "message":         "Missione avviata con successo",
+        "credits_rimasti": current.credits,
     }
 
 

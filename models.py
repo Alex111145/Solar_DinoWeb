@@ -19,10 +19,12 @@ class Company(Base):
     credits            = Column(Integer, default=1)
     is_active          = Column(Boolean, default=True)
     deleted_at         = Column(DateTime, nullable=True)             # Soft delete
+    last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
     created_at         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    jobs       = relationship("Job", back_populates="company", cascade="all, delete")
-    usage_logs = relationship("UsageLog", back_populates="company", cascade="all, delete")
+    jobs               = relationship("Job", back_populates="company", cascade="all, delete")
+    usage_logs         = relationship("UsageLog", back_populates="company", cascade="all, delete")
+    bonifico_requests  = relationship("BonificoRequest", back_populates="company", cascade="all, delete")
 
 
 class Job(Base):
@@ -42,6 +44,22 @@ class Job(Base):
 
     company   = relationship("Company", back_populates="jobs")
     usage_log = relationship("UsageLog", back_populates="job", uselist=False)
+
+
+class BonificoRequest(Base):
+    __tablename__ = "bonifico_requests"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    company_id  = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    package     = Column(String, nullable=False)   # single | pack5 | pack10 | pack20 | pack100 | ...
+    credits     = Column(Integer, nullable=False)
+    amount_eur  = Column(Float, nullable=False)
+    status       = Column(String, default="pending")  # pending | approved | rejected
+    receipt_path = Column(String, nullable=True)       # path della ricevuta caricata
+    created_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    approved_at  = Column(DateTime, nullable=True)
+
+    company = relationship("Company", back_populates="bonifico_requests")
 
 
 class UsageLog(Base):

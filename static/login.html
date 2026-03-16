@@ -29,6 +29,11 @@
       <h2 class="text-xl font-semibold text-white mb-6">Accedi al tuo account</h2>
 
       <div id="errMsg" class="hidden mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
+      <div id="disabledMsg" class="hidden mb-4 px-4 py-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-sm space-y-1">
+        <p class="text-orange-300 font-semibold">⚠️ Account momentaneamente disabilitato</p>
+        <p class="text-slate-400 text-xs">Per riattivare l'accesso contatta l'assistenza:</p>
+        <a href="mailto:agervasini1@gmail.com" class="text-amber-400 hover:text-amber-300 text-xs font-medium transition">agervasini1@gmail.com</a>
+      </div>
 
       <form id="loginForm" class="space-y-5">
         <div>
@@ -65,7 +70,7 @@
         <p class="text-center text-slate-400 text-sm font-medium mb-3">Nuova azienda?</p>
         <a href="/static/register.html"
           class="block w-full py-3 rounded-xl border border-slate-600 hover:border-amber-500/50 bg-slate-700/50 hover:bg-amber-500/10 text-slate-300 hover:text-amber-300 font-semibold text-sm text-center transition">
-          Registrati — 1 ortomosaico gratuito
+          Registrati — 2 ortomosaici gratuiti
         </a>
       </div>
     </div>
@@ -108,6 +113,10 @@
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 403) {
+          document.getElementById("disabledMsg").classList.remove("hidden");
+          return;
+        }
         throw new Error(data.detail || "Errore di accesso");
       }
 

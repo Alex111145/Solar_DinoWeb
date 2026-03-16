@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE companies ADD COLUMN ragione_sociale VARCHAR",
             "ALTER TABLE companies ADD COLUMN vat_number VARCHAR",
             "ALTER TABLE companies ADD COLUMN deleted_at DATETIME",
+            "ALTER TABLE companies ADD COLUMN last_ip VARCHAR",
         ]:
             try:
                 conn.execute(text(col_sql))

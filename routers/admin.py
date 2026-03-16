@@ -1,8 +1,9 @@
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -41,14 +42,22 @@ def get_stats(
         .filter(models.Job.status == "completato")
         .scalar()
     ) or 0
-    total_revenue = total_panels * PRICE_PER_PANEL
+
+    now         = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    panels_month = (
+        db.query(func.sum(models.Job.panels_detected))
+        .filter(models.Job.status == "completato", models.Job.created_at >= month_start)
+        .scalar()
+    ) or 0
 
     return {
         "total_companies":       total_companies,
         "total_jobs":            total_jobs,
         "completed_jobs":        completed,
         "total_panels_detected": total_panels,
-        "total_revenue_eur":     round(total_revenue, 2),
+        "total_revenue_eur":     round(total_panels  * PRICE_PER_PANEL, 2),
+        "revenue_month_eur":     round(panels_month  * PRICE_PER_PANEL, 2),
         "price_per_panel":       PRICE_PER_PANEL,
     }
 
@@ -97,6 +106,7 @@ def list_companies(
             "jobs_completed":   jobs_done,
             "panels_detected":  panels,
             "amount_owed_eur":  round(amount_owed, 2),
+            "last_ip":          c.last_ip or "—",
             "created_at":       c.created_at.isoformat(),
         })
 
@@ -277,6 +287,72 @@ def company_history(
 # Usage / Billing report
 # ---------------------------------------------------------------------------
 
+@router.get("/billing")
+def billing_report(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Per ogni azienda: pannelli totali, importo dovuto, pagamenti ricevuti con metodo."""
+    companies = (
+        db.query(models.Company)
+        .filter(
+            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.deleted_at.is_(None),
+        )
+        .order_by(models.Company.created_at.desc())
+        .all()
+    )
+
+    rows = []
+    for c in companies:
+        panels_total = db.query(func.sum(models.Job.panels_detected)).filter(
+            models.Job.company_id == c.id,
+            models.Job.status == "completato",
+        ).scalar() or 0
+
+        amount_due = round(panels_total * PRICE_PER_PANEL, 2)
+
+        # Pagamenti ricevuti: bonifici approvati
+        bonifici = db.query(models.BonificoRequest).filter(
+            models.BonificoRequest.company_id == c.id,
+            models.BonificoRequest.status == "approved",
+        ).order_by(models.BonificoRequest.approved_at.desc()).all()
+
+        payments = [{
+            "id":           b.id,
+            "method":       "Bonifico",
+            "credits":      b.credits,
+            "amount_eur":   b.amount_eur,
+            "date":         b.approved_at.isoformat() if b.approved_at else b.created_at.isoformat(),
+            "has_receipt":  bool(b.receipt_path and os.path.exists(b.receipt_path)),
+        } for b in bonifici]
+
+        rows.append({
+            "id":            c.id,
+            "name":          c.name,
+            "email":         c.email,
+            "panels_total":  panels_total,
+            "amount_due":    amount_due,
+            "payments":      payments,
+        })
+
+    return rows
+
+
+@router.get("/bonifico-requests/{req_id}/receipt")
+def download_receipt(
+    req_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    req = db.query(models.BonificoRequest).filter(models.BonificoRequest.id == req_id).first()
+    if not req or not req.receipt_path:
+        raise HTTPException(status_code=404, detail="Ricevuta non trovata")
+    if not os.path.exists(req.receipt_path):
+        raise HTTPException(status_code=404, detail="File ricevuta non trovato")
+    return FileResponse(path=req.receipt_path, filename=os.path.basename(req.receipt_path))
+
+
 @router.get("/usage")
 def usage_report(
     db: Session = Depends(get_db),
@@ -303,3 +379,75 @@ def usage_report(
         })
 
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Bonifico requests
+# ---------------------------------------------------------------------------
+
+@router.get("/bonifico-requests")
+def list_bonifico_requests(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    reqs = (
+        db.query(models.BonificoRequest)
+        .order_by(models.BonificoRequest.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    rows = []
+    for r in reqs:
+        company = db.query(models.Company).filter(models.Company.id == r.company_id).first()
+        rows.append({
+            "id":           r.id,
+            "company_id":   r.company_id,
+            "company_name": company.name if company else "N/A",
+            "package":      r.package,
+            "credits":      r.credits,
+            "amount_eur":   r.amount_eur,
+            "status":       r.status,
+            "receipt_path": r.receipt_path,
+            "created_at":   r.created_at.isoformat(),
+            "approved_at":  r.approved_at.isoformat() if r.approved_at else None,
+        })
+    return rows
+
+
+@router.post("/bonifico-requests/{req_id}/approve")
+def approve_bonifico(
+    req_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    req = db.query(models.BonificoRequest).filter(models.BonificoRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="Richiesta già elaborata")
+
+    company = db.query(models.Company).filter(models.Company.id == req.company_id).first()
+    if company:
+        company.credits += req.credits
+
+    req.status      = "approved"
+    req.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": f"+{req.credits} crediti aggiunti a {company.name if company else req.company_id}"}
+
+
+@router.post("/bonifico-requests/{req_id}/reject")
+def reject_bonifico(
+    req_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    req = db.query(models.BonificoRequest).filter(models.BonificoRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="Richiesta già elaborata")
+
+    req.status = "rejected"
+    db.commit()
+    return {"message": "Richiesta rifiutata"}
