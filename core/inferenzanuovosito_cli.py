@@ -75,15 +75,47 @@ CLASS_NAMES = {0: "PV_Module", 1: "Hotspot", 2: "Degrado"}
 # ✂️ FASE 1: TAGLIO
 # ==============================================================================
 
+def leggi_tif_come_bgr(image_path):
+    """
+    Legge un TIF geospaziale con rasterio e lo converte in immagine BGR uint8
+    compatibile con OpenCV. Gestisce TIF a 1, 3 o 4 bande (termico, RGB, RGBA).
+    """
+    with rasterio.open(image_path) as src:
+        bande = src.count
+        if bande >= 3:
+            r = src.read(1).astype(np.float32)
+            g = src.read(2).astype(np.float32)
+            b = src.read(3).astype(np.float32)
+        else:
+            # TIF termico a 1 banda: replica in 3 canali
+            grey = src.read(1).astype(np.float32)
+            r = g = b = grey
+
+    def normalizza(ch):
+        mn, mx = ch.min(), ch.max()
+        if mx > mn:
+            return ((ch - mn) / (mx - mn) * 255).astype(np.uint8)
+        return np.zeros_like(ch, dtype=np.uint8)
+
+    bgr = cv2.merge([normalizza(b), normalizza(g), normalizza(r)])
+    return bgr
+
+
 def taglio_tile(image_path, output_dir, tile_size=800, overlap=0.70):
     print(f"\n✂️  FASE 1: Taglio ortomosaico in tile...")
     if not os.path.exists(image_path):
         print(f"❌ ERRORE: Ortomosaico {image_path} non trovato!")
         return 0
-    full_img = cv2.imread(image_path)
-    if full_img is None:
-        print(f"❌ ERRORE: Impossibile leggere {image_path}")
-        return 0
+
+    # Usa rasterio per leggere TIF geospaziali (evita errori OpenCV su float/multi-banda)
+    try:
+        full_img = leggi_tif_come_bgr(image_path)
+    except Exception as e:
+        full_img = cv2.imread(image_path)
+        if full_img is None:
+            print(f"❌ ERRORE: Impossibile leggere {image_path}: {e}")
+            return 0
+
     h_orig, w_orig = full_img.shape[:2]
     print(f"   Dimensioni mosaico: {w_orig} x {h_orig} px")
     os.makedirs(output_dir, exist_ok=True)
@@ -420,7 +452,7 @@ def main():
     if os.path.exists(args.tif):
         print("🖼️  Generazione mosaico annotato...")
         try:
-            mosaico = cv2.imread(args.tif)
+            mosaico = leggi_tif_come_bgr(args.tif)
             if mosaico is not None:
                 for p in final_panels:
                     color = CLASS_COLORS.get(p.get('class_id', 0), (0, 200, 0))

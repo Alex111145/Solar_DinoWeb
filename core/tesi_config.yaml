@@ -1,0 +1,75 @@
+MODEL:
+  META_ARCHITECTURE: "MaskDINO"
+  DEVICE: "cpu"
+  WEIGHTS: "detectron2://ImageNetPretrained/torchvision/R-50.pkl"
+  MASK_ON: True
+  
+  BACKBONE:
+    NAME: "build_resnet_backbone"
+  RESNETS:
+    DEPTH: 50
+    OUT_FEATURES: ["res2", "res3", "res4", "res5"]
+    NORM: "FrozenBN"
+
+  SEM_SEG_HEAD:
+    NAME: "MaskDINOHead"
+    IN_FEATURES: ["res2", "res3", "res4", "res5"]
+    NUM_CLASSES: 1
+    IGNORE_VALUE: 255
+    COMMON_STRIDE: 4
+    LOSS_WEIGHT: 1.0
+    CONVS_DIM: 256
+    MASK_DIM: 256
+    NORM: "GN"
+    PIXEL_DECODER_NAME: "MaskDINOEncoder"
+    TRANSFORMER_ENC_LAYERS: 6
+    DEFORMABLE_TRANSFORMER_ENCODER_IN_FEATURES: ["res3", "res4", "res5"]
+
+  MASK_DINO:
+    NUM_CLASSES: 1
+    NUM_QUERIES: 100
+    IN_FEATURES: ["res2", "res3", "res4", "res5"]
+
+  ROI_HEADS:
+    NUM_CLASSES: 1
+
+DATASETS:
+  TRAIN: ("tesi_train",)
+  TEST: ("tesi_val",)
+
+SOLVER:
+  IMS_PER_BATCH: 1
+  BASE_LR: 0.0001
+  
+  # --- AGGIORNATO: 25.000 Iterazioni ---
+  MAX_ITER: 25000
+  # Step di decadimento LR adattati a 25k (a circa 18k e 22k iterazioni)
+  STEPS: (18000, 22500)
+  
+  CHECKPOINT_PERIOD: 2500 # Salva un modello ogni 2500 iterazioni
+  WARMUP_ITERS: 100
+  OPTIMIZER: "ADAMW"
+  
+  # --- FIX 1: AMP DISABILITATO (CPU) ---
+  AMP:
+    ENABLED: False
+
+  # --- FIX 2: GRADIENT CLIPPING DISABILITATO ---
+  # Necessario su Mac CPU per evitare errore "nested_tensorlist"
+  CLIP_GRADIENTS:
+    ENABLED: False
+    CLIP_TYPE: "value"
+    CLIP_VALUE: 0.01
+    NORM_TYPE: 2.0
+
+INPUT:
+  MASK_FORMAT: "bitmask" 
+  MIN_SIZE_TRAIN: (640,)
+  MAX_SIZE_TRAIN: 800
+  MIN_SIZE_TEST: 640
+  MAX_SIZE_TEST: 800
+  CROP:
+    ENABLED: False
+  FORMAT: "BGR"
+
+OUTPUT_DIR: "./output_tesi"
