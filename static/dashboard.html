@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SolarDino — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f172a; }
+    .drop-active { border-color: #f59e0b !important; background: rgba(245,158,11,.05) !important; }
+    .status-in_coda     { color:#94a3b8; }
+    .status-taglio_tile { color:#60a5fa; }
+    .status-inferenza   { color:#a78bfa; }
+    .status-completato  { color:#34d399; }
+    .status-errore      { color:#f87171; }
+    .pkg-scroll::-webkit-scrollbar { height: 6px; }
+    .pkg-scroll::-webkit-scrollbar-track { background: #1e293b; border-radius: 3px; }
+    .pkg-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-300">
+
+<!-- ── NAVBAR ── -->
+<nav class="bg-slate-900 border-b border-slate-700/50 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+  <div class="flex items-center gap-3">
+    <span class="text-xl">☀️</span>
+    <span class="font-bold text-white text-lg">SolarDino</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+      <span class="text-amber-400 text-xs font-medium">Crediti:</span>
+      <span id="creditsDisplay" class="text-amber-300 font-bold text-sm">—</span>
+    </div>
+    <span id="userNameDisplay" class="text-slate-400 text-sm hidden md:block"></span>
+    <button onclick="logout()" class="text-slate-500 hover:text-red-400 text-sm transition">Esci</button>
+  </div>
+</nav>
+
+<!-- ── PAYMENT BANNER ── -->
+<div id="paymentBanner" class="hidden mx-6 mt-4 px-4 py-3 rounded-xl border text-sm font-medium"></div>
+
+<!-- ── MAIN ── -->
+<main class="max-w-6xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- Welcome -->
+  <div>
+    <h1 class="text-2xl font-bold text-white">Benvenuto, <span id="welcomeName">—</span></h1>
+    <p class="text-slate-500 text-sm mt-1">Carica i dati del drone per avviare l'elaborazione AI dei tuoi pannelli solari.</p>
+  </div>
+
+  <!-- ── TOP GRID: Upload + Tip + ActiveJob ── -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Upload card (2 colonne) -->
+    <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-2xl p-6">
+      <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+        <span>📡</span> Nuova Elaborazione
+      </h2>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <!-- TIF Drop Zone -->
+        <div
+          id="dropTif"
+          ondragover="onDragOver(event,'dropTif')" ondragleave="onDragLeave('dropTif')" ondrop="onDrop(event,'tifInput','dropTif','tifLabel')"
+          class="border-2 border-dashed border-slate-600 rounded-xl p-5 text-center cursor-pointer hover:border-amber-500/50 transition"
+          onclick="document.getElementById('tifInput').click()"
+        >
+          <div class="text-3xl mb-2">🗺️</div>
+          <p id="tifLabel" class="text-slate-400 text-xs">Trascina qui <span class="text-amber-400 font-semibold">Ortomosaico .TIF</span><br/>o clicca per selezionare</p>
+          <input type="file" id="tifInput" accept=".tif,.tiff" class="hidden" onchange="onFileSelect('tifInput','tifLabel')"/>
+        </div>
+
+        <!-- TFW Drop Zone -->
+        <div
+          id="dropTfw"
+          ondragover="onDragOver(event,'dropTfw')" ondragleave="onDragLeave('dropTfw')" ondrop="onDrop(event,'tfwInput','dropTfw','tfwLabel')"
+          class="border-2 border-dashed border-slate-600 rounded-xl p-5 text-center cursor-pointer hover:border-amber-500/50 transition"
+          onclick="document.getElementById('tfwInput').click()"
+        >
+          <div class="text-3xl mb-2">📍</div>
+          <p id="tfwLabel" class="text-slate-400 text-xs">Trascina qui <span class="text-amber-400 font-semibold">File .TFW</span><br/>o clicca per selezionare</p>
+          <input type="file" id="tfwInput" accept=".tfw" class="hidden" onchange="onFileSelect('tfwInput','tfwLabel')"/>
+        </div>
+      </div>
+
+      <div id="uploadErr" class="hidden mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
+
+      <button
+        id="uploadBtn" onclick="uploadMission()"
+        class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition flex items-center justify-center gap-2"
+      >
+        <span id="uploadBtnText">🚀 Avvia Elaborazione AI</span>
+        <svg id="uploadSpinner" class="hidden animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Tip drone + active job -->
+    <div class="flex flex-col gap-4">
+
+      <!-- Drone tip card -->
+      <div class="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-lg">🚁</span>
+          <p class="text-blue-300 font-semibold text-sm">Requisiti di ripresa</p>
+        </div>
+        <ul class="space-y-3 text-xs">
+          <li class="flex items-center gap-3">
+            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">↕</span>
+            <span class="text-slate-400">Altezza max <strong class="text-slate-200">10 m</strong> dai pannelli</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">📐</span>
+            <span class="text-slate-400">Telecamera a <strong class="text-slate-200">90°</strong> (nadir)</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">🗂</span>
+            <span class="text-slate-400"><strong class="text-slate-200">.TIF</strong> + <strong class="text-slate-200">.TFW</strong></span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="flex-shrink-0 w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm">☀️</span>
+            <span class="text-slate-400">Ore <strong class="text-slate-200">centrali</strong> della giornata</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Active job card -->
+      <div id="activeJobCard" class="hidden bg-slate-800 border border-slate-700 rounded-2xl p-5 flex-1">
+        <h2 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
+          <span>⚡</span> Elaborazione in Corso
+        </h2>
+        <div class="space-y-3">
+          <div>
+            <div class="flex justify-between text-xs text-slate-400 mb-1.5">
+              <span id="activeStatus">In coda...</span>
+              <span id="activePercent">0%</span>
+            </div>
+            <div class="w-full bg-slate-700 rounded-full h-2">
+              <div id="progressBar" class="bg-amber-500 h-2 rounded-full transition-all duration-700" style="width:5%"></div>
+            </div>
+          </div>
+          <div id="activeJobInfo" class="text-xs text-slate-500 space-y-1"></div>
+          <div id="downloadSection" class="hidden pt-1 space-y-2">
+            <p class="text-emerald-400 text-sm font-medium">✅ Elaborazione completata!</p>
+            <div class="grid grid-cols-2 gap-1.5" id="downloadButtons"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── CREDITS CARD ── -->
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+        <span>💳</span> Acquista Elaborazioni
+      </h2>
+      <span class="text-xs text-slate-500">1 credito = 1 ortomosaico</span>
+    </div>
+
+    <div id="noCreditsAlert" class="hidden mt-3 mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm font-medium">
+      ⚠️ Crediti esauriti — acquista un pacchetto per continuare.
+    </div>
+
+    <!-- Tabs pagamento -->
+    <div class="flex gap-1 mt-4 mb-4 border-b border-slate-700">
+      <button id="tabStripe" onclick="switchPayTab('stripe')"
+        class="px-4 py-2 text-xs font-medium border-b-2 border-amber-500 text-amber-400 transition">
+        💳 Carta di credito
+      </button>
+      <button id="tabBonifico" onclick="switchPayTab('bonifico')"
+        class="px-4 py-2 text-xs font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-300 transition">
+        🏦 Bonifico bancario
+      </button>
+    </div>
+
+    <!-- Stripe packages -->
+    <div id="panelStripe" class="overflow-x-auto pkg-scroll pb-2">
+      <div class="flex gap-4 min-w-max" id="packagesContainer">
+        <div class="text-slate-500 text-sm py-4">Caricamento pacchetti...</div>
+      </div>
+    </div>
+
+    <!-- Bonifico -->
+    <div id="panelBonifico" class="hidden">
+      <div class="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 space-y-4">
+        <p class="text-slate-300 text-sm">Effettua un bonifico bancario con i seguenti dati e invia la ricevuta via email. I crediti verranno aggiunti manualmente entro 24h lavorative.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <p class="text-slate-500 text-xs mb-1">Intestatario</p>
+            <p class="text-white font-medium">—</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+            <p class="text-slate-500 text-xs mb-1">IBAN</p>
+            <p class="text-white font-mono font-medium tracking-wide">—</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 sm:col-span-2">
+            <p class="text-slate-500 text-xs mb-1">Causale</p>
+            <p class="text-slate-300 text-xs">SolarDino — [nome azienda] — [numero ortomosaici]</p>
+          </div>
+        </div>
+        <p class="text-slate-500 text-xs">Dopo il pagamento invia la ricevuta a <span class="text-amber-400">—</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HISTORY TABLE ── -->
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+    <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <span>📋</span> Storico Elaborazioni
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-slate-500 border-b border-slate-700 text-left">
+            <th class="pb-3 pr-4 font-medium">File</th>
+            <th class="pb-3 pr-4 font-medium">Data</th>
+            <th class="pb-3 pr-4 font-medium">Stato</th>
+            <th class="pb-3 pr-4 font-medium">Pannelli</th>
+            <th class="pb-3 font-medium">Download</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="5" class="py-8 text-center text-slate-600">Caricamento...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Auth ──────────────────────────────────────────────────────────────────────
+const token = localStorage.getItem("token");
+if (!token) { window.location.href = "/static/login.html"; }
+
+function authHeaders() { return { "Authorization": `Bearer ${token}` }; }
+function logout() { localStorage.clear(); window.location.href = "/static/login.html"; }
+
+// ── Payment banner ─────────────────────────────────────────────────────────────
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const banner = document.getElementById("paymentBanner");
+  if (params.get("payment") === "success") {
+    banner.className = "mx-6 mt-4 px-4 py-3 rounded-xl border text-sm font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+    banner.textContent = "✅ Pagamento completato! I tuoi crediti sono stati aggiornati.";
+    banner.classList.remove("hidden");
+    refreshUserInfo();
+  } else if (params.get("payment") === "cancelled") {
+    banner.className = "mx-6 mt-4 px-4 py-3 rounded-xl border text-sm font-medium bg-slate-700/50 border-slate-600 text-slate-400";
+    banner.textContent = "ℹ️ Pagamento annullato.";
+    banner.classList.remove("hidden");
+  }
+})();
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  await refreshUserInfo();
+  await loadHistory();
+  await loadPackages();
+}
+
+async function refreshUserInfo() {
+  try {
+    const res  = await fetch("/auth/me", { headers: authHeaders() });
+    if (res.status === 401) { logout(); return; }
+    const data = await res.json();
+    document.getElementById("creditsDisplay").textContent  = data.credits;
+    document.getElementById("welcomeName").textContent     = data.name;
+    document.getElementById("userNameDisplay").textContent = data.email;
+    localStorage.setItem("credits", data.credits);
+    const alert = document.getElementById("noCreditsAlert");
+    if (data.credits <= 0) alert.classList.remove("hidden");
+    else alert.classList.add("hidden");
+  } catch (e) {}
+}
+
+// ── Drag & Drop ────────────────────────────────────────────────────────────────
+function onDragOver(e, zoneId) { e.preventDefault(); document.getElementById(zoneId).classList.add("drop-active"); }
+function onDragLeave(zoneId)   { document.getElementById(zoneId).classList.remove("drop-active"); }
+function onDrop(e, inputId, zoneId, labelId) {
+  e.preventDefault();
+  document.getElementById(zoneId).classList.remove("drop-active");
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const dt = new DataTransfer(); dt.items.add(file);
+  document.getElementById(inputId).files = dt.files;
+  document.getElementById(labelId).innerHTML = `<span class="text-emerald-400 font-medium">✓ ${file.name}</span>`;
+}
+function onFileSelect(inputId, labelId) {
+  const file = document.getElementById(inputId).files[0];
+  if (file) document.getElementById(labelId).innerHTML = `<span class="text-emerald-400 font-medium">✓ ${file.name}</span>`;
+}
+
+// ── Upload mission ─────────────────────────────────────────────────────────────
+let pollingInterval = null;
+
+async function uploadMission() {
+  const tifFile = document.getElementById("tifInput").files[0];
+  const tfwFile = document.getElementById("tfwInput").files[0];
+  const errBox  = document.getElementById("uploadErr");
+  errBox.classList.add("hidden");
+
+  if (!tifFile || !tfwFile) {
+    errBox.textContent = "Seleziona entrambi i file (.tif e .tfw) prima di avviare.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+
+  const credits = parseInt(localStorage.getItem("credits") || "0");
+  if (credits <= 0) {
+    errBox.textContent = "Crediti esauriti. Acquista un pacchetto per continuare.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+
+  const btn    = document.getElementById("uploadBtn");
+  const btnTxt = document.getElementById("uploadBtnText");
+  const spin   = document.getElementById("uploadSpinner");
+  btn.disabled = true;
+  btnTxt.textContent = "Caricamento...";
+  spin.classList.remove("hidden");
+
+  const formData = new FormData();
+  formData.append("tif_file", tifFile);
+  formData.append("tfw_file", tfwFile);
+
+  try {
+    const res  = await fetch("/missions/upload", { method: "POST", headers: authHeaders(), body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Errore upload");
+    document.getElementById("creditsDisplay").textContent = data.credits_rimasti;
+    localStorage.setItem("credits", data.credits_rimasti);
+    showActiveJob(data.job_id, tifFile.name);
+    startPolling(data.job_id);
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove("hidden");
+  } finally {
+    btnTxt.textContent = "🚀 Avvia Elaborazione AI";
+    spin.classList.add("hidden");
+    btn.disabled = false;
+  }
+}
+
+function showActiveJob(jobId, filename) {
+  document.getElementById("activeJobCard").classList.remove("hidden");
+  document.getElementById("downloadSection").classList.add("hidden");
+  document.getElementById("activeJobInfo").innerHTML =
+    `<p>📁 <span class="text-slate-400">${filename}</span></p>
+     <p>🔑 Job: <span class="text-slate-400 font-mono text-xs">${jobId.substring(0,8)}...</span></p>`;
+  updateProgress("in_coda", 5);
+}
+
+function updateProgress(status, pct) {
+  const labels = {
+    in_coda:     "⏳ In coda...",
+    taglio_tile: "✂️ Taglio ortomosaico...",
+    inferenza:   "🤖 Inferenza MaskDINO... (fino a 2h)",
+    completato:  "✅ Completata",
+    errore:      "❌ Errore durante l'elaborazione",
+  };
+  document.getElementById("activeStatus").textContent  = labels[status] || status;
+  document.getElementById("activePercent").textContent = pct >= 0 ? `${pct}%` : "—";
+  document.getElementById("progressBar").style.width   = pct >= 0 ? `${pct}%` : "100%";
+  if (status === "errore") {
+    document.getElementById("progressBar").classList.replace("bg-amber-500", "bg-red-500");
+  }
+}
+
+function startPolling(jobId) {
+  if (pollingInterval) clearInterval(pollingInterval);
+  const PROGRESS = { in_coda: 5, taglio_tile: 30, inferenza: 65, completato: 100, errore: -1 };
+  pollingInterval = setInterval(async () => {
+    try {
+      const res  = await fetch(`/missions/${jobId}/status`, { headers: authHeaders() });
+      const data = await res.json();
+      updateProgress(data.status, PROGRESS[data.status] ?? 10);
+      if (data.status === "completato") {
+        clearInterval(pollingInterval);
+        showDownloadButtons(jobId, data);
+        await loadHistory();
+        await refreshUserInfo();
+      } else if (data.status === "errore") {
+        clearInterval(pollingInterval);
+        await loadHistory();
+      }
+    } catch (e) {}
+  }, 5000);
+}
+
+function showDownloadButtons(jobId, data) {
+  document.getElementById("downloadSection").classList.remove("hidden");
+  const formats = [
+    { type: "json",    label: "📄 JSON GPS",   color: "bg-blue-600 hover:bg-blue-500"       },
+    { type: "csv",     label: "📊 CSV",         color: "bg-emerald-600 hover:bg-emerald-500" },
+    { type: "kml",     label: "🗺️ KML",         color: "bg-purple-600 hover:bg-purple-500"   },
+    { type: "kmz",     label: "🌐 KMZ",         color: "bg-indigo-600 hover:bg-indigo-500"   },
+    { type: "geojson", label: "🔵 GeoJSON",     color: "bg-teal-600 hover:bg-teal-500"       },
+  ];
+  document.getElementById("downloadButtons").innerHTML = formats.map(f =>
+    `<a href="/missions/${jobId}/download/${f.type}" target="_blank"
+      class="block text-center py-1.5 px-2 rounded-lg text-white text-xs font-medium transition ${f.color}">${f.label}</a>`
+  ).join("");
+  if (data.panels_detected != null) {
+    document.getElementById("activeJobInfo").innerHTML +=
+      `<p class="text-emerald-400 mt-2">🔍 Pannelli: <strong>${data.panels_detected}</strong>` +
+      ` (🔴 ${data.hotspot_count||0} hotspot, 🟠 ${data.degraded_count||0} degrado)</p>`;
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  const tbody = document.getElementById("historyBody");
+  try {
+    const res  = await fetch("/missions", { headers: authHeaders() });
+    const jobs = await res.json();
+
+    if (!jobs.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-600">Nessuna elaborazione ancora avviata.</td></tr>';
+      return;
+    }
+
+    const STATUS_LABELS = {
+      in_coda:     '<span class="status-in_coda">⏳ In coda</span>',
+      taglio_tile: '<span class="status-taglio_tile">✂️ Taglio</span>',
+      inferenza:   '<span class="status-inferenza">🤖 Inferenza</span>',
+      completato:  '<span class="status-completato">✅ Completata</span>',
+      errore:      '<span class="status-errore">❌ Errore</span>',
+    };
+
+    tbody.innerHTML = jobs.map(j => {
+      const date   = new Date(j.created_at).toLocaleString("it-IT");
+      const panels = j.panels_detected != null
+        ? `${j.panels_detected} <span class="text-slate-500 text-xs">(🔴${j.hotspot_count||0} 🟠${j.degraded_count||0})</span>`
+        : "—";
+      const dlLinks = j.status === "completato"
+        ? `<div class="flex flex-wrap gap-1">
+            ${["json","csv","kml","kmz","geojson"].map(t =>
+              `<a href="/missions/${j.id}/download/${t}" target="_blank"
+                class="px-2 py-0.5 rounded text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 transition">${t.toUpperCase()}</a>`
+            ).join("")}
+           </div>`
+        : `<span class="text-slate-600 text-xs">—</span>`;
+
+      return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/30 transition">
+        <td class="py-3 pr-4 font-mono text-xs text-slate-400">${(j.tif_filename||"—").substring(0,30)}</td>
+        <td class="py-3 pr-4 text-xs text-slate-500">${date}</td>
+        <td class="py-3 pr-4">${STATUS_LABELS[j.status] || j.status}</td>
+        <td class="py-3 pr-4 text-sm">${panels}</td>
+        <td class="py-3">${dlLinks}</td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-red-400 text-sm">Errore caricamento storico.</td></tr>';
+  }
+}
+
+// ── Payment tabs ──────────────────────────────────────────────────────────────
+function switchPayTab(tab) {
+  const isStripe = tab === "stripe";
+  document.getElementById("panelStripe").classList.toggle("hidden", !isStripe);
+  document.getElementById("panelBonifico").classList.toggle("hidden", isStripe);
+  document.getElementById("tabStripe").className   = `px-4 py-2 text-xs font-medium border-b-2 transition ${isStripe  ? "border-amber-500 text-amber-400" : "border-transparent text-slate-500 hover:text-slate-300"}`;
+  document.getElementById("tabBonifico").className = `px-4 py-2 text-xs font-medium border-b-2 transition ${!isStripe ? "border-amber-500 text-amber-400" : "border-transparent text-slate-500 hover:text-slate-300"}`;
+}
+
+// ── Packages ──────────────────────────────────────────────────────────────────
+async function loadPackages() {
+  const container = document.getElementById("packagesContainer");
+  try {
+    const res      = await fetch("/payments/packages");
+    const packages = await res.json();
+    const popular  = "pack10";
+
+    container.innerHTML = packages.map(p => {
+      const isPopular  = p.key === popular;
+      const perUnit    = (p.price_eur / p.credits).toFixed(2).replace(".", ",");
+      const totalFmt   = p.price_eur % 1 === 0
+        ? `€${p.price_eur.toFixed(0)},00`
+        : `€${p.price_eur.toFixed(2).replace(".", ",")}`;
+      const qty = p.credits === 1 ? "1 ortomosaico processato" : `${p.credits} ortomosaici processati`;
+      return `
+        <div class="relative flex flex-col rounded-2xl border w-52 flex-shrink-0 ${isPopular ? "border-amber-500 bg-amber-500/5" : "border-slate-700 bg-slate-900/60"} p-5">
+          ${isPopular ? `<span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-amber-500 text-slate-900 text-xs font-bold whitespace-nowrap">Più popolare</span>` : ""}
+          <p class="text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">${p.label}</p>
+          <p class="text-3xl font-extrabold text-white">${totalFmt}</p>
+          <p class="text-slate-400 text-sm mt-1">${qty}</p>
+          <p class="text-slate-600 text-xs mt-0.5 mb-4">€${perUnit} / ortomosaico</p>
+          <button onclick="buyPackage('${p.key}')"
+            class="mt-auto w-full py-2.5 rounded-xl font-semibold text-sm transition
+              ${isPopular ? "bg-amber-500 hover:bg-amber-400 text-slate-900" : "bg-slate-700 hover:bg-slate-600 text-slate-200"}">
+            Acquista
+          </button>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    container.innerHTML = '<p class="text-slate-500 text-sm">Impossibile caricare i pacchetti.</p>';
+  }
+}
+
+async function buyPackage(pkg) {
+  try {
+    const res  = await fetch("/payments/checkout", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ package: pkg }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    window.location.href = data.checkout_url;
+  } catch (err) {
+    alert("Acquisto non disponibile: " + err.message);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SolarDino — Registrazione</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f172a; }
+    .glow { box-shadow: 0 0 40px rgba(251,191,36,.15); }
+    input:-webkit-autofill { -webkit-box-shadow: 0 0 0 40px #1e293b inset !important; -webkit-text-fill-color: #e2e8f0 !important; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4">
+
+  <div class="w-full max-w-md">
+
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 mb-4">
+        <span class="text-3xl">☀️</span>
+      </div>
+      <h1 class="text-3xl font-bold text-white">SolarDino</h1>
+      <p class="text-slate-400 mt-1 text-sm">Piattaforma AI per ispezione pannelli solari</p>
+    </div>
+
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-8 glow">
+      <h2 class="text-xl font-semibold text-white mb-2">Crea il tuo account</h2>
+      <p class="text-slate-500 text-xs mb-6">1 ortomosaico gratuito incluso alla registrazione.</p>
+
+      <div id="errMsg" class="hidden mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
+
+      <form id="registerForm" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-slate-300 mb-1.5">Ragione sociale</label>
+            <input
+              type="text" id="ragione_sociale" required
+              placeholder="Energia Solare S.R.L."
+              class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1.5">Nome commerciale</label>
+            <input
+              type="text" id="name" required autocomplete="organization"
+              placeholder="Energia Solare"
+              class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-300 mb-1.5">Partita IVA</label>
+            <input
+              type="text" id="vat_number" required
+              placeholder="IT12345678901"
+              class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1.5">Email aziendale</label>
+          <input
+            type="email" id="email" required autocomplete="email"
+            placeholder="contatto@azienda.it"
+            class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
+          <input
+            type="password" id="password" required autocomplete="new-password"
+            placeholder="Minimo 8 caratteri"
+            class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+          />
+        </div>
+
+        <button
+          type="submit" id="submitBtn"
+          class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2"
+        >
+          <span id="btnText">Crea account</span>
+          <svg id="spinner" class="hidden animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+          </svg>
+        </button>
+      </form>
+
+      <p class="text-center text-slate-500 text-xs mt-6">
+        Hai già un account?
+        <a href="/static/login.html" class="text-amber-400 hover:text-amber-300 transition">Accedi</a>
+      </p>
+    </div>
+
+    <p class="text-center text-slate-600 text-xs mt-6">
+      SolarDino © 2026 — Tecnologia di rilevamento AI MaskDINO
+    </p>
+  </div>
+
+<script>
+  const tok = localStorage.getItem("token");
+  if (tok) {
+    const isAdmin = localStorage.getItem("is_admin") === "true";
+    window.location.href = isAdmin ? "/static/admin.html" : "/static/dashboard.html";
+  }
+
+  document.getElementById("registerForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn     = document.getElementById("submitBtn");
+    const spinner = document.getElementById("spinner");
+    const btnText = document.getElementById("btnText");
+    const errMsg  = document.getElementById("errMsg");
+
+    btnText.textContent = "Registrazione in corso...";
+    spinner.classList.remove("hidden");
+    btn.disabled = true;
+    errMsg.classList.add("hidden");
+
+    try {
+      const res = await fetch("/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:            document.getElementById("name").value.trim(),
+          ragione_sociale: document.getElementById("ragione_sociale").value.trim(),
+          vat_number:      document.getElementById("vat_number").value.trim(),
+          email:           document.getElementById("email").value.trim(),
+          password:        document.getElementById("password").value,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Errore di registrazione");
+
+      localStorage.setItem("token",    data.access_token);
+      localStorage.setItem("name",     data.name);
+      localStorage.setItem("email",    data.email);
+      localStorage.setItem("credits",  data.credits);
+      localStorage.setItem("is_admin", data.is_admin);
+
+      window.location.href = "/static/dashboard.html";
+
+    } catch (err) {
+      errMsg.textContent = err.message;
+      errMsg.classList.remove("hidden");
+      btnText.textContent = "Crea account";
+      spinner.classList.add("hidden");
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

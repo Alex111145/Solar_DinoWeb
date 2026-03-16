@@ -1,0 +1,305 @@
+import os
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+import auth_utils
+import models
+from database import get_db
+
+router = APIRouter(prefix="/admin", tags=["Admin"])
+
+PRICE_PER_PANEL = float(os.getenv("PRICE_PER_PANEL", "0.01"))  # € per pannello rilevato
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
+
+@router.get("/stats")
+def get_stats(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    total_companies = (
+        db.query(func.count(models.Company.id))
+        .filter(models.Company.email != auth_utils.ADMIN_EMAIL)
+        .scalar()
+    )
+    total_jobs = db.query(func.count(models.Job.id)).scalar()
+    completed  = (
+        db.query(func.count(models.Job.id))
+        .filter(models.Job.status == "completato")
+        .scalar()
+    )
+    total_panels = (
+        db.query(func.sum(models.Job.panels_detected))
+        .filter(models.Job.status == "completato")
+        .scalar()
+    ) or 0
+    total_revenue = total_panels * PRICE_PER_PANEL
+
+    return {
+        "total_companies":       total_companies,
+        "total_jobs":            total_jobs,
+        "completed_jobs":        completed,
+        "total_panels_detected": total_panels,
+        "total_revenue_eur":     round(total_revenue, 2),
+        "price_per_panel":       PRICE_PER_PANEL,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Companies CRUD
+# ---------------------------------------------------------------------------
+
+@router.get("/companies")
+def list_companies(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    companies = (
+        db.query(models.Company)
+        .filter(
+            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.deleted_at.is_(None),
+        )
+        .order_by(models.Company.created_at.desc())
+        .all()
+    )
+
+    result = []
+    for c in companies:
+        jobs_done = (
+            db.query(func.count(models.Job.id))
+            .filter(models.Job.company_id == c.id, models.Job.status == "completato")
+            .scalar()
+        )
+        panels = (
+            db.query(func.sum(models.Job.panels_detected))
+            .filter(models.Job.company_id == c.id, models.Job.status == "completato")
+            .scalar()
+        ) or 0
+        amount_owed = panels * PRICE_PER_PANEL
+
+        result.append({
+            "id":               c.id,
+            "name":             c.name,
+            "ragione_sociale":  c.ragione_sociale or "",
+            "vat_number":       c.vat_number or "",
+            "email":            c.email,
+            "credits":          c.credits,
+            "is_active":        c.is_active,
+            "jobs_completed":   jobs_done,
+            "panels_detected":  panels,
+            "amount_owed_eur":  round(amount_owed, 2),
+            "created_at":       c.created_at.isoformat(),
+        })
+
+    return result
+
+
+class CreateCompanyBody(BaseModel):
+    email:    str
+    name:     str
+    password: str
+    credits:  int = 3
+
+
+@router.post("/companies", status_code=201)
+def create_company(
+    body: CreateCompanyBody,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    if db.query(models.Company).filter(models.Company.email == body.email.lower()).first():
+        raise HTTPException(status_code=400, detail="Email già registrata")
+
+    company = models.Company(
+        email         = body.email.lower().strip(),
+        name          = body.name.strip(),
+        password_hash = auth_utils.hash_password(body.password),
+        credits       = body.credits,
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    return {"message": f"Azienda '{company.name}' creata", "id": company.id}
+
+
+class UpdateCompanyBody(BaseModel):
+    is_active: Optional[bool] = None
+    credits:   Optional[int]  = None
+    name:      Optional[str]  = None
+
+
+@router.patch("/companies/{company_id}")
+def update_company(
+    company_id: int,
+    body: UpdateCompanyBody,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Azienda non trovata")
+
+    if body.is_active is not None:
+        company.is_active = body.is_active
+    if body.credits is not None:
+        company.credits = body.credits
+    if body.name:
+        company.name = body.name.strip()
+
+    db.commit()
+    return {"message": "Azienda aggiornata"}
+
+
+@router.delete("/companies/{company_id}")
+def delete_company(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Azienda non trovata")
+
+    company.deleted_at = datetime.now(timezone.utc)
+    company.is_active  = False
+    db.commit()
+    return {"message": "Azienda eliminata (soft delete)"}
+
+
+@router.get("/companies/{company_id}/jobs")
+def company_jobs(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    jobs = (
+        db.query(models.Job)
+        .filter(models.Job.company_id == company_id)
+        .order_by(models.Job.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return [
+        {
+            "id":              j.id,
+            "status":          j.status,
+            "tif_filename":    j.tif_filename,
+            "panels_detected": j.panels_detected,
+            "hotspot_count":   j.hotspot_count,
+            "degraded_count":  j.degraded_count,
+            "created_at":      j.created_at.isoformat(),
+            "completed_at":    j.completed_at.isoformat() if j.completed_at else None,
+        }
+        for j in jobs
+    ]
+
+
+@router.get("/companies/{company_id}/stats")
+def company_stats(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    total_jobs = db.query(func.count(models.Job.id)).filter(models.Job.company_id == company_id).scalar() or 0
+    jobs_month = db.query(func.count(models.Job.id)).filter(
+        models.Job.company_id == company_id,
+        models.Job.created_at >= month_start,
+    ).scalar() or 0
+    completed_total = db.query(func.count(models.Job.id)).filter(
+        models.Job.company_id == company_id, models.Job.status == "completato",
+    ).scalar() or 0
+    completed_month = db.query(func.count(models.Job.id)).filter(
+        models.Job.company_id == company_id, models.Job.status == "completato",
+        models.Job.created_at >= month_start,
+    ).scalar() or 0
+    panels_total = db.query(func.sum(models.Job.panels_detected)).filter(
+        models.Job.company_id == company_id, models.Job.status == "completato",
+    ).scalar() or 0
+    panels_month = db.query(func.sum(models.Job.panels_detected)).filter(
+        models.Job.company_id == company_id, models.Job.status == "completato",
+        models.Job.created_at >= month_start,
+    ).scalar() or 0
+
+    return {
+        "total_jobs": total_jobs,
+        "jobs_month": jobs_month,
+        "completed_total": completed_total,
+        "completed_month": completed_month,
+        "panels_total": panels_total,
+        "panels_month": panels_month,
+    }
+
+
+@router.get("/companies/{company_id}/history")
+def company_history(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Restituisce i job completati per mese negli ultimi 12 mesi."""
+    from sqlalchemy import extract
+    from datetime import datetime, timezone, timedelta
+
+    now = datetime.now(timezone.utc)
+    months = []
+    for i in range(11, -1, -1):
+        # calcola anno/mese per i mesi precedenti
+        month_date = (now.replace(day=1) - timedelta(days=i * 28)).replace(day=1)
+        year  = month_date.year
+        month = month_date.month
+        count = db.query(func.count(models.Job.id)).filter(
+            models.Job.company_id == company_id,
+            models.Job.status == "completato",
+            extract("year",  models.Job.created_at) == year,
+            extract("month", models.Job.created_at) == month,
+        ).scalar() or 0
+        months.append({
+            "label": month_date.strftime("%b %Y"),
+            "count": count,
+        })
+    return months
+
+
+# ---------------------------------------------------------------------------
+# Usage / Billing report
+# ---------------------------------------------------------------------------
+
+@router.get("/usage")
+def usage_report(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    logs = (
+        db.query(models.UsageLog)
+        .order_by(models.UsageLog.created_at.desc())
+        .limit(500)
+        .all()
+    )
+
+    rows = []
+    for log in logs:
+        company = db.query(models.Company).filter(models.Company.id == log.company_id).first()
+        rows.append({
+            "company_name":  company.name if company else "N/A",
+            "company_email": company.email if company else "N/A",
+            "job_id":        log.job_id[:8] + "...",
+            "panels_count":  log.panels_count,
+            "credits_used":  log.credits_used,
+            "cost_eur":      round(log.panels_count * PRICE_PER_PANEL, 2),
+            "created_at":    log.created_at.isoformat(),
+        })
+
+    return rows

@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SolarDino — Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0f172a; }
+    .tab-active { background: rgba(245,158,11,.15); border-color: #f59e0b; color: #fbbf24; }
+    .tab-inactive { background: transparent; border-color: transparent; color: #64748b; }
+    .tab-inactive:hover { color: #94a3b8; }
+    dialog::backdrop { background: rgba(0,0,0,.7); }
+  </style>
+</head>
+<body class="min-h-screen text-slate-300">
+
+<!-- ── NAVBAR ── -->
+<nav class="bg-slate-900 border-b border-slate-700/50 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+  <div class="flex items-center gap-3">
+    <span class="text-xl">☀️</span>
+    <span class="font-bold text-white text-lg">SolarDino</span>
+    <span class="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-xs font-semibold border border-amber-500/30">ADMIN</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <span id="adminEmail" class="text-slate-500 text-sm hidden md:block"></span>
+    <button onclick="logout()" class="text-slate-500 hover:text-red-400 text-sm transition">Esci</button>
+  </div>
+</nav>
+
+<!-- ── MAIN ── -->
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-white">Pannello Amministratore</h1>
+      <p class="text-slate-500 text-sm mt-1">Gestisci aziende, monitora utilizzo e fatturazione.</p>
+    </div>
+    <button onclick="openCreateModal()"
+      class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-semibold transition flex items-center gap-2">
+      <span>＋</span> Nuova Azienda
+    </button>
+  </div>
+
+  <!-- ── STATS ── -->
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-4" id="statsGrid">
+    <!-- injected by JS -->
+  </div>
+
+  <!-- ── TABS ── -->
+  <div class="flex gap-1 border-b border-slate-700">
+    <button class="tab-btn tab-active px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('companies')">🏢 Aziende</button>
+    <button class="tab-btn tab-inactive px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('usage')">📊 Utilizzo & Fatturazione</button>
+  </div>
+
+  <!-- ── COMPANIES TAB ── -->
+  <div id="tab-companies">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-500 text-left text-xs uppercase tracking-wider">
+              <th class="px-5 py-4 font-medium">Azienda</th>
+              <th class="px-5 py-4 font-medium">Email</th>
+              <th class="px-5 py-4 font-medium">Ortomosaici disp.</th>
+              <th class="px-5 py-4 font-medium">Elaborazioni</th>
+              <th class="px-5 py-4 font-medium">Pannelli</th>
+              <th class="px-5 py-4 font-medium">Dovuto €</th>
+              <th class="px-5 py-4 font-medium">Stato</th>
+              <th class="px-5 py-4 font-medium">Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="companiesBody">
+            <tr><td colspan="8" class="py-10 text-center text-slate-600">Caricamento...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── USAGE TAB ── -->
+  <div id="tab-usage" class="hidden space-y-4">
+    <div class="flex items-center justify-between">
+      <p class="text-slate-500 text-sm">Ultime 500 operazioni registrate.</p>
+      <button onclick="loadUsage()" class="text-xs text-amber-400 hover:text-amber-300 transition">🔄 Aggiorna</button>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider text-left">
+              <th class="px-5 py-4 font-medium">Azienda</th>
+              <th class="px-5 py-4 font-medium">Job ID</th>
+              <th class="px-5 py-4 font-medium">Pannelli</th>
+              <th class="px-5 py-4 font-medium">Crediti</th>
+              <th class="px-5 py-4 font-medium">Costo €</th>
+              <th class="px-5 py-4 font-medium">Data</th>
+            </tr>
+          </thead>
+          <tbody id="usageBody">
+            <tr><td colspan="6" class="py-10 text-center text-slate-600">Clicca su "Utilizzo & Fatturazione" per caricare.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── JOB DETAIL MODAL ── -->
+<dialog id="jobModal" class="bg-slate-800 border border-slate-700 rounded-2xl p-0 w-full max-w-3xl shadow-2xl">
+  <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+    <h3 class="text-lg font-semibold text-white" id="jobModalTitle">Storico Job</h3>
+    <button onclick="document.getElementById('jobModal').close()" class="text-slate-500 hover:text-white text-xl transition">&times;</button>
+  </div>
+  <div class="overflow-y-auto max-h-96 px-6 py-4">
+    <table class="w-full text-xs">
+      <thead>
+        <tr class="text-slate-500 border-b border-slate-700 text-left">
+          <th class="pb-2 pr-3">File</th>
+          <th class="pb-2 pr-3">Stato</th>
+          <th class="pb-2 pr-3">Pannelli</th>
+          <th class="pb-2">Data</th>
+        </tr>
+      </thead>
+      <tbody id="jobModalBody"></tbody>
+    </table>
+  </div>
+</dialog>
+
+<!-- ── COMPANY DETAIL MODAL ── -->
+<dialog id="companyDetailModal" class="bg-slate-800 border border-slate-700 rounded-2xl p-0 w-full max-w-lg shadow-2xl">
+  <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+    <div>
+      <h3 class="text-lg font-semibold text-white" id="detailModalTitle">Dettagli Azienda</h3>
+      <p class="text-slate-500 text-xs" id="detailModalEmail"></p>
+    </div>
+    <button onclick="document.getElementById('companyDetailModal').close()" class="text-slate-500 hover:text-white text-xl transition">&times;</button>
+  </div>
+  <div class="px-6 py-6" id="detailModalBody">
+    <div class="text-center text-slate-500 py-8">Caricamento...</div>
+  </div>
+</dialog>
+
+<!-- ── CREATE COMPANY MODAL ── -->
+<dialog id="createModal" class="bg-slate-800 border border-slate-700 rounded-2xl p-0 w-full max-w-md shadow-2xl">
+  <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+    <h3 class="text-lg font-semibold text-white">Crea Nuova Azienda</h3>
+    <button onclick="document.getElementById('createModal').close()" class="text-slate-500 hover:text-white text-xl transition">&times;</button>
+  </div>
+  <form id="createForm" class="px-6 py-6 space-y-4">
+    <div id="createErr" class="hidden px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Nome Azienda</label>
+      <input type="text" id="newName" required placeholder="Energia Solare SRL"
+        class="w-full px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm transition"/>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Email</label>
+      <input type="email" id="newEmail" required placeholder="contatto@azienda.it"
+        class="w-full px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm transition"/>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Password iniziale</label>
+      <input type="text" id="newPassword" required placeholder="password temporanea"
+        class="w-full px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm transition"/>
+    </div>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Crediti iniziali</label>
+      <input type="number" id="newCredits" value="3" min="0"
+        class="w-full px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm transition"/>
+    </div>
+    <div id="createSuccess" class="hidden px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm"></div>
+    <button type="submit"
+      class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition">
+      Crea Azienda
+    </button>
+  </form>
+</dialog>
+
+<!-- ── EDIT CREDITS MODAL ── -->
+<dialog id="editModal" class="bg-slate-800 border border-slate-700 rounded-2xl p-0 w-full max-w-sm shadow-2xl">
+  <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+    <h3 class="text-lg font-semibold text-white">🎁 Regala Ortomosaici</h3>
+    <button onclick="document.getElementById('editModal').close()" class="text-slate-500 hover:text-white text-xl transition">&times;</button>
+  </div>
+  <div class="px-6 py-6 space-y-4">
+    <div class="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-medium">
+      ⚠️ Stai assegnando ortomosaici gratuiti manualmente. Questa operazione non genera fattura.
+    </div>
+    <p class="text-sm text-slate-400">Azienda: <span id="editCompanyName" class="text-white font-medium"></span></p>
+    <div>
+      <label class="block text-sm text-slate-400 mb-1">Ortomosaici disponibili (nuovo totale)</label>
+      <input type="number" id="editCredits" min="0"
+        class="w-full px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm transition"/>
+    </div>
+    <button onclick="saveCredits()"
+      class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition">
+      Salva
+    </button>
+  </div>
+</dialog>
+
+<script>
+// ── Auth guard ────────────────────────────────────────────────────────────────
+const token = localStorage.getItem("token");
+if (!token) { window.location.href = "/static/login.html"; }
+
+function authH() { return { "Authorization": `Bearer ${token}` }; }
+function logout() { localStorage.clear(); window.location.href = "/static/login.html"; }
+
+document.getElementById("adminEmail").textContent = localStorage.getItem("email") || "";
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const grid = document.getElementById("statsGrid");
+  try {
+    const res  = await fetch("/admin/stats", { headers: authH() });
+    if (res.status === 401) { logout(); return; }
+    const s = await res.json();
+
+    const cards = [
+      { icon: "🏢", label: "Aziende",          value: s.total_companies },
+      { icon: "📡", label: "Elaborazioni Tot.", value: s.total_jobs },
+      { icon: "✅", label: "Completate",        value: s.completed_jobs },
+      { icon: "🔲", label: "Pannelli Rilevati", value: s.total_panels_detected.toLocaleString("it") },
+      { icon: "💶", label: "Fatturato Est.",    value: `€${s.total_revenue_eur.toLocaleString("it")}` },
+    ];
+
+    grid.innerHTML = cards.map(c => `
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl px-5 py-4">
+        <div class="text-2xl mb-1">${c.icon}</div>
+        <div class="text-xl font-bold text-white">${c.value}</div>
+        <div class="text-xs text-slate-500 mt-0.5">${c.label}</div>
+      </div>`).join("");
+  } catch (e) {}
+}
+
+// ── Companies ─────────────────────────────────────────────────────────────────
+async function loadCompanies() {
+  const tbody = document.getElementById("companiesBody");
+  try {
+    const res  = await fetch("/admin/companies", { headers: authH() });
+    const list = await res.json();
+
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="py-10 text-center text-slate-600">Nessuna azienda registrata.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map(c => `
+      <tr class="border-b border-slate-700/50 hover:bg-slate-700/20 transition" id="row-${c.id}">
+        <td class="px-5 py-4">
+          <button onclick="openCompanyDetail(${c.id}, '${esc(c.name)}')"
+            class="font-medium text-white hover:text-amber-400 transition text-left">
+            ${esc(c.name)}
+          </button>
+        </td>
+        <td class="px-5 py-4 text-slate-400 text-xs">${esc(c.email)}</td>
+        <td class="px-5 py-4">
+          <span class="font-bold ${c.credits <= 0 ? 'text-red-400' : 'text-amber-400'}">${c.credits}</span>
+        </td>
+        <td class="px-5 py-4 text-slate-300">${c.jobs_completed}</td>
+        <td class="px-5 py-4 text-slate-300">${c.panels_detected.toLocaleString("it")}</td>
+        <td class="px-5 py-4 font-semibold ${c.amount_owed_eur > 0 ? 'text-emerald-400' : 'text-slate-500'}">
+          €${c.amount_owed_eur.toLocaleString("it")}
+        </td>
+        <td class="px-5 py-4">
+          <span class="px-2 py-0.5 rounded-md text-xs font-medium ${c.is_active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}">
+            ${c.is_active ? 'Attiva' : 'Disattiva'}
+          </span>
+        </td>
+        <td class="px-5 py-4">
+          <div class="flex items-center gap-2">
+            <button onclick="openEditCredits(${c.id}, '${esc(c.name)}', ${c.credits})"
+              class="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs border border-amber-500/20 transition">
+              Ortomosaici
+            </button>
+            <button onclick="toggleActive(${c.id}, ${c.is_active})"
+              class="px-2 py-1 rounded-lg ${c.is_active ? 'bg-slate-700 hover:bg-red-500/20 text-slate-400 hover:text-red-400' : 'bg-slate-700 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400'} text-xs border border-slate-600 transition">
+              ${c.is_active ? 'Disattiva' : 'Attiva'}
+            </button>
+            <button onclick="deleteCompany(${c.id}, '${esc(c.name)}')"
+              class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-red-500/20 text-red-500/50 hover:text-red-400 text-xs border border-slate-600 transition">
+              Elimina
+            </button>
+          </div>
+        </td>
+      </tr>`).join("");
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-red-400 text-sm">Errore caricamento.</td></tr>';
+  }
+}
+
+// ── Usage ─────────────────────────────────────────────────────────────────────
+async function loadUsage() {
+  const tbody = document.getElementById("usageBody");
+  tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-600">Caricamento...</td></tr>';
+  try {
+    const res  = await fetch("/admin/usage", { headers: authH() });
+    const rows = await res.json();
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-600">Nessun utilizzo registrato.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => `
+      <tr class="border-b border-slate-700/50 hover:bg-slate-700/20 transition">
+        <td class="px-5 py-3 text-slate-300">${esc(r.company_name)}</td>
+        <td class="px-5 py-3 font-mono text-xs text-slate-500">${r.job_id}</td>
+        <td class="px-5 py-3 text-slate-300">${r.panels_count}</td>
+        <td class="px-5 py-3 text-amber-400">${r.credits_used}</td>
+        <td class="px-5 py-3 font-semibold text-emerald-400">€${r.cost_eur}</td>
+        <td class="px-5 py-3 text-xs text-slate-500">${new Date(r.created_at).toLocaleString("it-IT")}</td>
+      </tr>`).join("");
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-red-400 text-sm">Errore.</td></tr>';
+  }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+let usageLoaded = false;
+function switchTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.replace("tab-active","tab-inactive") || b.classList.add("tab-inactive"));
+  event.target.classList.replace("tab-inactive","tab-active");
+
+  document.getElementById("tab-companies").classList.add("hidden");
+  document.getElementById("tab-usage").classList.add("hidden");
+  document.getElementById(`tab-${name}`).classList.remove("hidden");
+
+  if (name === "usage" && !usageLoaded) { usageLoaded = true; loadUsage(); }
+}
+
+// ── Create modal ──────────────────────────────────────────────────────────────
+function openCreateModal() {
+  document.getElementById("createErr").classList.add("hidden");
+  document.getElementById("createSuccess").classList.add("hidden");
+  document.getElementById("createForm").reset();
+  document.getElementById("createModal").showModal();
+}
+
+document.getElementById("createForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById("createErr");
+  const okEl  = document.getElementById("createSuccess");
+  errEl.classList.add("hidden");
+  okEl.classList.add("hidden");
+
+  try {
+    const res  = await fetch("/admin/companies", {
+      method: "POST",
+      headers: { ...authH(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email:    document.getElementById("newEmail").value.trim(),
+        name:     document.getElementById("newName").value.trim(),
+        password: document.getElementById("newPassword").value,
+        credits:  parseInt(document.getElementById("newCredits").value) || 3,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+
+    okEl.textContent = `✅ ${data.message}`;
+    okEl.classList.remove("hidden");
+    await loadCompanies();
+    await loadStats();
+    setTimeout(() => document.getElementById("createModal").close(), 1500);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove("hidden");
+  }
+});
+
+// ── Edit credits modal ────────────────────────────────────────────────────────
+let editingCompanyId = null;
+
+function openEditCredits(id, name, currentCredits) {
+  editingCompanyId = id;
+  document.getElementById("editCompanyName").textContent = name;
+  document.getElementById("editCredits").value = currentCredits;
+  document.getElementById("editModal").showModal();
+}
+
+async function saveCredits() {
+  const credits = parseInt(document.getElementById("editCredits").value);
+  if (isNaN(credits) || credits < 0) return;
+
+  const name = document.getElementById("editCompanyName").textContent;
+  if (!confirm(`⚠️ ATTENZIONE\n\nStai per assegnare ${credits} ortomosaici gratuiti a "${name}".\n\nQuesta operazione non genera fattura.\n\nConfermi?`)) return;
+
+  try {
+    await fetch(`/admin/companies/${editingCompanyId}`, {
+      method: "PATCH",
+      headers: { ...authH(), "Content-Type": "application/json" },
+      body: JSON.stringify({ credits }),
+    });
+    document.getElementById("editModal").close();
+    await loadCompanies();
+    await loadStats();
+  } catch (e) { alert("Errore aggiornamento"); }
+}
+
+// ── Toggle active ─────────────────────────────────────────────────────────────
+async function toggleActive(id, currentActive) {
+  if (!confirm(`${currentActive ? "Disattivare" : "Riattivare"} questa azienda?`)) return;
+  try {
+    await fetch(`/admin/companies/${id}`, {
+      method: "PATCH",
+      headers: { ...authH(), "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: !currentActive }),
+    });
+    await loadCompanies();
+  } catch (e) { alert("Errore"); }
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+async function deleteCompany(id, name) {
+  if (!confirm(`Eliminare definitivamente "${name}" e tutti i suoi dati?`)) return;
+  try {
+    const res = await fetch(`/admin/companies/${id}`, { method: "DELETE", headers: authH() });
+    if (!res.ok) throw new Error("Errore eliminazione");
+    await loadCompanies();
+    await loadStats();
+  } catch (e) { alert(e.message); }
+}
+
+// ── View jobs ─────────────────────────────────────────────────────────────────
+async function viewJobs(id, name) {
+  document.getElementById("jobModalTitle").textContent = `Job — ${name}`;
+  document.getElementById("jobModalBody").innerHTML = '<tr><td colspan="4" class="py-4 text-center text-slate-600">Caricamento...</td></tr>';
+  document.getElementById("jobModal").showModal();
+
+  try {
+    const res  = await fetch(`/admin/companies/${id}/jobs`, { headers: authH() });
+    const jobs = await res.json();
+
+    const STATUS = { in_coda:"⏳", taglio_tile:"✂️", inferenza:"🤖", completato:"✅", errore:"❌" };
+
+    document.getElementById("jobModalBody").innerHTML = jobs.length
+      ? jobs.map(j => `
+          <tr class="border-b border-slate-700/50">
+            <td class="py-2 pr-3 font-mono text-slate-400">${(j.tif_filename||"—").substring(0,25)}</td>
+            <td class="py-2 pr-3">${STATUS[j.status] || ""} ${j.status}</td>
+            <td class="py-2 pr-3 ${j.panels_detected ? 'text-emerald-400' : 'text-slate-600'}">${j.panels_detected ?? "—"}</td>
+            <td class="py-2 text-slate-500">${new Date(j.created_at).toLocaleString("it-IT")}</td>
+          </tr>`)
+          .join("")
+      : '<tr><td colspan="4" class="py-4 text-center text-slate-600">Nessun job.</td></tr>';
+  } catch (e) {
+    document.getElementById("jobModalBody").innerHTML = '<tr><td colspan="4" class="py-4 text-center text-red-400">Errore</td></tr>';
+  }
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Company detail modal ───────────────────────────────────────────────────────
+async function openCompanyDetail(id, name) {
+  const modal = document.getElementById("companyDetailModal");
+  const body  = document.getElementById("detailModalBody");
+  document.getElementById("detailModalTitle").textContent = name;
+
+  // trova email dalla riga
+  const company = document.querySelector(`#row-${id} td:nth-child(2)`);
+  document.getElementById("detailModalEmail").textContent = company ? company.textContent : "";
+
+  body.innerHTML = '<div class="text-center text-slate-500 py-8">Caricamento...</div>';
+  modal.showModal();
+
+  try {
+    const res  = await fetch(`/admin/companies/${id}/stats`, { headers: authH() });
+    const s    = await res.json();
+    const now  = new Date();
+    const mese = now.toLocaleString("it-IT", { month: "long", year: "numeric" });
+
+    body.innerHTML = `
+      <div class="grid grid-cols-2 gap-4 mb-5">
+        <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
+          <p class="text-slate-500 text-xs mb-1">Ortomosaici usati in totale</p>
+          <p class="text-3xl font-bold text-white">${s.completed_total}</p>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-4 border border-amber-500/20">
+          <p class="text-amber-400 text-xs mb-1">Questo mese (${mese})</p>
+          <p class="text-3xl font-bold text-white">${s.completed_month}</p>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
+          <p class="text-slate-500 text-xs mb-1">Pannelli rilevati totali</p>
+          <p class="text-2xl font-bold text-emerald-400">${s.panels_total.toLocaleString("it")}</p>
+        </div>
+        <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
+          <p class="text-slate-500 text-xs mb-1">Pannelli questo mese</p>
+          <p class="text-2xl font-bold text-emerald-400">${s.panels_month.toLocaleString("it")}</p>
+        </div>
+      </div>
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
+        <p class="text-slate-400 text-xs font-medium mb-3">Andamento ortomosaici — ultimi 12 mesi</p>
+        <canvas id="companyChart" height="120"></canvas>
+      </div>`;
+
+    // Carica il grafico
+    const histRes  = await fetch(`/admin/companies/${id}/history`, { headers: authH() });
+    const histData = await histRes.json();
+    new Chart(document.getElementById("companyChart"), {
+      type: "bar",
+      data: {
+        labels:   histData.map(m => m.label),
+        datasets: [{
+          label:           "Ortomosaici elaborati",
+          data:            histData.map(m => m.count),
+          backgroundColor: "rgba(245,158,11,0.6)",
+          borderColor:     "rgba(245,158,11,1)",
+          borderWidth:     1,
+          borderRadius:    4,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e293b" } },
+          y: { ticks: { color: "#64748b", stepSize: 1 }, grid: { color: "#1e293b" }, beginAtZero: true },
+        },
+      },
+    });
+  } catch (e) {
+    body.innerHTML = '<div class="text-center text-red-400 py-8">Errore caricamento dati.</div>';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  const res = await fetch("/auth/me", { headers: authH() });
+  if (res.status === 401) { logout(); return; }
+  const me = await res.json();
+  if (!me.is_admin) { window.location.href = "/static/dashboard.html"; return; }
+
+  await Promise.all([loadStats(), loadCompanies()]);
+}
+
+init();
+</script>
+</body>
+</html>
