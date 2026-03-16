@@ -24,7 +24,7 @@ from .maskdino import MaskDINO
 # from .data.datasets_detr import coco
 from .test_time_augmentation import SemanticSegmentorWithTTA
 
-# evaluation
-from .evaluation.instance_evaluation import InstanceSegEvaluator
+# evaluation (disabled — not needed for inference)
+# from .evaluation.instance_evaluation import InstanceSegEvaluator
 # util
 from .utils import box_ops, misc, utils

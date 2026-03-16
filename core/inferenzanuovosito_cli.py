@@ -14,9 +14,9 @@ import os
 import sys
 import glob
 
-# Aggiungi path locali per detectron2 e maskdino se non installati globalmente
+# Aggiungi path locali per detectron2 e maskdino (in core/libs/)
 _BASE = os.path.dirname(os.path.abspath(__file__))
-for _lib in ["libs/detectron2", "libs/maskdino", "libs"]:
+for _lib in ["libs", "libs/detectron2"]:
     _p = os.path.join(_BASE, _lib)
     if os.path.isdir(_p) and _p not in sys.path:
         sys.path.insert(0, _p)
