@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Upload, CreditCard, History, Star, LogOut,
-  Info, X, Play, FileDown, Check, AlertTriangle, Trash2,
+  X, Play, FileDown, Check, AlertTriangle, Trash2,
   Mail, Lock, Building2, ChevronRight, Zap,
 } from 'lucide-react'
 import { apiFetch } from '../api'
@@ -177,48 +177,6 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
 }
 
 // ── Info Modal ─────────────────────────────────────────────────────────────
-function InfoModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="card"
-        style={{ maxWidth: 560, width: '100%', padding: '2rem', borderRadius: 20, maxHeight: '80vh', overflowY: 'auto' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 style={{ color: '#f1f5f9', fontSize: '1.1rem', fontWeight: 700 }}>Come funziona SolarDino</h3>
-          <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
-        </div>
-        <div style={{ fontSize: '0.875rem', color: '#94a3b8', lineHeight: 1.75 }}>
-          <p style={{ marginBottom: '1rem' }}>
-            <strong style={{ color: '#f1f5f9' }}>SolarDino</strong> utilizza reti neurali MaskDINO per analizzare ortomosaici
-            termici di impianti fotovoltaici. Il sistema rileva automaticamente i pannelli anomali, li geolocalizza tramite
-            coordinate GPS e genera report esportabili.
-          </p>
-          <h4 style={{ color: '#f59e0b', marginBottom: 8, fontSize: '0.925rem', fontWeight: 600 }}>Requisiti drone e file</h4>
-          <ul style={{ paddingLeft: '1.2rem', marginBottom: '1rem' }}>
-            <li>Drone con camera termografica calibrata</li>
-            <li>Volo a quota costante (raccomandato 40–80m AGL)</li>
-            <li>Ortomosaico termico in formato GeoTIFF (.tif)</li>
-            <li>File world (.tfw) con georiferimento</li>
-            <li>Ortomosaico RGB sincronizzato (opzionale ma consigliato)</li>
-            <li>GSD termico: 5–15 cm/pixel</li>
-          </ul>
-          <h4 style={{ color: '#f59e0b', marginBottom: 8, fontSize: '0.925rem', fontWeight: 600 }}>Output</h4>
-          <ul style={{ paddingLeft: '1.2rem' }}>
-            <li>KML — visualizzabile in Google Earth</li>
-            <li>JSON — per integrazioni API</li>
-            <li>CSV — per analisi in Excel</li>
-          </ul>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
-
 // ── Profile Sidebar ────────────────────────────────────────────────────────
 function ProfileSidebar({
   name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose,
@@ -603,7 +561,7 @@ export default function DashboardPage() {
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
 
   // UI state
-  const [showInfo, setShowInfo] = useState(false)
+
   const [showProfile, setShowProfile] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -818,14 +776,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              className="btn-ghost"
-              style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem', gap: '0.35rem' }}
-              onClick={() => setShowInfo(true)}
-            >
-              <Info size={15} /> Info
-            </button>
-
             <div
               className="badge badge-amber"
               style={{ cursor: 'default' }}
@@ -887,8 +837,7 @@ export default function DashboardPage() {
             <video
               controls
               style={{ width: '100%', display: 'block', maxHeight: 400, background: '#000' }}
-              src="https://msyvtrsgxfderbyametg.supabase.co/storage/v1/object/sign/pth/c.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV85ZjNjY2UxNi1hMmJmLTQ5OGQtOTBiOS02NDEyZTI4ZmJlZDAiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdGgvYy5tcDQiLCJpYXQiOjE3NzM3NDEzMzEsImV4cCI6MzE1MzYxNzQyMjA1MzMxfQ.yT6oRNSe1UahsxjRVz0s5gSWQL7DL2b9ZjbmAV4RlzY"
-            />
+              src="https://msyvtrsgxfderbyametg.supabase.co/storage/v1/object/sign/pth/g.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV85ZjNjY2UxNi1hMmJmLTQ5OGQtOTBiOS02NDEyZTI4ZmJlZDAiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdGgvZy5tcDQiLCJpYXQiOjE3NzM3NTAyNTQsImV4cCI6NDM2MzE1ODI1NH0.wTGPATzAYIhwAfcgWGVx03T9tE98tF5WSEICr57OyPE" />
           </div>
         </motion.div>
 
@@ -1191,9 +1140,6 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
-      </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
