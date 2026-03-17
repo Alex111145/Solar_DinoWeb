@@ -198,7 +198,7 @@ export default function AdminPage() {
     apiFetch('/admin/reviews').then((r) => r.json()).then((d) => {
       const arr = Array.isArray(d) ? d : d.reviews || []
       setAdminReviews(arr)
-      setPendingReviews(arr.filter((r: ReviewItem & { approved?: boolean }) => !r.approved).length)
+      setPendingReviews(arr.filter((r: ReviewItem) => r.status !== 'approved' && r.status !== 'approvata' && r.status !== 'rejected').length)
     }).catch(() => {})
   }, [])
 

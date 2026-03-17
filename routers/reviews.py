@@ -45,7 +45,7 @@ def get_approved_reviews(db: Session = Depends(get_db)):
             "id":         r.id,
             "stars":      r.stars,
             "comment":    r.comment,
-            "company":    r.company.ragione_sociale or r.company.name,
+            "company":    (r.company.ragione_sociale if r.company else None) or "Cliente verificato",
             "created_at": r.created_at.isoformat(),
         }
         for r in reviews

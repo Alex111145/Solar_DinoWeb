@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Upload, CreditCard, History, Star, LogOut,
   X, Play, FileDown, Check, AlertTriangle, Trash2,
-  Mail, Lock, Building2, ChevronRight, Zap,
+  Mail, Lock, Building2, ChevronRight, Zap, Moon,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -179,7 +179,7 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
 // ── Info Modal ─────────────────────────────────────────────────────────────
 // ── Profile Sidebar ────────────────────────────────────────────────────────
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme,
 }: {
   name: string
   email: string
@@ -190,6 +190,8 @@ function ProfileSidebar({
   myReview: Review | null
   onReviewUpdate: (r: Review) => void
   onClose: () => void
+  isDark: boolean
+  onToggleTheme: () => void
 }) {
   const navigate = useNavigate()
   const [openSection, setOpenSection] = useState<string | null>(null)
@@ -275,6 +277,16 @@ function ProfileSidebar({
 
   const initials = name ? name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2) : '??'
 
+  const st = isDark ? {
+    bg: '#0d1117', border: 'rgba(255,255,255,0.08)', borderSub: 'rgba(255,255,255,0.06)',
+    text: '#f1f5f9', textSec: '#94a3b8', textMuted: '#64748b',
+    rowBg: 'rgba(255,255,255,0.03)', rowBorder: 'rgba(255,255,255,0.06)',
+  } : {
+    bg: '#ffffff', border: 'rgba(0,0,0,0.1)', borderSub: 'rgba(0,0,0,0.07)',
+    text: '#1e293b', textSec: '#475569', textMuted: '#94a3b8',
+    rowBg: 'rgba(0,0,0,0.03)', rowBorder: 'rgba(0,0,0,0.07)',
+  }
+
   return (
     <>
       <motion.div
@@ -292,16 +304,27 @@ function ProfileSidebar({
         className="fixed right-0 top-0 bottom-0 z-50 flex flex-col"
         style={{
           width: 360,
-          background: '#0d1117',
-          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          background: st.bg,
+          borderLeft: `1px solid ${st.border}`,
           overflowY: 'auto',
         }}
       >
         {/* Header */}
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '1.5rem', borderBottom: `1px solid ${st.border}` }}>
           <div className="flex items-center justify-between mb-4">
-            <span style={{ color: '#94a3b8', fontSize: '0.875rem', fontWeight: 600 }}>Profilo</span>
-            <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+            <span style={{ color: st.textSec, fontSize: '0.875rem', fontWeight: 600 }}>Profilo</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onToggleTheme}
+                className="btn-ghost flex items-center gap-1.5"
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                title={isDark ? 'Modalità chiara' : 'Modalità scura'}
+              >
+                {isDark ? <Sun size={14} /> : <Moon size={14} />}
+                {isDark ? 'Chiara' : 'Scura'}
+              </button>
+              <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <div
@@ -311,8 +334,8 @@ function ProfileSidebar({
               {initials}
             </div>
             <div>
-              <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.975rem' }}>{name}</div>
-              <div style={{ color: '#64748b', fontSize: '0.8rem' }}>{email}</div>
+              <div style={{ color: st.text, fontWeight: 600, fontSize: '0.975rem' }}>{name}</div>
+              <div style={{ color: st.textMuted, fontSize: '0.8rem' }}>{email}</div>
             </div>
           </div>
         </div>
@@ -329,14 +352,14 @@ function ProfileSidebar({
           <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
             <button
               className="w-full flex items-center justify-between p-4"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
               onClick={() => toggle('info')}
             >
               <span className="flex items-center gap-2 text-sm font-medium"><Building2 size={15} /> Info azienda</span>
-              <ChevronRight size={15} style={{ transform: openSection === 'info' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: '#64748b' }} />
+              <ChevronRight size={15} style={{ transform: openSection === 'info' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
             </button>
             {openSection === 'info' && (
-              <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
                 <div className="flex flex-col gap-2" style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
                   {[
                     { label: 'Ragione sociale', value: ragioneSociale || '—' },
@@ -345,13 +368,13 @@ function ProfileSidebar({
                     { label: 'Email', value: email || '—' },
                     { label: 'Password', value: '••••••••' },
                   ].map(({ label, value }) => (
-                    <div key={label} style={{ padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div style={{ fontSize: '0.68rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
-                      <div style={{ fontSize: '0.85rem', color: label === 'Password' ? '#475569' : '#f1f5f9', fontWeight: 500 }}>{value}</div>
+                    <div key={label} style={{ padding: '0.6rem 0.75rem', background: st.rowBg, borderRadius: 10, border: `1px solid ${st.rowBorder}` }}>
+                      <div style={{ fontSize: '0.68rem', color: st.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: '0.85rem', color: label === 'Password' ? st.textMuted : st.text, fontWeight: 500 }}>{value}</div>
                     </div>
                   ))}
                 </div>
-                <p style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.75rem' }}>
+                <p style={{ fontSize: '0.75rem', color: st.textMuted, marginBottom: '0.75rem' }}>
                   Per modificare email o password usa le sezioni dedicate. Per altri dati contatta il supporto.
                 </p>
                 {!deleteConfirm ? (
@@ -384,14 +407,14 @@ function ProfileSidebar({
           <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
             <button
               className="w-full flex items-center justify-between p-4"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
               onClick={() => toggle('email')}
             >
               <span className="flex items-center gap-2 text-sm font-medium"><Mail size={15} /> Cambia email</span>
-              <ChevronRight size={15} style={{ transform: openSection === 'email' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: '#64748b' }} />
+              <ChevronRight size={15} style={{ transform: openSection === 'email' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
             </button>
             {openSection === 'email' && (
-              <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
                 <input
                   className="form-input mt-3"
                   type="email"
@@ -411,14 +434,14 @@ function ProfileSidebar({
           <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
             <button
               className="w-full flex items-center justify-between p-4"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
               onClick={() => toggle('pwd')}
             >
               <span className="flex items-center gap-2 text-sm font-medium"><Lock size={15} /> Cambia password</span>
-              <ChevronRight size={15} style={{ transform: openSection === 'pwd' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: '#64748b' }} />
+              <ChevronRight size={15} style={{ transform: openSection === 'pwd' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
             </button>
             {openSection === 'pwd' && (
-              <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
                 {!pwdConfirm ? (
                   <>
                     <input
@@ -447,8 +470,8 @@ function ProfileSidebar({
                   </>
                 ) : (
                   <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                    <p style={{ fontSize: '0.82rem', color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}>Sei sicuro di voler cambiare la password?</p>
-                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: 12, lineHeight: 1.5 }}>
+                    <p style={{ fontSize: '0.82rem', color: st.text, fontWeight: 600, marginBottom: 4 }}>Sei sicuro di voler cambiare la password?</p>
+                    <p style={{ fontSize: '0.78rem', color: st.textSec, marginBottom: 12, lineHeight: 1.5 }}>
                       Questa operazione è irreversibile. Potrai cambiarla di nuovo al massimo una volta a settimana.
                     </p>
                     <div className="flex gap-2">
@@ -477,14 +500,14 @@ function ProfileSidebar({
           <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
             <button
               className="w-full flex items-center justify-between p-4"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
               onClick={() => toggle('storico')}
             >
               <span className="flex items-center gap-2 text-sm font-medium"><History size={15} /> Storico elaborazioni</span>
-              <ChevronRight size={15} style={{ transform: openSection === 'storico' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: '#64748b' }} />
+              <ChevronRight size={15} style={{ transform: openSection === 'storico' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
             </button>
             {openSection === 'storico' && (
-              <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
                 {history.length === 0 ? (
                   <p style={{ color: '#475569', fontSize: '0.8rem', textAlign: 'center', padding: '1rem 0' }}>
                     Nessuna elaborazione ancora.
@@ -533,14 +556,14 @@ function ProfileSidebar({
             <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
               <button
                 className="w-full flex items-center justify-between p-4"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
                 onClick={() => toggle('recensione')}
               >
                 <span className="flex items-center gap-2 text-sm font-medium"><Star size={15} /> Modifica recensione</span>
-                <ChevronRight size={15} style={{ transform: openSection === 'recensione' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: '#64748b' }} />
+                <ChevronRight size={15} style={{ transform: openSection === 'recensione' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
               </button>
               {openSection === 'recensione' && (
-                <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
                   <div className="mt-3 mb-3">
                     <label className="form-label">La tua valutazione</label>
                     <StarRating value={editStars} onChange={setEditStars} />
@@ -593,8 +616,35 @@ export default function DashboardPage() {
   const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
 
-  // UI state
+  // Theme state
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
 
+  useEffect(() => {
+    const root = document.documentElement
+    if (isDark) {
+      root.style.setProperty('--bg', '#060912')
+      root.style.setProperty('--border', 'rgba(255,255,255,0.07)')
+      root.style.setProperty('--surface', 'rgba(255,255,255,0.03)')
+      root.style.setProperty('--surface-hover', 'rgba(255,255,255,0.06)')
+      root.style.setProperty('--text-primary', '#f1f5f9')
+      root.style.setProperty('--text-secondary', '#94a3b8')
+      root.style.setProperty('--text-muted', '#64748b')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      root.style.setProperty('--bg', '#f0f4f8')
+      root.style.setProperty('--border', 'rgba(0,0,0,0.09)')
+      root.style.setProperty('--surface', 'rgba(0,0,0,0.03)')
+      root.style.setProperty('--surface-hover', 'rgba(0,0,0,0.06)')
+      root.style.setProperty('--text-primary', '#0f172a')
+      root.style.setProperty('--text-secondary', '#475569')
+      root.style.setProperty('--text-muted', '#94a3b8')
+      localStorage.setItem('theme', 'light')
+    }
+  }, [isDark])
+
+  function toggleTheme() { setIsDark((d) => !d) }
+
+  // UI state
   const [showProfile, setShowProfile] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -798,7 +848,7 @@ export default function DashboardPage() {
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.08 } } }
 
   return (
-    <div className="min-h-screen" style={{ background: '#060912', position: 'relative' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg)', position: 'relative' }}>
       <div className="grid-overlay" />
 
       {/* ── Navbar ──────────────────────────────────────────────────── */}
@@ -1234,6 +1284,8 @@ export default function DashboardPage() {
             myReview={myReview}
             onReviewUpdate={(r) => setMyReview(r)}
             onClose={() => setShowProfile(false)}
+            isDark={isDark}
+            onToggleTheme={toggleTheme}
           />
         )}
       </AnimatePresence>

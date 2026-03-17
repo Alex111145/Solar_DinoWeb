@@ -169,6 +169,34 @@ def update_company(
     return {"message": "Azienda aggiornata"}
 
 
+@router.post("/companies/{company_id}/activate")
+def activate_company(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Azienda non trovata")
+    company.is_active = True
+    db.commit()
+    return {"message": "Azienda attivata"}
+
+
+@router.post("/companies/{company_id}/deactivate")
+def deactivate_company(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Azienda non trovata")
+    company.is_active = False
+    db.commit()
+    return {"message": "Azienda disattivata"}
+
+
 @router.delete("/companies/{company_id}")
 def delete_company(
     company_id: int,
@@ -457,13 +485,11 @@ def reject_bonifico(
 
 @router.get("/reviews")
 def list_reviews(
-    status: str = "pending",
     db: Session = Depends(get_db),
     _: models.Company = Depends(auth_utils.require_admin),
 ):
     reviews = (
         db.query(models.Review)
-        .filter(models.Review.status == status)
         .order_by(models.Review.created_at.desc())
         .all()
     )
@@ -472,7 +498,7 @@ def list_reviews(
             "id":         r.id,
             "stars":      r.stars,
             "comment":    r.comment,
-            "company":    r.company.ragione_sociale or r.company.name,
+            "company":    (r.company.ragione_sociale if r.company else None) or "Cliente verificato",
             "status":     r.status,
             "created_at": r.created_at.isoformat(),
         }
@@ -506,3 +532,17 @@ def reject_review(
     r.status = "rejected"
     db.commit()
     return {"message": "Recensione rifiutata"}
+
+
+@router.delete("/reviews/{review_id}")
+def delete_review(
+    review_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    r = db.query(models.Review).filter(models.Review.id == review_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Recensione non trovata")
+    db.delete(r)
+    db.commit()
+    return {"message": "Recensione eliminata"}
