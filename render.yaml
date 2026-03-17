@@ -44,8 +44,4 @@ services:
       - key: FRONTEND_URL
         value: "https://solar-dinoweb.onrender.com"
       - key: UPLOAD_DIR
-        value: "/opt/render/project/src/elaborazioni"
-    disk:
-      name: elaborazioni
-      mountPath: /opt/render/project/src/elaborazioni
-      sizeGB: 10
+        value: "/tmp/elaborazioni"
