@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
         if not db.query(models.Company).filter(models.Company.email == admin_email).first():
             admin_user = models.Company(
                 email         = admin_email,
-                name          = "Admin — SolarDino",
+                name          = "Admin",
                 password_hash = auth_utils.hash_password(admin_password),
                 credits       = 9999,
                 is_active     = True,
