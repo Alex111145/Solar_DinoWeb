@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Upload, CreditCard, History, Star, LogOut,
-  X, Play, FileDown, Check, AlertTriangle, Trash2,
+  Info, X, Play, FileDown, Check, AlertTriangle, Trash2,
   Mail, Lock, Building2, ChevronRight, Zap,
 } from 'lucide-react'
 import { apiFetch } from '../api'
@@ -221,7 +221,7 @@ function InfoModal({ onClose }: { onClose: () => void }) {
 
 // ── Profile Sidebar ────────────────────────────────────────────────────────
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, onClose,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose,
 }: {
   name: string
   email: string
@@ -229,6 +229,8 @@ function ProfileSidebar({
   vatNumber: string
   history: Job[]
   downloadFile: (jobId: string, format: string) => void
+  myReview: Review | null
+  onReviewUpdate: (r: Review) => void
   onClose: () => void
 }) {
   const navigate = useNavigate()
@@ -238,9 +240,40 @@ function ProfileSidebar({
   const [newPwd, setNewPwd] = useState('')
   const [msg, setMsg] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [editStars, setEditStars] = useState(myReview?.stars ?? 0)
+  const [editComment, setEditComment] = useState(myReview?.comment ?? '')
+  const [reviewMsg, setReviewMsg] = useState('')
+
+  useEffect(() => {
+    if (myReview) {
+      setEditStars(myReview.stars)
+      setEditComment(myReview.comment ?? '')
+    }
+  }, [myReview])
 
   function toggle(s: string) {
     setOpenSection((prev) => (prev === s ? null : s))
+  }
+
+  async function updateReview() {
+    if (!editStars) { setReviewMsg('Seleziona una valutazione'); return }
+    try {
+      const method = myReview ? 'PUT' : 'POST'
+      const url = myReview ? `/reviews/${myReview.id}` : '/reviews'
+      const res = await apiFetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stars: editStars, comment: editComment }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        onReviewUpdate(updated)
+        setReviewMsg('Recensione aggiornata!')
+        setTimeout(() => setReviewMsg(''), 3000)
+      } else {
+        setReviewMsg('Errore aggiornamento')
+      }
+    } catch { setReviewMsg('Errore') }
   }
 
   async function changeEmail() {
@@ -346,19 +379,20 @@ function ProfileSidebar({
               <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex flex-col gap-2" style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
                   {[
-                    { label: 'Ragione sociale', value: ragioneSociale },
-                    { label: 'Partita IVA', value: vatNumber },
-                    { label: 'Email', value: email },
-                    { label: 'Referente', value: name },
-                  ].map(({ label, value }) => value ? (
+                    { label: 'Ragione sociale', value: ragioneSociale || '—' },
+                    { label: 'Partita IVA', value: vatNumber || '—' },
+                    { label: 'Nome referente', value: name || '—' },
+                    { label: 'Email', value: email || '—' },
+                    { label: 'Password', value: '••••••••' },
+                  ].map(({ label, value }) => (
                     <div key={label} style={{ padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
                       <div style={{ fontSize: '0.68rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
-                      <div style={{ fontSize: '0.85rem', color: '#f1f5f9', fontWeight: 500 }}>{value}</div>
+                      <div style={{ fontSize: '0.85rem', color: label === 'Password' ? '#475569' : '#f1f5f9', fontWeight: 500 }}>{value}</div>
                     </div>
-                  ) : null)}
+                  ))}
                 </div>
                 <p style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.75rem' }}>
-                  Per modificare i dati contatta il supporto.
+                  Per modificare email o password usa le sezioni dedicate. Per altri dati contatta il supporto.
                 </p>
                 {!deleteConfirm ? (
                   <button
@@ -503,6 +537,43 @@ function ProfileSidebar({
               </div>
             )}
           </div>
+          {/* Modifica recensione */}
+          {myReview && (
+            <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
+              <button
+                className="w-full flex items-center justify-between p-4"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                onClick={() => toggle('recensione')}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium"><Star size={15} /> Modifica recensione</span>
+                <ChevronRight size={15} style={{ transform: openSection === 'recensione' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: '#64748b' }} />
+              </button>
+              {openSection === 'recensione' && (
+                <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="mt-3 mb-3">
+                    <label className="form-label">La tua valutazione</label>
+                    <StarRating value={editStars} onChange={setEditStars} />
+                  </div>
+                  <textarea
+                    className="form-input"
+                    rows={3}
+                    placeholder="Commento (opzionale)"
+                    value={editComment}
+                    onChange={(e) => setEditComment(e.target.value)}
+                    style={{ resize: 'vertical', fontSize: '0.85rem' }}
+                  />
+                  {reviewMsg && (
+                    <div className="rounded-xl p-2 mt-2" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.78rem' }}>
+                      {reviewMsg}
+                    </div>
+                  )}
+                  <button className="btn-amber w-full mt-3" style={{ fontSize: '0.85rem', padding: '0.6rem' }} onClick={updateReview}>
+                    <Check size={14} /> Salva modifiche
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Logout */}
@@ -522,6 +593,8 @@ function ProfileSidebar({
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const navigate = useNavigate()
+
   // User state
   const [userName, setUserName] = useState(localStorage.getItem('name') || '')
   const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '')
@@ -530,7 +603,9 @@ export default function DashboardPage() {
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
 
   // UI state
+  const [showInfo, setShowInfo] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
 
   // Upload state
   const [thermalTif, setThermalTif] = useState<File | null>(null)
@@ -558,6 +633,7 @@ export default function DashboardPage() {
 
   // Reviews
   const [reviews, setReviews] = useState<Review[]>([])
+  const [myReview, setMyReview] = useState<Review | null>(null)
   const [starValue, setStarValue] = useState(0)
   const [reviewComment, setReviewComment] = useState('')
   const [reviewMsg, setReviewMsg] = useState('')
@@ -592,6 +668,11 @@ export default function DashboardPage() {
     apiFetch('/reviews')
       .then((r) => r.json())
       .then((d) => setReviews(Array.isArray(d) ? d : d.reviews || []))
+      .catch(() => {})
+
+    apiFetch('/reviews/mine')
+      .then((r) => r.json())
+      .then((d) => { if (d && d.id) setMyReview(d) })
       .catch(() => {})
   }, [])
 
@@ -691,8 +772,12 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stars: starValue, comment: reviewComment }),
       })
-      if (res.ok) { setReviewMsg('Recensione inviata! Sarà pubblicata dopo approvazione.'); setStarValue(0); setReviewComment('') }
-      else setReviewMsg('Errore invio')
+      if (res.ok) {
+        const created = await res.json().catch(() => ({ id: '', stars: starValue, comment: reviewComment }))
+        setMyReview(created)
+        setStarValue(0); setReviewComment('')
+        setReviewMsg('Recensione inviata! Sarà pubblicata dopo approvazione.')
+      } else setReviewMsg('Errore invio')
     } catch { setReviewMsg('Errore') }
   }
 
@@ -733,6 +818,14 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              className="btn-ghost"
+              style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem', gap: '0.35rem' }}
+              onClick={() => setShowInfo(true)}
+            >
+              <Info size={15} /> Info
+            </button>
+
             <div
               className="badge badge-amber"
               style={{ cursor: 'default' }}
@@ -990,73 +1083,78 @@ export default function DashboardPage() {
           )}
         </motion.div>
 
-        {/* Reviews */}
-        <motion.div variants={cardAnim} className="card mb-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
-              <Star size={17} />
-            </div>
-            <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Lascia una recensione</h2>
-          </div>
-
-          <form onSubmit={submitReview} className="flex flex-col gap-4">
-            <div>
-              <label className="form-label">La tua valutazione</label>
-              <StarRating value={starValue} onChange={setStarValue} />
-            </div>
-            <div>
-              <label className="form-label">Commento (opzionale)</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                placeholder="Scrivi la tua esperienza..."
-                value={reviewComment}
-                onChange={(e) => setReviewComment(e.target.value)}
-                style={{ resize: 'vertical' }}
-              />
-            </div>
-            {reviewMsg && (
-              <div className="rounded-xl p-3" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.85rem' }}>
-                {reviewMsg}
+        {/* Form recensione — sparisce se l'utente ha già recensito */}
+        {!myReview && (
+          <motion.div variants={cardAnim} className="card mb-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+                <Star size={17} />
               </div>
-            )}
-            <button type="submit" className="btn-amber" style={{ alignSelf: 'flex-start' }}>
-              <Check size={15} /> Invia recensione
-            </button>
-          </form>
+              <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Lascia una recensione</h2>
+            </div>
+            <form onSubmit={submitReview} className="flex flex-col gap-4">
+              <div>
+                <label className="form-label">La tua valutazione</label>
+                <StarRating value={starValue} onChange={setStarValue} />
+              </div>
+              <div>
+                <label className="form-label">Commento (opzionale)</label>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  placeholder="Scrivi la tua esperienza..."
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+              {reviewMsg && (
+                <div className="rounded-xl p-3" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.85rem' }}>
+                  {reviewMsg}
+                </div>
+              )}
+              <button type="submit" className="btn-amber" style={{ alignSelf: 'flex-start' }}>
+                <Check size={15} /> Invia recensione
+              </button>
+            </form>
+          </motion.div>
+        )}
 
-          {reviews.length > 0 && (
-            <div style={{ marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1.5rem' }}>
-              <h3 style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.9rem', marginBottom: '1rem' }}>
-                Recensioni approvate
-              </h3>
-              <div className="flex flex-col gap-3">
-                {reviews.map((r) => (
-                  <div
-                    key={r.id}
-                    className="rounded-xl p-4"
-                    style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="flex gap-0.5">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <Star key={n} size={14} fill={n <= r.stars ? '#f59e0b' : 'none'} color={n <= r.stars ? '#f59e0b' : '#475569'} />
-                        ))}
-                      </div>
-                      {r.company && (
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>{r.company}</span>
-                      )}
-                      <span style={{ fontSize: '0.75rem', color: '#475569', marginLeft: 'auto' }}>
-                        {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
-                      </span>
+        {/* Recensioni pubbliche degli altri utenti */}
+        {reviews.filter((r) => r.id !== myReview?.id).length > 0 && (
+          <motion.div variants={cardAnim} className="card mb-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+                <Star size={17} />
+              </div>
+              <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Recensioni</h2>
+            </div>
+            <div className="flex flex-col gap-3">
+              {reviews.filter((r) => r.id !== myReview?.id).map((r) => (
+                <div
+                  key={r.id}
+                  className="rounded-xl p-4"
+                  style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <Star key={n} size={14} fill={n <= r.stars ? '#f59e0b' : 'none'} color={n <= r.stars ? '#f59e0b' : '#475569'} />
+                      ))}
                     </div>
-                    {r.comment && <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>{r.comment}</p>}
+                    {r.company && (
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>{r.company}</span>
+                    )}
+                    <span style={{ fontSize: '0.75rem', color: '#475569', marginLeft: 'auto' }}>
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
+                    </span>
                   </div>
-                ))}
-              </div>
+                  {r.comment && <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>{r.comment}</p>}
+                </div>
+              ))}
             </div>
-          )}
-        </motion.div>
+          </motion.div>
+        )}
 
         {/* Support footer */}
         <motion.div variants={cardAnim} className="mb-8">
@@ -1093,6 +1191,9 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
@@ -1103,6 +1204,8 @@ export default function DashboardPage() {
             vatNumber={vatNumber}
             history={history}
             downloadFile={downloadFile}
+            myReview={myReview}
+            onReviewUpdate={(r) => setMyReview(r)}
             onClose={() => setShowProfile(false)}
           />
         )}
