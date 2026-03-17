@@ -66,15 +66,18 @@ async def lifespan(app: FastAPI):
     model_url = os.getenv("MODEL_PTH_URL", "")
     upload_dir = os.getenv("UPLOAD_DIR", "elaborazioni")
     model_path = os.path.join(upload_dir, "model_best.pth")
-    if model_url and not os.path.exists(model_path):
-        print(f"[STARTUP] Download model_best.pth → {model_path} ...")
-        os.makedirs(upload_dir, exist_ok=True)
-        urllib.request.urlretrieve(model_url, model_path)
-        print(f"[STARTUP] Modello scaricato ({os.path.getsize(model_path) // 1024 // 1024} MB)")
-    elif os.path.exists(model_path):
-        print(f"[STARTUP] Modello già presente: {model_path}")
-    else:
-        print("[STARTUP] MODEL_PTH_URL non configurato — modello non scaricato")
+    try:
+        if model_url and not os.path.exists(model_path):
+            print(f"[STARTUP] Download model_best.pth → {model_path} ...")
+            os.makedirs(upload_dir, exist_ok=True)
+            urllib.request.urlretrieve(model_url, model_path)
+            print(f"[STARTUP] Modello scaricato ({os.path.getsize(model_path) // 1024 // 1024} MB)")
+        elif os.path.exists(model_path):
+            print(f"[STARTUP] Modello già presente: {model_path}")
+        else:
+            print("[STARTUP] MODEL_PTH_URL non configurato — modello non scaricato")
+    except Exception as e:
+        print(f"[STARTUP] Download modello fallito (non bloccante): {e}")
 
     yield  # server running
 

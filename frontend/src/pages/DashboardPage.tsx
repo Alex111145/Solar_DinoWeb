@@ -865,42 +865,7 @@ export default function DashboardPage() {
           )}
         </motion.div>
 
-        {/* Active job */}
-        <AnimatePresence>
-          {activeJob && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="card mb-6"
-              style={{ borderColor: 'rgba(245,158,11,0.25)' }}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                  style={{ width: 18, height: 18, border: '2px solid rgba(245,158,11,0.3)', borderTopColor: '#f59e0b', borderRadius: '50%', flexShrink: 0 }}
-                />
-                <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.925rem' }}>
-                  Elaborazione in corso — {statusLabel(activeJob.status)}
-                </span>
-                <span className="badge badge-amber ml-auto">{statusEta(activeJob.status)}</span>
-              </div>
-              <div className="progress-bar">
-                <motion.div
-                  className="progress-fill"
-                  initial={{ width: '0%' }}
-                  animate={{ width: `${statusProgress(activeJob.status)}%` }}
-                  transition={{ duration: 0.8, ease: 'easeOut' }}
-                />
-              </div>
-              <div className="flex justify-between mt-2">
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{statusProgress(activeJob.status)}%</span>
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Job ID: {activeJob.id}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Active job — floating popup (rendered outside flow at bottom of return) */}
 
         {/* Credits / Payments */}
         <motion.div variants={cardAnim} className="card mb-6">
@@ -1192,6 +1157,102 @@ export default function DashboardPage() {
             vatNumber={vatNumber}
             onClose={() => setShowProfile(false)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── Floating elaboration popup ────────────────────────────────── */}
+      <AnimatePresence>
+        {activeJob && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+            style={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              width: 340,
+              zIndex: 60,
+              background: '#0d1117',
+              border: '1px solid rgba(245,158,11,0.3)',
+              borderRadius: 20,
+              padding: '1.25rem 1.5rem',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,158,11,0.1)',
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                style={{ width: 20, height: 20, border: '2px solid rgba(245,158,11,0.25)', borderTopColor: '#f59e0b', borderRadius: '50%', flexShrink: 0 }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>Elaborazione in corso</div>
+                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Analisi AI pannelli solari</div>
+              </div>
+              <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
+                {statusEta(activeJob.status)}
+              </span>
+            </div>
+
+            {/* Steps */}
+            <div className="flex flex-col gap-2 mb-4">
+              {([
+                { key: 'in_coda',     label: 'In coda',         pct: 5  },
+                { key: 'taglio_tile', label: 'Taglio tiles',     pct: 30 },
+                { key: 'inferenza',   label: 'Inferenza AI',     pct: 65 },
+                { key: 'completato',  label: 'Completato',       pct: 100},
+              ] as { key: string; label: string; pct: number }[]).map((step) => {
+                const currentPct = statusProgress(activeJob.status)
+                const done = currentPct >= step.pct
+                const active = activeJob.status === step.key
+                return (
+                  <div key={step.key} className="flex items-center gap-2.5">
+                    <div style={{
+                      width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                      border: `2px solid ${done ? '#f59e0b' : 'rgba(255,255,255,0.1)'}`,
+                      background: done ? 'rgba(245,158,11,0.15)' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {done && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b' }} />}
+                    </div>
+                    <span style={{
+                      fontSize: '0.8rem',
+                      color: active ? '#f59e0b' : done ? '#94a3b8' : '#475569',
+                      fontWeight: active ? 600 : 400,
+                    }}>
+                      {step.label}
+                    </span>
+                    {active && (
+                      <motion.span
+                        animate={{ opacity: [1, 0.3, 1] }}
+                        transition={{ duration: 1.2, repeat: Infinity }}
+                        style={{ fontSize: '0.7rem', color: '#f59e0b', marginLeft: 'auto' }}
+                      >
+                        in corso…
+                      </motion.span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 4, overflow: 'hidden' }}>
+              <motion.div
+                initial={{ width: '0%' }}
+                animate={{ width: `${statusProgress(activeJob.status)}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
+                style={{ height: '100%', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 4 }}
+              />
+            </div>
+            <div className="flex justify-between mt-1.5">
+              <span style={{ fontSize: '0.7rem', color: '#475569' }}>{statusProgress(activeJob.status)}%</span>
+              <span style={{ fontSize: '0.7rem', color: '#475569' }}>ID: {activeJob.id.slice(0, 8)}</span>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
