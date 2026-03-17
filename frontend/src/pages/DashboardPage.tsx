@@ -1167,7 +1167,7 @@ export default function DashboardPage() {
 
       {/* ── Floating elaboration popup ────────────────────────────────── */}
       <AnimatePresence>
-        {activeJob && (
+        {(uploading || activeJob) && (
           <motion.div
             initial={{ opacity: 0, y: 40, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1194,30 +1194,36 @@ export default function DashboardPage() {
                 style={{ width: 20, height: 20, border: '2px solid rgba(245,158,11,0.25)', borderTopColor: '#f59e0b', borderRadius: '50%', flexShrink: 0 }}
               />
               <div style={{ flex: 1 }}>
-                <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>Elaborazione in corso</div>
+                <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>
+                  {uploading && !activeJob ? 'Caricamento file…' : 'Elaborazione in corso'}
+                </div>
                 <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Analisi AI pannelli solari</div>
               </div>
-              <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
-                {statusEta(activeJob.status)}
-              </span>
+              {activeJob && (
+                <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
+                  {statusEta(activeJob.status)}
+                </span>
+              )}
             </div>
 
             {/* Steps */}
             <div className="flex flex-col gap-2 mb-4">
               {([
-                { key: 'in_coda',     label: 'In coda',         pct: 5  },
-                { key: 'taglio_tile', label: 'Taglio tiles',     pct: 30 },
-                { key: 'inferenza',   label: 'Inferenza AI',     pct: 65 },
-                { key: 'completato',  label: 'Completato',       pct: 100},
+                { key: 'upload',      label: 'Caricamento file',  pct: 0   },
+                { key: 'in_coda',     label: 'In coda',           pct: 5   },
+                { key: 'taglio_tile', label: 'Taglio tiles',       pct: 30  },
+                { key: 'inferenza',   label: 'Inferenza AI',       pct: 65  },
+                { key: 'completato',  label: 'Completato',         pct: 100 },
               ] as { key: string; label: string; pct: number }[]).map((step) => {
-                const currentPct = statusProgress(activeJob.status)
-                const done = currentPct >= step.pct
-                const active = activeJob.status === step.key
+                const currentPct = activeJob ? statusProgress(activeJob.status) : -1
+                const isUploadStep = step.key === 'upload'
+                const done = isUploadStep ? !!activeJob : (activeJob ? currentPct >= step.pct : false)
+                const active = isUploadStep ? (uploading && !activeJob) : (activeJob?.status === step.key)
                 return (
                   <div key={step.key} className="flex items-center gap-2.5">
                     <div style={{
                       width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                      border: `2px solid ${done ? '#f59e0b' : 'rgba(255,255,255,0.1)'}`,
+                      border: `2px solid ${done ? '#f59e0b' : active ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.1)'}`,
                       background: done ? 'rgba(245,158,11,0.15)' : 'transparent',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
@@ -1248,14 +1254,18 @@ export default function DashboardPage() {
             <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 4, overflow: 'hidden' }}>
               <motion.div
                 initial={{ width: '0%' }}
-                animate={{ width: `${statusProgress(activeJob.status)}%` }}
+                animate={{ width: activeJob ? `${statusProgress(activeJob.status)}%` : '8%' }}
                 transition={{ duration: 0.8, ease: 'easeOut' }}
                 style={{ height: '100%', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 4 }}
               />
             </div>
             <div className="flex justify-between mt-1.5">
-              <span style={{ fontSize: '0.7rem', color: '#475569' }}>{statusProgress(activeJob.status)}%</span>
-              <span style={{ fontSize: '0.7rem', color: '#475569' }}>ID: {activeJob.id.slice(0, 8)}</span>
+              <span style={{ fontSize: '0.7rem', color: '#475569' }}>
+                {activeJob ? `${statusProgress(activeJob.status)}%` : 'Invio…'}
+              </span>
+              {activeJob && (
+                <span style={{ fontSize: '0.7rem', color: '#475569' }}>ID: {activeJob.id.slice(0, 8)}</span>
+              )}
             </div>
           </motion.div>
         )}
