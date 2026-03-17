@@ -196,6 +196,7 @@ function ProfileSidebar({
   const [newEmail, setNewEmail] = useState('')
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
+  const [pwdConfirm, setPwdConfirm] = useState(false)
   const [msg, setMsg] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editStars, setEditStars] = useState(myReview?.stars ?? 0)
@@ -241,8 +242,9 @@ function ProfileSidebar({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: newEmail }),
       })
-      if (res.ok) { setMsg('Email aggiornata'); localStorage.setItem('email', newEmail) }
-      else setMsg('Errore aggiornamento email')
+      if (res.ok) {
+        setMsg('Ti abbiamo inviato una email di conferma alla tua vecchia email. Segui il link per confermare la modifica.')
+      } else setMsg('Errore aggiornamento email')
     } catch { setMsg('Errore') }
   }
 
@@ -253,7 +255,7 @@ function ProfileSidebar({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
       })
-      if (res.ok) setMsg('Password aggiornata')
+      if (res.ok) { setMsg('Password aggiornata con successo'); setPwdConfirm(false) }
       else setMsg('Errore: password attuale errata')
     } catch { setMsg('Errore') }
   }
@@ -417,25 +419,56 @@ function ProfileSidebar({
             </button>
             {openSection === 'pwd' && (
               <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <input
-                  className="form-input mt-3"
-                  type="password"
-                  placeholder="Password attuale"
-                  value={oldPwd}
-                  onChange={(e) => setOldPwd(e.target.value)}
-                  style={{ fontSize: '0.85rem', marginBottom: 8 }}
-                />
-                <input
-                  className="form-input"
-                  type="password"
-                  placeholder="Nuova password"
-                  value={newPwd}
-                  onChange={(e) => setNewPwd(e.target.value)}
-                  style={{ fontSize: '0.85rem' }}
-                />
-                <button className="btn-amber w-full mt-3" style={{ fontSize: '0.85rem', padding: '0.6rem' }} onClick={changePassword}>
-                  Aggiorna password
-                </button>
+                {!pwdConfirm ? (
+                  <>
+                    <input
+                      className="form-input mt-3"
+                      type="password"
+                      placeholder="Password attuale"
+                      value={oldPwd}
+                      onChange={(e) => setOldPwd(e.target.value)}
+                      style={{ fontSize: '0.85rem', marginBottom: 8 }}
+                    />
+                    <input
+                      className="form-input"
+                      type="password"
+                      placeholder="Nuova password"
+                      value={newPwd}
+                      onChange={(e) => setNewPwd(e.target.value)}
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <button
+                      className="btn-amber w-full mt-3"
+                      style={{ fontSize: '0.85rem', padding: '0.6rem' }}
+                      onClick={() => { if (oldPwd && newPwd) setPwdConfirm(true) }}
+                    >
+                      Aggiorna password
+                    </button>
+                  </>
+                ) : (
+                  <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <p style={{ fontSize: '0.82rem', color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}>Sei sicuro di voler cambiare la password?</p>
+                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: 12, lineHeight: 1.5 }}>
+                      Questa operazione è irreversibile. Potrai cambiarla di nuovo al massimo una volta a settimana.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        className="btn-ghost"
+                        style={{ flex: 1, fontSize: '0.8rem', padding: '0.45rem' }}
+                        onClick={() => setPwdConfirm(false)}
+                      >
+                        Annulla
+                      </button>
+                      <button
+                        className="btn-amber"
+                        style={{ flex: 1, fontSize: '0.8rem', padding: '0.45rem' }}
+                        onClick={changePassword}
+                      >
+                        Confermo
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -574,6 +607,7 @@ export default function DashboardPage() {
   const [showConsent, setShowConsent] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [showBlocked, setShowBlocked] = useState(false)
 
   // Job polling
   const [activeJob, setActiveJob] = useState<Job | null>(null)
@@ -679,6 +713,11 @@ export default function DashboardPage() {
       if (rgbTfw) fd.append('rgb_tfw', rgbTfw)
       Object.entries(panelData).forEach(([k, v]) => { if (v) fd.append(k, v) })
       const res = await apiFetch('/missions/upload', { method: 'POST', body: fd })
+      if (res.status === 403) {
+        setShowBlocked(true)
+        setUploading(false)
+        return
+      }
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         setUploadError(d.detail || 'Errore upload')
@@ -1137,6 +1176,48 @@ export default function DashboardPage() {
             onClose={() => setShowConsent(false)}
             onConfirm={() => { setShowConsent(false); doUpload() }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Blocked account modal */}
+      <AnimatePresence>
+        {showBlocked && (
+          <div className="modal-overlay" onClick={() => setShowBlocked(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card"
+              style={{ maxWidth: 440, width: '100%', padding: '2rem', borderRadius: 20, border: '1px solid rgba(239,68,68,0.3)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <AlertTriangle size={20} color="#ef4444" />
+                </div>
+                <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.05rem' }}>Azienda bloccata</h3>
+              </div>
+              <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+                Il tuo account è stato bloccato dall'amministratore. Non è possibile avviare nuove elaborazioni.
+                Contatta l'assistenza per risolvere il problema.
+              </p>
+              <a
+                href="mailto:agervasini1@gmail.com"
+                className="btn-amber w-full flex items-center justify-center gap-2"
+                style={{ textDecoration: 'none', padding: '0.75rem' }}
+              >
+                <Mail size={15} /> Contatta l'assistenza
+              </a>
+              <button
+                className="btn-ghost w-full mt-2"
+                style={{ width: '100%' }}
+                onClick={() => setShowBlocked(false)}
+              >
+                Chiudi
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
