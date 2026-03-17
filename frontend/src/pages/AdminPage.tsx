@@ -36,10 +36,11 @@ interface BonificoRequest {
 
 interface ReviewItem {
   id: string
-  name?: string
-  rating?: number
+  company?: string
+  stars?: number
   comment?: string
   created_at?: string
+  status?: string
 }
 
 interface BillingItem {
@@ -556,12 +557,12 @@ export default function AdminPage() {
                                 <Star
                                   key={n}
                                   size={13}
-                                  fill={(r.rating || 0) >= n ? '#f59e0b' : 'none'}
-                                  color={(r.rating || 0) >= n ? '#f59e0b' : '#475569'}
+                                  fill={(r.stars || 0) >= n ? '#f59e0b' : 'none'}
+                                  color={(r.stars || 0) >= n ? '#f59e0b' : '#475569'}
                                 />
                               ))}
                             </div>
-                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{r.name || 'Utente'}</span>
+                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{r.company || 'Azienda'}</span>
                             <span style={{ fontSize: '0.75rem', color: '#475569' }}>
                               {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
                             </span>

@@ -27,8 +27,8 @@ interface Package {
 
 interface Review {
   id: string
-  name?: string
-  rating: number
+  company?: string
+  stars: number
   comment?: string
   created_at?: string
 }
@@ -633,7 +633,7 @@ export default function DashboardPage() {
       const res = await apiFetch('/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating: starValue, comment: reviewComment }),
+        body: JSON.stringify({ stars: starValue, comment: reviewComment }),
       })
       if (res.ok) { setReviewMsg('Recensione inviata! Sarà pubblicata dopo approvazione.'); setStarValue(0); setReviewComment('') }
       else setReviewMsg('Errore invio')
@@ -1096,10 +1096,15 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 mb-1.5">
                       <div className="flex gap-0.5">
                         {[1, 2, 3, 4, 5].map((n) => (
-                          <Star key={n} size={14} fill={n <= r.rating ? '#f59e0b' : 'none'} color={n <= r.rating ? '#f59e0b' : '#475569'} />
+                          <Star key={n} size={14} fill={n <= r.stars ? '#f59e0b' : 'none'} color={n <= r.stars ? '#f59e0b' : '#475569'} />
                         ))}
                       </div>
-                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{r.name || 'Utente'}</span>
+                      {r.company && (
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>{r.company}</span>
+                      )}
+                      <span style={{ fontSize: '0.75rem', color: '#475569', marginLeft: 'auto' }}>
+                        {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
+                      </span>
                     </div>
                     {r.comment && <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>{r.comment}</p>}
                   </div>
@@ -1124,11 +1129,11 @@ export default function DashboardPage() {
               </div>
             </div>
             <a
-              href="mailto:support@solardino.it"
+              href="mailto:agervasini1@gmail.com"
               className="btn-ghost flex items-center gap-2"
               style={{ borderColor: 'rgba(245,158,11,0.3)', color: '#f59e0b', whiteSpace: 'nowrap' }}
             >
-              <Mail size={15} /> support@solardino.it
+              <Mail size={15} /> agervasini1@gmail.com
             </a>
           </div>
         </motion.div>
