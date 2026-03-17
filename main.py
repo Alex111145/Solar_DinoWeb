@@ -13,7 +13,7 @@ import auth_utils
 import models
 from sqlalchemy import text
 from database import Base, SessionLocal, engine
-from routers import admin, auth, missions, payments
+from routers import admin, auth, missions, payments, reviews
 
 
 @asynccontextmanager
@@ -28,6 +28,11 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE companies ADD COLUMN vat_number VARCHAR",
             "ALTER TABLE companies ADD COLUMN deleted_at TIMESTAMP",
             "ALTER TABLE companies ADD COLUMN last_ip VARCHAR",
+            "ALTER TABLE jobs ADD COLUMN panel_model VARCHAR",
+            "ALTER TABLE jobs ADD COLUMN panel_dimensions VARCHAR",
+            "ALTER TABLE jobs ADD COLUMN panel_efficiency FLOAT",
+            "ALTER TABLE jobs ADD COLUMN panel_temp_coeff FLOAT",
+            "CREATE TABLE IF NOT EXISTS reviews (id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id), stars INTEGER NOT NULL, comment TEXT, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
         ]:
             try:
                 conn.execute(text(col_sql))
@@ -94,6 +99,7 @@ app.include_router(auth.router)
 app.include_router(missions.router)
 app.include_router(admin.router)
 app.include_router(payments.router)
+app.include_router(reviews.router)
 
 # Serve frontend HTML/CSS/JS
 app.mount("/static", StaticFiles(directory="static"), name="static")

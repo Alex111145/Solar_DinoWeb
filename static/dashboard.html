@@ -143,7 +143,7 @@
 
 <!-- ── INFO MODAL ── -->
 <div id="infoModal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4" style="background:rgba(0,0,0,.7)">
-  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-white font-bold text-lg flex items-center gap-2"><span>☀️</span> Cos'è SolarDino?</h3>
       <button onclick="document.getElementById('infoModal').classList.add('hidden')" class="text-slate-500 hover:text-white text-xl transition">✕</button>
@@ -178,7 +178,7 @@
     <ul class="space-y-4 text-sm">
       <li class="flex items-start gap-3">
         <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">↕</span>
-        <div><p class="text-white font-medium">Altezza max <strong>10 m</strong> dai pannelli</p><p class="text-slate-500 text-xs mt-0.5">Vola a bassa quota per garantire la risoluzione necessaria all'AI.</p></div>
+        <div><p class="text-white font-medium">Altezza max <strong>5 m</strong> dai pannelli</p><p class="text-slate-500 text-xs mt-0.5">Vola a bassa quota per garantire la risoluzione necessaria all'AI.</p></div>
       </li>
       <li class="flex items-start gap-3">
         <span class="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400">📐</span>
@@ -212,6 +212,21 @@
     <p class="text-slate-500 text-sm mt-1">Carica i dati del drone per avviare l'elaborazione AI dei tuoi pannelli solari.</p>
   </div>
 
+  <!-- ── VIDEO DEMO ── -->
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-700">
+      <h2 class="text-lg font-semibold text-white flex items-center gap-2"><span>🎬</span> Come funziona SolarDino</h2>
+      <p class="text-slate-500 text-xs mt-0.5">Dalla ripresa drone all'output AI — guarda il processo completo</p>
+    </div>
+    <div class="flex items-center justify-center bg-slate-900/60" style="min-height:320px">
+      <div class="text-center space-y-3 px-6 py-12">
+        <div class="w-20 h-20 rounded-2xl bg-slate-700/60 border-2 border-dashed border-slate-600 flex items-center justify-center mx-auto text-4xl">▶</div>
+        <p class="text-slate-400 font-semibold text-sm">Video dimostrativo</p>
+        <p class="text-slate-600 text-xs max-w-xs mx-auto">Il video verrà inserito qui. Mostrerà il flusso completo dalla ripresa con drone fino all'output geolocalizzato.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ── UPLOAD CARD (full width) ── -->
   <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
     <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -227,13 +242,13 @@
             class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tifTermicoInput').click()">
             <div class="text-2xl mb-1">🗺️</div>
             <p id="tifTermicoLabel" class="text-slate-400 text-xs">Termico <span class="text-amber-400 font-semibold">.TIF</span></p>
-            <input type="file" id="tifTermicoInput" accept=".tif,.tiff,.TIF,.TIFF" class="hidden" onchange="onFileSelect('tifTermicoInput','tifTermicoLabel')"/>
+            <input type="file" id="tifTermicoInput" class="hidden" onchange="onFileSelect('tifTermicoInput','tifTermicoLabel')"/>
           </div>
           <div id="dropTfwTermico" ondragover="onDragOver(event,'dropTfwTermico')" ondragleave="onDragLeave('dropTfwTermico')" ondrop="onDrop(event,'tfwTermicoInput','dropTfwTermico','tfwTermicoLabel')"
             class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tfwTermicoInput').click()">
             <div class="text-2xl mb-1">📍</div>
             <p id="tfwTermicoLabel" class="text-slate-400 text-xs">Termico <span class="text-amber-400 font-semibold">.TFW</span></p>
-            <input type="file" id="tfwTermicoInput" accept=".tfw,.TFW" class="hidden" onchange="onFileSelect('tfwTermicoInput','tfwTermicoLabel')"/>
+            <input type="file" id="tfwTermicoInput" class="hidden" onchange="onFileSelect('tfwTermicoInput','tfwTermicoLabel')"/>
           </div>
         </div>
       </div>
@@ -246,22 +261,58 @@
             class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tifRgbInput').click()">
             <div class="text-2xl mb-1">🗺️</div>
             <p id="tifRgbLabel" class="text-slate-400 text-xs">RGB <span class="text-amber-400 font-semibold">.TIF</span></p>
-            <input type="file" id="tifRgbInput" accept=".tif,.tiff,.TIF,.TIFF" class="hidden" onchange="onFileSelect('tifRgbInput','tifRgbLabel')"/>
+            <input type="file" id="tifRgbInput" class="hidden" onchange="onFileSelect('tifRgbInput','tifRgbLabel')"/>
           </div>
           <div id="dropTfwRgb" ondragover="onDragOver(event,'dropTfwRgb')" ondragleave="onDragLeave('dropTfwRgb')" ondrop="onDrop(event,'tfwRgbInput','dropTfwRgb','tfwRgbLabel')"
             class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-amber-500/50 transition" onclick="document.getElementById('tfwRgbInput').click()">
             <div class="text-2xl mb-1">📍</div>
             <p id="tfwRgbLabel" class="text-slate-400 text-xs">RGB <span class="text-amber-400 font-semibold">.TFW</span></p>
-            <input type="file" id="tfwRgbInput" accept=".tfw,.TFW" class="hidden" onchange="onFileSelect('tfwRgbInput','tfwRgbLabel')"/>
+            <input type="file" id="tfwRgbInput" class="hidden" onchange="onFileSelect('tfwRgbInput','tfwRgbLabel')"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dati opzionali impianto -->
+    <div class="mt-6 border border-slate-700 rounded-xl overflow-hidden">
+      <div class="px-4 py-3 bg-slate-700/40 flex items-center gap-2">
+        <span>⚡</span>
+        <span class="text-sm font-medium text-slate-300">Dati impianto</span>
+        <span class="text-xs bg-slate-600 text-slate-400 px-2 py-0.5 rounded-full font-normal">Opzionali</span>
+      </div>
+      <div class="px-4 pb-4 pt-3 bg-slate-800/50 space-y-3">
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Senza questi dati il modello rileva solo la posizione degli hotspot e dei pannelli degradati. Fornendo le specifiche tecniche dei pannelli, SolarDino può stimare la perdita di efficienza per ogni anomalia rilevata e calcolare la potenza persa in kW/MW sull'intero impianto.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">Marca e modello pannello</label>
+            <input type="text" id="optModel" placeholder="es. LONGi LR5-72HTH-555M"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">Dimensioni fisiche (L × H, in mm)</label>
+            <input type="text" id="optDimensions" placeholder="es. 2278 × 1134"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">Efficienza nominale (%)</label>
+            <input type="number" id="optEfficiency" placeholder="es. 21.3" min="0" max="100" step="0.1"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">Coefficiente temperatura potenza (%/°C)</label>
+            <input type="number" id="optTempCoeff" placeholder="es. -0.35" step="0.01"
+              class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"/>
           </div>
         </div>
       </div>
     </div>
 
     <div id="uploadErr" class="hidden mt-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"></div>
-    <p class="text-xs text-slate-500 mt-4 mb-3">Richiede <strong class="text-amber-400">1 credito</strong> per elaborazione (termico + RGB)</p>
+    <p class="text-xs text-slate-500 mt-4 mb-3">Richiede <strong class="text-amber-400">1 credito</strong> per elaborazione</p>
 
-    <button id="uploadBtn" onclick="uploadMission()"
+    <button id="uploadBtn" onclick="openConsentModal()"
       class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition flex items-center justify-center gap-2">
       <span id="uploadBtnText">Avvia Elaborazione AI (1 credito)</span>
       <svg id="uploadSpinner" class="hidden animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -330,8 +381,8 @@
     </div>
 
     <!-- Stripe packages -->
-    <div id="panelStripe" class="overflow-x-auto pkg-scroll pb-2">
-      <div class="flex gap-4 min-w-max" id="packagesContainer">
+    <div id="panelStripe" class="pb-2">
+      <div class="flex flex-wrap justify-center gap-4" id="packagesContainer">
         <div class="text-slate-500 text-sm py-4">Caricamento pacchetti...</div>
       </div>
     </div>
@@ -428,6 +479,41 @@
           <tr><td colspan="5" class="py-8 text-center text-slate-600">Caricamento...</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ── RECENSIONI ── -->
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-6">
+    <h2 class="text-lg font-semibold text-white flex items-center gap-2"><span>⭐</span> Recensioni</h2>
+
+    <!-- Form lascia recensione -->
+    <div class="border border-slate-700 rounded-xl p-5 space-y-4">
+      <p class="text-sm font-medium text-slate-300">Lascia una recensione</p>
+      <!-- Stelle -->
+      <div class="flex items-center gap-1" id="starSelector">
+        <button onclick="setStar(1)" data-star="1" class="star-btn text-3xl text-slate-600 hover:text-amber-400 transition">★</button>
+        <button onclick="setStar(2)" data-star="2" class="star-btn text-3xl text-slate-600 hover:text-amber-400 transition">★</button>
+        <button onclick="setStar(3)" data-star="3" class="star-btn text-3xl text-slate-600 hover:text-amber-400 transition">★</button>
+        <button onclick="setStar(4)" data-star="4" class="star-btn text-3xl text-slate-600 hover:text-amber-400 transition">★</button>
+        <button onclick="setStar(5)" data-star="5" class="star-btn text-3xl text-slate-600 hover:text-amber-400 transition">★</button>
+        <span id="starLabel" class="text-slate-500 text-xs ml-2">Seleziona un voto</span>
+      </div>
+      <textarea id="reviewComment" placeholder="Commento (opzionale)..." rows="3"
+        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 resize-none"></textarea>
+      <div id="reviewErr" class="hidden text-red-400 text-xs"></div>
+      <div id="reviewOk" class="hidden text-green-400 text-xs">✅ Recensione inviata! Sarà visibile dopo approvazione.</div>
+      <button onclick="submitReview()"
+        class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm transition">
+        Invia recensione
+      </button>
+    </div>
+
+    <!-- Recensioni approvate -->
+    <div>
+      <p class="text-xs text-slate-500 mb-3 font-medium uppercase tracking-wider">Cosa dicono i clienti</p>
+      <div id="reviewsList" class="space-y-3">
+        <p class="text-slate-600 text-sm">Caricamento...</p>
+      </div>
     </div>
   </div>
 
@@ -647,19 +733,6 @@ async function uploadMission() {
   const errBox     = document.getElementById("uploadErr");
   errBox.classList.add("hidden");
 
-  if (!tifTermico || !tfwTermico || !tifRgb || !tfwRgb) {
-    errBox.textContent = "Seleziona tutti e 4 i file: TIF termico, TFW termico, TIF RGB e TFW RGB.";
-    errBox.classList.remove("hidden");
-    return;
-  }
-
-  const credits = parseInt(localStorage.getItem("credits") || "0");
-  if (credits <= 0) {
-    errBox.textContent = "Crediti esauriti. Acquista un pacchetto per continuare.";
-    errBox.classList.remove("hidden");
-    return;
-  }
-
   const btn    = document.getElementById("uploadBtn");
   const btnTxt = document.getElementById("uploadBtnText");
   const spin   = document.getElementById("uploadSpinner");
@@ -672,6 +745,14 @@ async function uploadMission() {
   formData.append("tfw_termico", tfwTermico);
   formData.append("tif_rgb",     tifRgb);
   formData.append("tfw_rgb",     tfwRgb);
+  const panelModel     = document.getElementById("optModel")?.value.trim();
+  const panelDims      = document.getElementById("optDimensions")?.value.trim();
+  const panelEff       = document.getElementById("optEfficiency")?.value.trim();
+  const panelTempCoeff = document.getElementById("optTempCoeff")?.value.trim();
+  if (panelModel)     formData.append("panel_model",      panelModel);
+  if (panelDims)      formData.append("panel_dimensions", panelDims);
+  if (panelEff)       formData.append("panel_efficiency", panelEff);
+  if (panelTempCoeff) formData.append("panel_temp_coeff", panelTempCoeff);
 
   try {
     const res  = await fetch("/missions/upload", { method: "POST", headers: authHeaders(), body: formData });
@@ -841,7 +922,7 @@ async function loadPackages() {
   try {
     const res      = await fetch("/payments/packages");
     const packages = await res.json();
-    const popular  = "pack10";
+    const popular  = "pack5";
 
     container.innerHTML = packages.map(p => {
       const isPopular  = p.key === popular;
@@ -1018,6 +1099,146 @@ async function cancelAccount() {
 }
 
 init();
+
+// ── Recensioni ──────────────────────────────────────────────────────────────
+let selectedStars = 0;
+const starLabels = ["", "Scarso", "Sufficiente", "Buono", "Ottimo", "Eccellente"];
+
+function setStar(n) {
+  selectedStars = n;
+  document.querySelectorAll(".star-btn").forEach(btn => {
+    btn.classList.toggle("text-amber-400", parseInt(btn.dataset.star) <= n);
+    btn.classList.toggle("text-slate-600", parseInt(btn.dataset.star) > n);
+  });
+  document.getElementById("starLabel").textContent = starLabels[n];
+}
+
+async function submitReview() {
+  const errBox = document.getElementById("reviewErr");
+  const okBox  = document.getElementById("reviewOk");
+  errBox.classList.add("hidden");
+  okBox.classList.add("hidden");
+  if (!selectedStars) {
+    errBox.textContent = "Seleziona un voto da 1 a 5 stelle.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+  const comment = document.getElementById("reviewComment").value.trim();
+  try {
+    const res = await fetch("/reviews", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ stars: selectedStars, comment: comment || null }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || "Errore");
+    okBox.classList.remove("hidden");
+    selectedStars = 0;
+    setStar(0);
+    document.getElementById("reviewComment").value = "";
+    document.getElementById("starLabel").textContent = "Seleziona un voto";
+  } catch (e) {
+    errBox.textContent = e.message;
+    errBox.classList.remove("hidden");
+  }
+}
+
+async function loadReviews() {
+  const list = document.getElementById("reviewsList");
+  try {
+    const res     = await fetch("/reviews");
+    const reviews = await res.json();
+    if (!reviews.length) {
+      list.innerHTML = '<p class="text-slate-600 text-sm">Ancora nessuna recensione approvata.</p>';
+      return;
+    }
+    list.innerHTML = reviews.map(r => {
+      const stars = "★".repeat(r.stars) + "☆".repeat(5 - r.stars);
+      const date  = new Date(r.created_at).toLocaleDateString("it-IT");
+      return `
+        <div class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 space-y-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-amber-400 text-lg tracking-tight">${stars}</span>
+            <span class="text-slate-600 text-xs">${date}</span>
+          </div>
+          <p class="text-slate-300 text-sm font-medium">${r.company}</p>
+          ${r.comment ? `<p class="text-slate-400 text-sm">${r.comment}</p>` : ""}
+        </div>`;
+    }).join("");
+  } catch {
+    list.innerHTML = '<p class="text-slate-600 text-sm">Impossibile caricare le recensioni.</p>';
+  }
+}
+
+loadReviews();
+
+// ── Modal consenso ──
+function openConsentModal() {
+  const tifTermico = document.getElementById("tifTermicoInput").files[0];
+  const tfwTermico = document.getElementById("tfwTermicoInput").files[0];
+  const tifRgb     = document.getElementById("tifRgbInput").files[0];
+  const tfwRgb     = document.getElementById("tfwRgbInput").files[0];
+  const errBox     = document.getElementById("uploadErr");
+  errBox.classList.add("hidden");
+  if (!tifTermico || !tfwTermico || !tifRgb || !tfwRgb) {
+    errBox.textContent = "Seleziona tutti e 4 i file: TIF termico, TFW termico, TIF RGB e TFW RGB.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+  const credits = parseInt(localStorage.getItem("credits") || "0");
+  if (credits <= 0) {
+    errBox.textContent = "Crediti esauriti. Acquista un pacchetto per continuare.";
+    errBox.classList.remove("hidden");
+    return;
+  }
+  // reset stato checkbox
+  const cb = document.getElementById("consentCheck");
+  cb.checked = false;
+  document.getElementById("consentConfirmBtn").disabled = true;
+  cb.onchange = () => { document.getElementById("consentConfirmBtn").disabled = !cb.checked; };
+  document.getElementById("consentModal").classList.remove("hidden");
+}
+function closeConsent() {
+  document.getElementById("consentModal").classList.add("hidden");
+}
+function confirmConsent() {
+  document.getElementById("consentModal").classList.add("hidden");
+  uploadMission();
+}
+
+
 </script>
+
+<!-- ── MODAL CONSENSO DATI ── -->
+<div id="consentModal" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4" style="background:rgba(0,0,0,.75)">
+  <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+    <div class="flex items-start gap-3 mb-4">
+      <span class="text-2xl mt-0.5">🛡️</span>
+      <div>
+        <h3 class="text-white font-semibold text-base">Consenso utilizzo dati</h3>
+        <p class="text-slate-400 text-xs mt-0.5">Prima di avviare l'elaborazione, leggi l'informativa</p>
+      </div>
+    </div>
+    <div class="bg-slate-900/60 border border-slate-700 rounded-xl p-4 mb-4 text-sm text-slate-300 leading-relaxed space-y-2">
+      <p>I dati caricati (immagini termiche e RGB) potrebbero essere utilizzati, in forma anonima e aggregata, per <strong class="text-white">migliorare le prestazioni del modello AI</strong> di rilevamento dei difetti.</p>
+      <p>Il trattamento avviene nel rispetto del <strong class="text-white">Regolamento (UE) 2016/679 (GDPR)</strong> e del D.Lgs. 196/2003. I dati non vengono ceduti a terzi né utilizzati per scopi commerciali.</p>
+    </div>
+    <div class="flex items-start gap-3 mb-5">
+      <input type="checkbox" id="consentCheck" class="mt-0.5 w-4 h-4 accent-amber-500 cursor-pointer flex-shrink-0"/>
+      <label for="consentCheck" class="text-sm text-slate-300 cursor-pointer">
+        Acconsento all'utilizzo anonimo dei dati per il miglioramento del modello AI, come descritto sopra.
+      </label>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="closeConsent()" class="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-400 hover:text-white hover:border-slate-500 text-sm transition">
+        Annulla
+      </button>
+      <button id="consentConfirmBtn" onclick="confirmConsent()" disabled
+        class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-semibold text-sm transition">
+        Avvia Elaborazione
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

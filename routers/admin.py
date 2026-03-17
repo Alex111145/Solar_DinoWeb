@@ -451,3 +451,58 @@ def reject_bonifico(
     req.status = "rejected"
     db.commit()
     return {"message": "Richiesta rifiutata"}
+
+
+# ── Reviews ─────────────────────────────────────────────────────────────────
+
+@router.get("/reviews")
+def list_reviews(
+    status: str = "pending",
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    reviews = (
+        db.query(models.Review)
+        .filter(models.Review.status == status)
+        .order_by(models.Review.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id":         r.id,
+            "stars":      r.stars,
+            "comment":    r.comment,
+            "company":    r.company.ragione_sociale or r.company.name,
+            "status":     r.status,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in reviews
+    ]
+
+
+@router.post("/reviews/{review_id}/approve")
+def approve_review(
+    review_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    r = db.query(models.Review).filter(models.Review.id == review_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Recensione non trovata")
+    r.status = "approved"
+    db.commit()
+    return {"message": "Recensione approvata"}
+
+
+@router.post("/reviews/{review_id}/reject")
+def reject_review(
+    review_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    r = db.query(models.Review).filter(models.Review.id == review_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Recensione non trovata")
+    r.status = "rejected"
+    db.commit()
+    return {"message": "Recensione rifiutata"}

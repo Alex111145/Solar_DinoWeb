@@ -54,6 +54,7 @@
     <button class="tab-btn tab-active px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('companies')">🏢 Aziende</button>
     <button class="tab-btn tab-inactive px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('usage')">📊 Utilizzo & Fatturazione</button>
     <button class="tab-btn tab-inactive px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('bonifico')" id="bonificoTab">🏦 Bonifici <span id="bonificoBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-900 text-xs font-bold"></span></button>
+    <button class="tab-btn tab-inactive px-5 py-2.5 text-sm font-medium border-b-2 transition" onclick="switchTab('reviews')" id="reviewsTab">⭐ Recensioni <span id="reviewsBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-slate-900 text-xs font-bold"></span></button>
   </div>
 
   <!-- ── COMPANIES TAB ── -->
@@ -128,6 +129,32 @@
           </thead>
           <tbody id="bonificoBody">
             <tr><td colspan="7" class="py-10 text-center text-slate-600">Clicca su "Bonifici" per caricare.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── REVIEWS TAB ── -->
+  <div id="tab-reviews" class="hidden space-y-4">
+    <div class="flex items-center justify-between">
+      <p class="text-slate-500 text-sm">Recensioni in attesa di approvazione.</p>
+      <button onclick="loadReviews('pending')" class="text-xs text-amber-400 hover:text-amber-300 transition">🔄 Aggiorna</button>
+    </div>
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-500 text-xs uppercase tracking-wider text-left">
+              <th class="px-5 py-4 font-medium">Azienda</th>
+              <th class="px-5 py-4 font-medium">Stelle</th>
+              <th class="px-5 py-4 font-medium">Commento</th>
+              <th class="px-5 py-4 font-medium">Data</th>
+              <th class="px-5 py-4 font-medium">Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="reviewsBody">
+            <tr><td colspan="5" class="py-10 text-center text-slate-600">Clicca su "Recensioni" per caricare.</td></tr>
           </tbody>
         </table>
       </div>
@@ -372,17 +399,19 @@ async function loadUsage() {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 let usageLoaded = false;
 let bonificoLoaded = false;
+let reviewsLoaded = false;
 function switchTab(name) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.replace("tab-active","tab-inactive") || b.classList.add("tab-inactive"));
   event.target.classList.replace("tab-inactive","tab-active");
 
-  ["companies","usage","bonifico"].forEach(t => {
+  ["companies","usage","bonifico","reviews"].forEach(t => {
     document.getElementById(`tab-${t}`)?.classList.add("hidden");
   });
   document.getElementById(`tab-${name}`).classList.remove("hidden");
 
   if (name === "usage"    && !usageLoaded)    { usageLoaded    = true; loadUsage(); }
   if (name === "bonifico" && !bonificoLoaded) { bonificoLoaded = true; loadBonifico(); }
+  if (name === "reviews"  && !reviewsLoaded)  { reviewsLoaded  = true; loadReviews("pending"); }
 }
 
 // ── Bonifico requests ─────────────────────────────────────────────────────────
@@ -671,6 +700,50 @@ async function init() {
 }
 
 init();
+
+// ── Reviews admin ────────────────────────────────────────────────────────────
+async function loadReviews(status = "pending") {
+  const tbody = document.getElementById("reviewsBody");
+  tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-slate-600">Caricamento...</td></tr>';
+  try {
+    const res   = await fetch(`/admin/reviews?status=${status}`, { headers: authH() });
+    const rows  = await res.json();
+    const badge = document.getElementById("reviewsBadge");
+    if (status === "pending" && rows.length) {
+      badge.textContent = rows.length;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="py-10 text-center text-slate-600">Nessuna recensione ${status === "pending" ? "in attesa" : ""}</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const stars = "★".repeat(r.stars) + "☆".repeat(5 - r.stars);
+      const date  = new Date(r.created_at).toLocaleDateString("it-IT");
+      const actions = r.status === "pending"
+        ? `<button onclick="reviewAction(${r.id},'approve')" class="px-3 py-1 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs transition mr-1">✅ Approva</button>
+           <button onclick="reviewAction(${r.id},'reject')"  class="px-3 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs transition">❌ Rifiuta</button>`
+        : `<span class="text-xs text-slate-600">${r.status}</span>`;
+      return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/20">
+        <td class="px-5 py-3 text-white text-sm">${r.company}</td>
+        <td class="px-5 py-3 text-amber-400">${stars}</td>
+        <td class="px-5 py-3 text-slate-400 text-sm max-w-xs">${r.comment || '<span class="text-slate-600 italic">—</span>'}</td>
+        <td class="px-5 py-3 text-slate-500 text-xs whitespace-nowrap">${date}</td>
+        <td class="px-5 py-3">${actions}</td>
+      </tr>`;
+    }).join("");
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-red-400 text-sm">Errore caricamento.</td></tr>';
+  }
+}
+
+async function reviewAction(id, action) {
+  await fetch(`/admin/reviews/${id}/${action}`, { method: "POST", headers: authH() });
+  reviewsLoaded = false;
+  loadReviews("pending");
+}
 </script>
 </body>
 </html>

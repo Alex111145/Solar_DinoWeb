@@ -6,7 +6,8 @@ import sys
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from typing import Optional
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -131,10 +132,14 @@ def _run_pipeline(job_id: str, tif_path: str, tfw_path: str, job_dir: str):
 @router.post("/upload")
 async def upload_mission(
     background_tasks: BackgroundTasks,
-    tif_termico: UploadFile = File(...),
-    tfw_termico: UploadFile = File(...),
-    tif_rgb:     UploadFile = File(...),
-    tfw_rgb:     UploadFile = File(...),
+    tif_termico:      UploadFile       = File(...),
+    tfw_termico:      UploadFile       = File(...),
+    tif_rgb:          UploadFile       = File(...),
+    tfw_rgb:          UploadFile       = File(...),
+    panel_model:      Optional[str]    = Form(None),
+    panel_dimensions: Optional[str]    = Form(None),
+    panel_efficiency: Optional[float]  = Form(None),
+    panel_temp_coeff: Optional[float]  = Form(None),
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
@@ -148,10 +153,11 @@ async def upload_mission(
     job_dir = os.path.join(UPLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
-    # Save all 4 files — normalizza estensione in minuscolo
+    # Save all 4 files — normalizza estensione in minuscolo, rimuove spazi
     def _norm(filename: str) -> str:
+        filename = filename.strip()
         name, ext = os.path.splitext(filename)
-        return name + ext.lower()
+        return name.strip() + ext.lower()
 
     tif_termico_path = os.path.join(job_dir, "termico_" + _norm(tif_termico.filename))
     tfw_termico_path = os.path.join(job_dir, "termico_" + _norm(tfw_termico.filename))
@@ -171,10 +177,14 @@ async def upload_mission(
     current.credits -= 1
 
     job = models.Job(
-        id           = job_id,
-        company_id   = current.id,
-        status       = "in_coda",
-        tif_filename = tif_termico.filename,
+        id               = job_id,
+        company_id       = current.id,
+        status           = "in_coda",
+        tif_filename     = tif_termico.filename,
+        panel_model      = panel_model or None,
+        panel_dimensions = panel_dimensions or None,
+        panel_efficiency = panel_efficiency,
+        panel_temp_coeff = panel_temp_coeff,
     )
     db.add(job)
     db.commit()
