@@ -220,10 +220,12 @@ function InfoModal({ onClose }: { onClose: () => void }) {
 
 // ── Profile Sidebar ────────────────────────────────────────────────────────
 function ProfileSidebar({
-  name, email, onClose,
+  name, email, ragioneSociale, vatNumber, onClose,
 }: {
   name: string
   email: string
+  ragioneSociale: string
+  vatNumber: string
   onClose: () => void
 }) {
   const navigate = useNavigate()
@@ -339,8 +341,21 @@ function ProfileSidebar({
             </button>
             {openSection === 'info' && (
               <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.75rem', marginBottom: '1rem' }}>
-                  Per modificare i dati aziendali contatta il supporto.
+                <div className="flex flex-col gap-2" style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
+                  {[
+                    { label: 'Ragione sociale', value: ragioneSociale },
+                    { label: 'Partita IVA', value: vatNumber },
+                    { label: 'Email', value: email },
+                    { label: 'Referente', value: name },
+                  ].map(({ label, value }) => value ? (
+                    <div key={label} style={{ padding: '0.6rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ fontSize: '0.68rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#f1f5f9', fontWeight: 500 }}>{value}</div>
+                    </div>
+                  ) : null)}
+                </div>
+                <p style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.75rem' }}>
+                  Per modificare i dati contatta il supporto.
                 </p>
                 {!deleteConfirm ? (
                   <button
@@ -454,6 +469,8 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState(localStorage.getItem('name') || '')
   const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '')
   const [credits, setCredits] = useState(parseInt(localStorage.getItem('credits') || '0'))
+  const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
+  const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
 
   // UI state
   const [showInfo, setShowInfo] = useState(false)
@@ -499,6 +516,8 @@ export default function DashboardPage() {
         setUserEmail(d.email || d.user?.email || userEmail)
         const c = d.credits ?? d.user?.credits ?? credits
         setCredits(c)
+        if (d.ragione_sociale) { setRagioneSociale(d.ragione_sociale); localStorage.setItem('ragione_sociale', d.ragione_sociale) }
+        if (d.vat_number) { setVatNumber(d.vat_number); localStorage.setItem('vat_number', d.vat_number) }
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
         localStorage.setItem('credits', String(c))
@@ -761,20 +780,16 @@ export default function DashboardPage() {
 
         {/* Video demo */}
         <motion.div variants={cardAnim} className="card mb-6">
-          <div
-            className="rounded-xl flex flex-col items-center justify-center gap-4 cursor-pointer"
-            style={{ background: 'rgba(0,0,0,0.25)', minHeight: 200, border: '1px solid rgba(255,255,255,0.05)' }}
-          >
-            <div
-              className="flex items-center justify-center rounded-full"
-              style={{ width: 60, height: 60, background: 'linear-gradient(135deg,#f59e0b,#f97316)', boxShadow: '0 0 30px rgba(245,158,11,0.4)' }}
-            >
-              <Play size={24} color="#000" fill="#000" />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '1rem', marginBottom: 4 }}>Come funziona SolarDino</div>
-              <div style={{ color: '#64748b', fontSize: '0.8rem' }}>Guarda la demo — 2 minuti</div>
-            </div>
+          <div className="flex items-center gap-2 mb-3">
+            <Play size={15} style={{ color: '#f59e0b' }} />
+            <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.925rem' }}>Come funziona SolarDino</span>
+          </div>
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+            <video
+              controls
+              style={{ width: '100%', display: 'block', maxHeight: 400, background: '#000' }}
+              src="https://msyvtrsgxfderbyametg.supabase.co/storage/v1/object/sign/pth/c.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV85ZjNjY2UxNi1hMmJmLTQ5OGQtOTBiOS02NDEyZTI4ZmJlZDAiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdGgvYy5tcDQiLCJpYXQiOjE3NzM3NDEzMzEsImV4cCI6MzE1MzYxNzQyMjA1MzMxfQ.yT6oRNSe1UahsxjRVz0s5gSWQL7DL2b9ZjbmAV4RlzY"
+            />
           </div>
         </motion.div>
 
@@ -1173,6 +1188,8 @@ export default function DashboardPage() {
           <ProfileSidebar
             name={userName}
             email={userEmail}
+            ragioneSociale={ragioneSociale}
+            vatNumber={vatNumber}
             onClose={() => setShowProfile(false)}
           />
         )}
