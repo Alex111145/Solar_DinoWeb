@@ -17,20 +17,3 @@ stripe==10.10.0
 
 # Env vars
 python-dotenv==1.0.1
-
-# AI / inference
-torch
-fvcore
-cloudpickle
-omegaconf
-hydra-core
-pycocotools
-timm
-opencv-python-headless
-rasterio
-numpy
-pandas
-geopandas
-shapely
-pyproj
-simplekml
