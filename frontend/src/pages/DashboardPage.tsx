@@ -18,11 +18,11 @@ interface Job {
 }
 
 interface Package {
-  id: string
-  name: string
+  key: string
+  label: string
   credits: number
-  price: number
-  description?: string
+  price_eur: number
+  popular?: boolean
 }
 
 interface Review {
@@ -465,7 +465,6 @@ export default function DashboardPage() {
   const [thermalTfw, setThermalTfw] = useState<File | null>(null)
   const [rgbTif, setRgbTif] = useState<File | null>(null)
   const [rgbTfw, setRgbTfw] = useState<File | null>(null)
-  const [showPanel, setShowPanel] = useState(false)
   const [panelData, setPanelData] = useState({ marca: '', modello: '', dimensioni: '', efficienza: '', coefficiente: '' })
   const [showConsent, setShowConsent] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -564,9 +563,7 @@ export default function DashboardPage() {
       if (thermalTfw) fd.append('thermal_tfw', thermalTfw)
       if (rgbTif) fd.append('rgb_tif', rgbTif)
       if (rgbTfw) fd.append('rgb_tfw', rgbTfw)
-      if (showPanel) {
-        Object.entries(panelData).forEach(([k, v]) => { if (v) fd.append(k, v) })
-      }
+      Object.entries(panelData).forEach(([k, v]) => { if (v) fd.append(k, v) })
       const res = await apiFetch('/missions/upload', { method: 'POST', body: fd })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -591,10 +588,10 @@ export default function DashboardPage() {
       const res = await apiFetch('/payments/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ package_id: pkg.id }),
+        body: JSON.stringify({ package: pkg.key }),
       })
       const d = await res.json()
-      if (d.url || d.checkout_url) window.open(d.url || d.checkout_url, '_blank')
+      if (d.checkout_url || d.url) window.location.href = d.checkout_url || d.url
     } catch { }
   }
 
@@ -800,49 +797,38 @@ export default function DashboardPage() {
             <DropZone label="RGB TFW" accept=".tfw" file={rgbTfw} onFile={setRgbTfw} />
           </div>
 
-          {/* Panel data toggle */}
-          <button
-            className="flex items-center gap-2 mb-4"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '0.85rem', padding: 0 }}
-            onClick={() => setShowPanel(!showPanel)}
-          >
-            <ChevronDown size={14} style={{ transform: showPanel ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
-            Dati pannelli (opzionale)
-          </button>
-
-          <AnimatePresence>
-            {showPanel && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{ overflow: 'hidden' }}
-              >
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4 pt-1">
-                  {[
-                    { k: 'marca', label: 'Marca' },
-                    { k: 'modello', label: 'Modello' },
-                    { k: 'dimensioni', label: 'Dimensioni (m)' },
-                    { k: 'efficienza', label: 'Efficienza nominale (%)' },
-                    { k: 'coefficiente', label: 'Coeff. temperatura (%/°C)' },
-                  ].map(({ k, label }) => (
-                    <div key={k}>
-                      <label className="form-label">{label}</label>
-                      <input
-                        className="form-input"
-                        type="text"
-                        placeholder={label}
-                        value={panelData[k as keyof typeof panelData]}
-                        onChange={(e) => setPanelData((p) => ({ ...p, [k]: e.target.value }))}
-                        style={{ fontSize: '0.85rem' }}
-                      />
-                    </div>
-                  ))}
+          {/* Panel data — always visible */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', marginBottom: '1rem' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Dati pannelli
+              </span>
+              <span style={{ fontSize: '0.72rem', color: '#475569', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '1px 6px' }}>
+                opzionale
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {[
+                { k: 'marca', label: 'Marca' },
+                { k: 'modello', label: 'Modello' },
+                { k: 'dimensioni', label: 'Dimensioni (m)' },
+                { k: 'efficienza', label: 'Efficienza nominale (%)' },
+                { k: 'coefficiente', label: 'Coeff. temperatura (%/°C)' },
+              ].map(({ k, label }) => (
+                <div key={k}>
+                  <label className="form-label">{label}</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder={label}
+                    value={panelData[k as keyof typeof panelData]}
+                    onChange={(e) => setPanelData((p) => ({ ...p, [k]: e.target.value }))}
+                    style={{ fontSize: '0.85rem' }}
+                  />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              ))}
+            </div>
+          </div>
 
           {uploadError && (
             <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', fontSize: '0.85rem' }}>
@@ -924,47 +910,56 @@ export default function DashboardPage() {
 
           {payTab === 'carta' && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {packages.length === 0 ? (
-                [
-                  { id: 'p1', name: 'Starter', credits: 5, price: 49, description: 'Per piccoli impianti' },
-                  { id: 'p2', name: 'Professional', credits: 15, price: 129, description: 'Uso professionale' },
-                  { id: 'p3', name: 'Enterprise', credits: 50, price: 399, description: 'Grandi portafogli' },
-                ].map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className="rounded-xl p-4 flex flex-col gap-2"
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
-                  >
-                    <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{pkg.name}</span>
-                    <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.5rem' }}>
-                      {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#64748b' }}>elaborazioni</span>
+              {(packages.length > 0
+                ? packages.map((p, i) => ({ ...p, popular: i === 1 }))
+                : [
+                    { key: 'single', label: 'Singola', credits: 1, price_eur: 49.99, popular: false },
+                    { key: 'pack5', label: 'Pack 5', credits: 5, price_eur: 219.99, popular: true },
+                    { key: 'pack10', label: 'Pack 10', credits: 10, price_eur: 399.99, popular: false },
+                  ]
+              ).map((pkg) => (
+                <div
+                  key={pkg.key}
+                  className="rounded-xl p-4 flex flex-col gap-2"
+                  style={{
+                    background: pkg.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
+                    border: pkg.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
+                    position: 'relative',
+                  }}
+                >
+                  {pkg.popular && (
+                    <div
+                      style={{
+                        position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
+                        background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20,
+                        padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Più popolare
                     </div>
-                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', flex: 1 }}>{pkg.description}</div>
-                    <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.1rem', marginBottom: 2 }}>€{pkg.price}</div>
-                    <button className="btn-amber w-full" style={{ fontSize: '0.85rem', padding: '0.6rem' }} onClick={() => buyPackage(pkg)}>
-                      Acquista
-                    </button>
+                  )}
+                  <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    {pkg.label}
+                  </span>
+                  <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.5rem' }}>
+                    {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#64748b' }}>elaborazioni</span>
                   </div>
-                ))
-              ) : (
-                packages.map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className="rounded-xl p-4 flex flex-col gap-2"
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+                  <div style={{ color: '#94a3b8', fontSize: '0.8rem', flex: 1 }}>
+                    €{(pkg.price_eur / pkg.credits).toFixed(2)} per elaborazione
+                  </div>
+                  <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.25rem', marginBottom: 2 }}>
+                    €{pkg.price_eur.toFixed(2)}
+                  </div>
+                  <button
+                    className="btn-amber w-full"
+                    style={{ fontSize: '0.85rem', padding: '0.6rem' }}
+                    onClick={() => buyPackage(pkg)}
                   >
-                    <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{pkg.name}</span>
-                    <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.5rem' }}>
-                      {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#64748b' }}>elaborazioni</span>
-                    </div>
-                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', flex: 1 }}>{pkg.description}</div>
-                    <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.1rem', marginBottom: 2 }}>€{pkg.price}</div>
-                    <button className="btn-amber w-full" style={{ fontSize: '0.85rem', padding: '0.6rem' }} onClick={() => buyPackage(pkg)}>
-                      Acquista
-                    </button>
-                  </div>
-                ))
-              )}
+                    Acquista
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 

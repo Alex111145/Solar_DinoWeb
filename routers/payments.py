@@ -92,8 +92,8 @@ def create_checkout(
             payment_method_types=["card"],
             line_items=[{"price": pkg["price_id"], "quantity": 1}],
             mode="payment",
-            success_url=f"{FRONTEND_URL}/static/dashboard.html?payment=success",
-            cancel_url=f"{FRONTEND_URL}/static/dashboard.html?payment=cancelled",
+            success_url=f"{FRONTEND_URL}/dashboard?payment=success",
+            cancel_url=f"{FRONTEND_URL}/dashboard?payment=cancelled",
             metadata={
                 "company_id": str(current.id),
                 "credits":    str(pkg["credits"]),
