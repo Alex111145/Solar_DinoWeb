@@ -206,9 +206,25 @@ export default function AdminPage() {
     try {
       const res = await apiFetch(`/admin/reviews/${id}/${action}`, { method: 'POST' })
       if (res.ok) {
-        setAdminReviews((prev) => prev.filter((r) => r.id !== id))
-        setPendingReviews((n) => Math.max(0, n - 1))
+        if (action === 'approve') {
+          setAdminReviews((prev) => prev.map((r) => r.id === id ? { ...r, status: 'approved' } : r))
+          setPendingReviews((n) => Math.max(0, n - 1))
+        } else {
+          setAdminReviews((prev) => prev.filter((r) => r.id !== id))
+          setPendingReviews((n) => Math.max(0, n - 1))
+        }
         setMsg(action === 'approve' ? 'Recensione approvata' : 'Recensione rifiutata')
+        setTimeout(() => setMsg(''), 3000)
+      }
+    } catch { }
+  }
+
+  async function deleteReview(id: string) {
+    try {
+      const res = await apiFetch(`/admin/reviews/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setAdminReviews((prev) => prev.filter((r) => r.id !== id))
+        setMsg('Recensione eliminata')
         setTimeout(() => setMsg(''), 3000)
       }
     } catch { }
@@ -534,64 +550,83 @@ export default function AdminPage() {
               className="card mt-4"
             >
               <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
-                Recensioni in attesa
+                Recensioni ({adminReviews.length})
               </h3>
 
               {adminReviews.length === 0 ? (
                 <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-                  Nessuna recensione in attesa
+                  Nessuna recensione
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {adminReviews.map((r) => (
-                    <div
-                      key={r.id}
-                      className="rounded-xl p-4"
-                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
-                    >
-                      <div className="flex items-start justify-between gap-4 flex-wrap">
-                        <div style={{ flex: 1 }}>
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map((n) => (
-                                <Star
-                                  key={n}
-                                  size={13}
-                                  fill={(r.stars || 0) >= n ? '#f59e0b' : 'none'}
-                                  color={(r.stars || 0) >= n ? '#f59e0b' : '#475569'}
-                                />
-                              ))}
+                  {adminReviews.map((r) => {
+                    const approved = r.status === 'approved' || r.status === 'approvata'
+                    return (
+                      <div
+                        key={r.id}
+                        className="rounded-xl p-4"
+                        style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${approved ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.07)'}` }}
+                      >
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div style={{ flex: 1 }}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <div className="flex gap-0.5">
+                                {[1, 2, 3, 4, 5].map((n) => (
+                                  <Star
+                                    key={n}
+                                    size={13}
+                                    fill={(r.stars || 0) >= n ? '#f59e0b' : 'none'}
+                                    color={(r.stars || 0) >= n ? '#f59e0b' : '#475569'}
+                                  />
+                                ))}
+                              </div>
+                              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{r.company || 'Azienda'}</span>
+                              <span style={{ fontSize: '0.75rem', color: '#475569' }}>
+                                {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
+                              </span>
+                              {approved && (
+                                <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>Approvata</span>
+                              )}
                             </div>
-                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{r.company || 'Azienda'}</span>
-                            <span style={{ fontSize: '0.75rem', color: '#475569' }}>
-                              {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
-                            </span>
+                            {r.comment && (
+                              <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>{r.comment}</p>
+                            )}
                           </div>
-                          {r.comment && (
-                            <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>{r.comment}</p>
-                          )}
-                        </div>
-                        <div className="flex gap-2 flex-shrink-0">
-                          <button
-                            className="btn-ghost flex items-center gap-1.5"
-                            style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,0.25)', fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
-                            onClick={() => handleReview(r.id, 'approve')}
-                          >
-                            <Check size={13} /> Approva
-                          </button>
-                          <button
-                            className="btn-ghost flex items-center gap-1.5"
-                            style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)', fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
-                            onClick={() => handleReview(r.id, 'reject')}
-                          >
-                            <X size={13} /> Rifiuta
-                          </button>
+                          <div className="flex gap-2 flex-shrink-0">
+                            {!approved && (
+                              <button
+                                className="btn-ghost flex items-center gap-1.5"
+                                style={{ color: '#22c55e', borderColor: 'rgba(34,197,94,0.25)', fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
+                                onClick={() => handleReview(r.id, 'approve')}
+                              >
+                                <Check size={13} /> Approva
+                              </button>
+                            )}
+                            {!approved && (
+                              <button
+                                className="btn-ghost flex items-center gap-1.5"
+                                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)', fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
+                                onClick={() => handleReview(r.id, 'reject')}
+                              >
+                                <X size={13} /> Rifiuta
+                              </button>
+                            )}
+                            {approved && (
+                              <button
+                                className="btn-ghost flex items-center gap-1.5"
+                                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)', fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
+                                onClick={() => deleteReview(r.id)}
+                              >
+                                <X size={13} /> Elimina
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
-          )}
+              )}
             </motion.div>
           )}
         </AnimatePresence>

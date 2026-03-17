@@ -14,8 +14,7 @@ export async function apiFetch(path: string, opts: RequestInit = {}): Promise<Re
   })
   if (res.status === 401) {
     localStorage.clear()
-    window.location.href = '/login'
-    throw new Error('Sessione scaduta')
+    throw new Error('UNAUTHORIZED')
   }
   return res
 }
