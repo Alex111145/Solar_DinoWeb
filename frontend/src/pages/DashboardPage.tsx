@@ -107,8 +107,8 @@ function DropZone({
         </span>
       ) : (
         <>
-          <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 500 }}>{label}</span>
-          <span style={{ fontSize: '0.72rem', color: '#475569' }}>Clicca o trascina</span>
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Clicca o trascina</span>
         </>
       )}
     </div>
@@ -151,17 +151,17 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 style={{ color: '#f1f5f9', fontSize: '1.1rem', fontWeight: 700 }}>Consenso al trattamento dati</h3>
+          <h3 style={{ color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: 700 }}>Consenso al trattamento dati</h3>
           <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
         </div>
-        <p style={{ fontSize: '0.875rem', color: '#94a3b8', lineHeight: 1.7, marginBottom: '1.25rem' }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '1.25rem' }}>
           I file che stai per caricare potrebbero contenere dati geografici e informazioni sull'impianto fotovoltaico.
           Questi dati saranno trattati esclusivamente per la generazione del report di analisi termografica e non
           saranno condivisi con terze parti. Il trattamento è effettuato nel rispetto del Regolamento (UE) 2016/679 (GDPR).
         </p>
         <label className="flex items-start gap-3 cursor-pointer mb-6">
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} style={{ marginTop: 2 }} />
-          <span style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
+          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
             Ho letto e accetto le condizioni di trattamento dei dati. Confermo di essere autorizzato al caricamento di questi file.
           </span>
         </label>
@@ -509,15 +509,15 @@ function ProfileSidebar({
             {openSection === 'storico' && (
               <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
                 {history.length === 0 ? (
-                  <p style={{ color: '#475569', fontSize: '0.8rem', textAlign: 'center', padding: '1rem 0' }}>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1rem 0' }}>
                     Nessuna elaborazione ancora.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-2 mt-3">
                     {history.map((job) => (
-                      <div key={job.id} style={{ padding: '0.65rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div key={job.id} style={{ padding: '0.65rem 0.75rem', background: st.rowBg, borderRadius: 10, border: `1px solid ${st.rowBorder}` }}>
                         <div className="flex items-center justify-between mb-1">
-                          <span style={{ fontSize: '0.78rem', color: '#f1f5f9', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                          <span style={{ fontSize: '0.78rem', color: st.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
                             {job.filename || `Job ${job.id.slice(0, 8)}`}
                           </span>
                           <span className={`badge ${job.status === 'completato' ? 'badge-green' : job.status === 'errore' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: '0.65rem' }}>
@@ -525,7 +525,7 @@ function ProfileSidebar({
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span style={{ fontSize: '0.7rem', color: '#475569' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                             {job.created_at ? new Date(job.created_at).toLocaleDateString('it-IT') : '—'}
                             {job.panel_count != null ? ` · ${job.panel_count} pannelli` : ''}
                           </span>
@@ -591,7 +591,7 @@ function ProfileSidebar({
         </div>
 
         {/* Logout */}
-        <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '1rem', borderTop: `1px solid ${st.border}` }}>
           <button
             className="w-full flex items-center justify-center gap-2 btn-ghost"
             style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)', width: '100%' }}
@@ -861,7 +861,7 @@ export default function DashboardPage() {
             >
               <Sun size={18} color="#000" strokeWidth={2.5} />
             </div>
-            <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#f1f5f9', letterSpacing: '-0.02em' }}>SolarDino</span>
+            <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>SolarDino</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -907,11 +907,11 @@ export default function DashboardPage() {
 
         {/* Welcome */}
         <motion.div variants={cardAnim} className="mb-8">
-          <h1 style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 800, letterSpacing: '-0.03em', color: '#f1f5f9', marginBottom: 6 }}>
+          <h1 style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-primary)', marginBottom: 6 }}>
             Benvenuto,{' '}
             <span className="text-amber-gradient">{userName || 'utente'}</span>
           </h1>
-          <p style={{ color: '#64748b', fontSize: '0.925rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem' }}>
             Carica due ortomosaici per avviare l'analisi AI.
           </p>
         </motion.div>
@@ -920,7 +920,7 @@ export default function DashboardPage() {
         <motion.div variants={cardAnim} className="card mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Play size={15} style={{ color: '#f59e0b' }} />
-            <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.925rem' }}>Come funziona SolarDino</span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.925rem' }}>Come funziona SolarDino</span>
           </div>
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
             <video
@@ -937,8 +937,8 @@ export default function DashboardPage() {
               <Upload size={17} />
             </div>
             <div>
-              <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Nuova Elaborazione</h2>
-              <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Carica i file ortomosaico per avviare l'analisi</p>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Nuova Elaborazione</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Carica i file ortomosaico per avviare l'analisi</p>
             </div>
           </div>
 
@@ -952,10 +952,10 @@ export default function DashboardPage() {
           {/* Panel data — always visible */}
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', marginBottom: '1rem' }}>
             <div className="flex items-center gap-2 mb-3">
-              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Dati pannelli
               </span>
-              <span style={{ fontSize: '0.72rem', color: '#475569', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '1px 6px' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '1px 6px' }}>
                 opzionale
               </span>
             </div>
@@ -1011,8 +1011,8 @@ export default function DashboardPage() {
               <CreditCard size={17} />
             </div>
             <div>
-              <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Acquista Elaborazioni</h2>
-              <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0 }}>Crediti disponibili: <strong style={{ color: '#f59e0b' }}>{credits}</strong></p>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Acquista Elaborazioni</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Crediti disponibili: <strong style={{ color: '#f59e0b' }}>{credits}</strong></p>
             </div>
           </div>
 
@@ -1059,13 +1059,13 @@ export default function DashboardPage() {
                   <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     {pkg.label}
                   </span>
-                  <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.5rem' }}>
-                    {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: '#64748b' }}>elaborazioni</span>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
+                    {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni</span>
                   </div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.8rem', flex: 1 }}>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', flex: 1 }}>
                     €{(pkg.price_eur / pkg.credits).toFixed(2)} per elaborazione
                   </div>
-                  <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.25rem', marginBottom: 2 }}>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem', marginBottom: 2 }}>
                     €{pkg.price_eur.toFixed(2)}
                   </div>
                   <button
@@ -1082,7 +1082,7 @@ export default function DashboardPage() {
 
           {payTab === 'bonifico' && (
             <div className="rounded-xl p-5" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <h3 style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.925rem', marginBottom: 12 }}>Dati per il bonifico</h3>
+              <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.925rem', marginBottom: 12 }}>Dati per il bonifico</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
                 {[
                   { label: 'Intestatario', value: 'SolarDino Srl' },
@@ -1091,8 +1091,8 @@ export default function DashboardPage() {
                   { label: 'Causale', value: 'Acquisto elaborazioni SolarDino' },
                 ].map(({ label, value }) => (
                   <div key={label}>
-                    <div style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
-                    <div style={{ fontSize: '0.875rem', color: '#f1f5f9', fontWeight: 500 }}>{value}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>{value}</div>
                   </div>
                 ))}
               </div>
@@ -1106,7 +1106,7 @@ export default function DashboardPage() {
                 {bonificoReceipt ? (
                   <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>{bonificoReceipt.name}</span>
                 ) : (
-                  <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>PDF, JPG, PNG</span>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>PDF, JPG, PNG</span>
                 )}
               </div>
               {bonificoMsg && (
@@ -1128,7 +1128,7 @@ export default function DashboardPage() {
               <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
                 <Star size={17} />
               </div>
-              <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Lascia una recensione</h2>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Lascia una recensione</h2>
             </div>
             <form onSubmit={submitReview} className="flex flex-col gap-4">
               <div>
@@ -1165,7 +1165,7 @@ export default function DashboardPage() {
               <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
                 <Star size={17} />
               </div>
-              <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Recensioni</h2>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Recensioni</h2>
             </div>
             <div className="flex flex-col gap-3">
               {reviews.filter((r) => r.id !== myReview?.id).map((r) => (
@@ -1181,13 +1181,13 @@ export default function DashboardPage() {
                       ))}
                     </div>
                     {r.company && (
-                      <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>{r.company}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{r.company}</span>
                     )}
-                    <span style={{ fontSize: '0.75rem', color: '#475569', marginLeft: 'auto' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
                       {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
                     </span>
                   </div>
-                  {r.comment && <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0 }}>{r.comment}</p>}
+                  {r.comment && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>{r.comment}</p>}
                 </div>
               ))}
             </div>
@@ -1201,10 +1201,10 @@ export default function DashboardPage() {
             style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.2)' }}
           >
             <div>
-              <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.925rem', marginBottom: 4 }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.925rem', marginBottom: 4 }}>
                 Hai bisogno di aiuto?
               </div>
-              <div style={{ color: '#64748b', fontSize: '0.85rem' }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 Il nostro team è disponibile per supporto tecnico e commerciale.
               </div>
             </div>
@@ -1248,7 +1248,7 @@ export default function DashboardPage() {
                 </div>
                 <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.05rem' }}>Azienda bloccata</h3>
               </div>
-              <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: 1.7, marginBottom: '1.5rem' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.7, marginBottom: '1.5rem' }}>
                 Il tuo account è stato bloccato dall'amministratore. Non è possibile avviare nuove elaborazioni.
                 Contatta l'assistenza per risolvere il problema.
               </p>
@@ -1326,12 +1326,12 @@ export default function DashboardPage() {
                 <div style={{ color: activeJob?.status === 'errore' ? '#ef4444' : '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>
                   {activeJob?.status === 'errore' ? 'Elaborazione fallita' : uploading && !activeJob ? 'Caricamento file…' : 'Elaborazione in corso'}
                 </div>
-                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Analisi AI pannelli solari</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Analisi AI pannelli solari</div>
               </div>
               {activeJob?.status === 'errore' ? (
                 <button
                   onClick={() => setActiveJob(null)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 0, display: 'flex' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}
                 >
                   <X size={16} />
                 </button>
@@ -1396,11 +1396,11 @@ export default function DashboardPage() {
               />
             </div>
             <div className="flex justify-between mt-1.5">
-              <span style={{ fontSize: '0.7rem', color: '#475569' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                 {activeJob ? `${statusProgress(activeJob.status)}%` : 'Invio…'}
               </span>
               {activeJob && (
-                <span style={{ fontSize: '0.7rem', color: '#475569' }}>ID: {activeJob.id.slice(0, 8)}</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>ID: {activeJob.id.slice(0, 8)}</span>
               )}
             </div>
 
