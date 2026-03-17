@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Node
+frontend/node_modules/
+
+# Build output — committed so Render doesn't need Node
+# static/app/   ← NON ignorare, serve per Render
+
+# macOS
+.DS_Store
+elaborazioni/.DS_Store
+
+# Dati locali (non caricare su git)
+elaborazioni/*/
+!elaborazioni/.gitkeep
+
+# Model weights (scaricato da Supabase all'avvio)
+elaborazioni/model_best.pth
+
+# Ricevute
+elaborazioni/ricevute/
