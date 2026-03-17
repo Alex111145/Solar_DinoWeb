@@ -116,7 +116,7 @@ export default function RegisterPage() {
             style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', borderRadius: 12 }}
           >
             <Gift size={14} />
-            2 ortomosaici gratuiti inclusi
+            2 elaborazioni gratuite incluse
           </span>
         </motion.div>
 
