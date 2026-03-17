@@ -39,10 +39,10 @@ const stats = [
 
 const features = [
   'Analisi termografica automatizzata',
-  'Rilevamento hotspot e anomalie',
+  'Rilevamento hotspot pannelli',
+  'Calcolo efficienza pannelli*',
   'Overlay RGB + Termico',
   'Report scaricabile istantaneamente',
-  '2 ortomosaici gratuiti al primo accesso',
 ]
 
 export default function LoginPage() {
@@ -223,6 +223,9 @@ export default function LoginPage() {
             </li>
           ))}
         </motion.ul>
+        <motion.p variants={item} style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.75rem', lineHeight: 1.6 }}>
+          * Il calcolo dell'efficienza è disponibile solo se vengono forniti i valori nominali dei pannelli (potenza, efficienza, coefficiente di temperatura).
+        </motion.p>
       </motion.div>
 
       {/* Right panel — form */}
@@ -254,15 +257,9 @@ export default function LoginPage() {
             <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f1f5f9' }}>SolarDino</span>
           </div>
 
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f1f5f9', marginBottom: 6 }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '1.75rem' }}>
             Accedi
           </h2>
-          <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1.75rem' }}>
-            Non hai un account?{' '}
-            <Link to="/register" style={{ color: '#f59e0b', fontWeight: 600 }}>
-              Registrati — 2 ortomosaici gratuiti
-            </Link>
-          </p>
 
           {/* Disabled banner */}
           {disabled && (
@@ -356,6 +353,33 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Registrazione — sotto il bottone */}
+          <div
+            className="mt-5 rounded-2xl p-4 text-center"
+            style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}
+          >
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 6 }}>Non hai ancora un account?</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f59e0b', marginBottom: 10, letterSpacing: '-0.01em' }}>
+              🎁 2 elaborazioni gratuite
+            </div>
+            <Link
+              to="/register"
+              style={{
+                display: 'block',
+                background: 'rgba(245,158,11,0.15)',
+                border: '1px solid rgba(245,158,11,0.4)',
+                borderRadius: 12,
+                padding: '0.65rem 1rem',
+                color: '#f59e0b',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                textDecoration: 'none',
+              }}
+            >
+              Registrati gratis →
+            </Link>
+          </div>
         </motion.div>
       </div>
     </div>

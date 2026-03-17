@@ -324,7 +324,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <motion.div variants={cardAnim} className="card" style={{ padding: '0.375rem' }}>
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap justify-center">
             {[
               { key: 'companies', label: 'Aziende', icon: <Users size={14} /> },
               { key: 'billing', label: 'Utilizzo & Fatturazione', icon: <BarChart2 size={14} /> },
