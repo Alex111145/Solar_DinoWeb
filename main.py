@@ -6,7 +6,7 @@ load_dotenv(override=True)  # carica .env e sovrascrive variabili già esistenti
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import auth_utils
@@ -101,13 +101,25 @@ app.include_router(admin.router)
 app.include_router(payments.router)
 app.include_router(reviews.router)
 
-# Serve frontend HTML/CSS/JS
+# Serve old static files (admin.html, etc.)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Serve React app (built frontend)
+if os.path.isdir("static/app"):
+    app.mount("/app", StaticFiles(directory="static/app", html=True), name="app")
 
 @app.get("/", include_in_schema=False)
 def root():
+    if os.path.isfile("static/app/index.html"):
+        return FileResponse("static/app/index.html")
     return RedirectResponse(url="/static/login.html")
+
+@app.get("/login", include_in_schema=False)
+@app.get("/register", include_in_schema=False)
+@app.get("/dashboard", include_in_schema=False)
+@app.get("/admin", include_in_schema=False)
+def spa_routes():
+    return FileResponse("static/app/index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
