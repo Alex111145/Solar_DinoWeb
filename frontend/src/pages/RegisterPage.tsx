@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Sun, Gift } from 'lucide-react'
+import { Sun, Gift, ArrowLeft } from 'lucide-react'
 
 const item = {
   hidden: { opacity: 0, y: 20 },
@@ -24,13 +24,70 @@ export default function RegisterPage() {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   function update(k: string, v: string) {
     setForm((f) => ({ ...f, [k]: v }))
+    if (errors[k]) setErrors((e) => ({ ...e, [k]: '' }))
+  }
+
+  function validate(): Record<string, string> {
+    const e: Record<string, string> = {}
+
+    // Ragione sociale: must contain a legal form
+    if (!form.ragione_sociale.trim()) {
+      e.ragione_sociale = 'Campo obbligatorio'
+    } else if (!/\b(srl|s\.r\.l|spa|s\.p\.a|snc|s\.n\.c|sas|s\.a\.s|srls|s\.r\.l\.s|ss|s\.s|soc\.|societa)\b/i.test(form.ragione_sociale)) {
+      e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc...)'
+    }
+
+    // Nome referente: first name ≥2 chars, last name ≥2 chars
+    const parts = form.name.trim().split(/\s+/)
+    if (!form.name.trim()) {
+      e.name = 'Campo obbligatorio'
+    } else if (parts.length < 2 || parts[0].length < 2 || parts[parts.length - 1].length < 2) {
+      e.name = 'Inserire nome e cognome (min. 2 lettere ciascuno)'
+    }
+
+    // Partita IVA: exactly 11 digits, no IT prefix
+    if (!form.vat_number.trim()) {
+      e.vat_number = 'Partita IVA obbligatoria'
+    } else if (/^it/i.test(form.vat_number.trim())) {
+      e.vat_number = 'Inserire solo le 11 cifre numeriche, senza prefisso IT'
+    } else if (!/^\d{11}$/.test(form.vat_number.trim())) {
+      e.vat_number = 'La Partita IVA deve contenere esattamente 11 cifre'
+    }
+
+    // Email: must have @ and valid TLD
+    if (!form.email.trim()) {
+      e.email = 'Email obbligatoria'
+    } else if (!/^[^\s@]+@[^\s@]+\.(it|com|eu|net|org|io|co|biz|info|gov|edu)(\.[a-z]{2})?$/i.test(form.email)) {
+      e.email = 'Email non valida (es. nome@azienda.it)'
+    }
+
+    // Password: 8+ chars, uppercase, number, special char
+    if (!form.password) {
+      e.password = 'Password obbligatoria'
+    } else if (form.password.length < 8) {
+      e.password = 'Minimo 8 caratteri'
+    } else if (!/[A-Z]/.test(form.password)) {
+      e.password = 'Deve contenere almeno una lettera maiuscola'
+    } else if (!/[0-9]/.test(form.password)) {
+      e.password = 'Deve contenere almeno un numero'
+    } else if (!/[^A-Za-z0-9]/.test(form.password)) {
+      e.password = 'Deve contenere almeno un carattere speciale (!@#$...)'
+    }
+
+    return e
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const fieldErrors = validate()
+    if (Object.values(fieldErrors).some(Boolean)) {
+      setErrors(fieldErrors)
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -96,6 +153,17 @@ export default function RegisterPage() {
         animate="show"
         style={{ width: '100%', maxWidth: 520, position: 'relative', zIndex: 10 }}
       >
+        {/* Back button */}
+        <motion.div variants={item} className="flex justify-center mb-5">
+          <Link
+            to="/login"
+            className="flex items-center gap-2 btn-amber"
+            style={{ fontSize: '0.975rem', fontWeight: 700, textDecoration: 'none', padding: '0.7rem 1.5rem', borderRadius: 12 }}
+          >
+            <ArrowLeft size={18} /> Torna al login
+          </Link>
+        </motion.div>
+
         {/* Logo */}
         <motion.div variants={item} className="flex items-center justify-center gap-3 mb-6">
           <div
@@ -116,7 +184,7 @@ export default function RegisterPage() {
             style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', borderRadius: 12 }}
           >
             <Gift size={14} />
-            2 elaborazioni gratuite incluse
+            2 Elaborazioni gratuite
           </span>
         </motion.div>
 
@@ -161,8 +229,9 @@ export default function RegisterPage() {
                 placeholder="Azienda Srl"
                 value={form.ragione_sociale}
                 onChange={(e) => update('ragione_sociale', e.target.value)}
-                required
+                style={errors.ragione_sociale ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
               />
+              {errors.ragione_sociale && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.ragione_sociale}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -174,18 +243,21 @@ export default function RegisterPage() {
                   placeholder="Mario Rossi"
                   value={form.name}
                   onChange={(e) => update('name', e.target.value)}
-                  required
+                  style={errors.name ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
                 />
+                {errors.name && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.name}</p>}
               </div>
               <div>
                 <label className="form-label">Partita IVA</label>
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="IT12345678901"
+                  placeholder="12345678901"
                   value={form.vat_number}
                   onChange={(e) => update('vat_number', e.target.value)}
+                  style={errors.vat_number ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
                 />
+                {errors.vat_number && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.vat_number}</p>}
               </div>
             </div>
 
@@ -197,9 +269,10 @@ export default function RegisterPage() {
                 placeholder="nome@azienda.it"
                 value={form.email}
                 onChange={(e) => update('email', e.target.value)}
-                required
                 autoComplete="email"
+                style={errors.email ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
               />
+              {errors.email && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.email}</p>}
             </div>
 
             <div>
@@ -207,13 +280,13 @@ export default function RegisterPage() {
               <input
                 className="form-input"
                 type="password"
-                placeholder="Minimo 8 caratteri"
+                placeholder="Min 8 car., maiuscola, numero, simbolo"
                 value={form.password}
                 onChange={(e) => update('password', e.target.value)}
-                required
-                minLength={8}
                 autoComplete="new-password"
+                style={errors.password ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
               />
+              {errors.password && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.password}</p>}
             </div>
 
             <button
