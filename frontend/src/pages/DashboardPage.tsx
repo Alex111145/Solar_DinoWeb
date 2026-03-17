@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Sun, Upload, CreditCard, History, Star, LogOut, ChevronDown,
-  Info, X, Play, FileDown, Check, AlertTriangle, Trash2,
-  Mail, Lock, Building2, ChevronRight, User, Zap,
+  Sun, Upload, CreditCard, History, Star, LogOut,
+  X, Play, FileDown, Check, AlertTriangle, Trash2,
+  Mail, Lock, Building2, ChevronRight, Zap,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -15,6 +15,7 @@ interface Job {
   created_at?: string
   status: string
   panel_count?: number
+  error_message?: string
 }
 
 interface Package {
@@ -220,12 +221,14 @@ function InfoModal({ onClose }: { onClose: () => void }) {
 
 // ── Profile Sidebar ────────────────────────────────────────────────────────
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, onClose,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, onClose,
 }: {
   name: string
   email: string
   ragioneSociale: string
   vatNumber: string
+  history: Job[]
+  downloadFile: (jobId: string, format: string) => void
   onClose: () => void
 }) {
   const navigate = useNavigate()
@@ -444,6 +447,62 @@ function ProfileSidebar({
               </div>
             )}
           </div>
+
+          {/* Storico elaborazioni */}
+          <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
+            <button
+              className="w-full flex items-center justify-between p-4"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+              onClick={() => toggle('storico')}
+            >
+              <span className="flex items-center gap-2 text-sm font-medium"><History size={15} /> Storico elaborazioni</span>
+              <ChevronRight size={15} style={{ transform: openSection === 'storico' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: '#64748b' }} />
+            </button>
+            {openSection === 'storico' && (
+              <div style={{ padding: '0 1rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                {history.length === 0 ? (
+                  <p style={{ color: '#475569', fontSize: '0.8rem', textAlign: 'center', padding: '1rem 0' }}>
+                    Nessuna elaborazione ancora.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2 mt-3">
+                    {history.map((job) => (
+                      <div key={job.id} style={{ padding: '0.65rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span style={{ fontSize: '0.78rem', color: '#f1f5f9', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                            {job.filename || `Job ${job.id.slice(0, 8)}`}
+                          </span>
+                          <span className={`badge ${job.status === 'completato' ? 'badge-green' : job.status === 'errore' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: '0.65rem' }}>
+                            {statusLabel(job.status)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span style={{ fontSize: '0.7rem', color: '#475569' }}>
+                            {job.created_at ? new Date(job.created_at).toLocaleDateString('it-IT') : '—'}
+                            {job.panel_count != null ? ` · ${job.panel_count} pannelli` : ''}
+                          </span>
+                          {job.status === 'completato' && (
+                            <div className="flex gap-1">
+                              {['kml', 'json', 'csv'].map((fmt) => (
+                                <button
+                                  key={fmt}
+                                  onClick={() => downloadFile(job.id, fmt)}
+                                  className="btn-ghost"
+                                  style={{ padding: '0.2rem 0.45rem', fontSize: '0.65rem', textTransform: 'uppercase' }}
+                                >
+                                  {fmt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Logout */}
@@ -463,8 +522,6 @@ function ProfileSidebar({
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const navigate = useNavigate()
-
   // User state
   const [userName, setUserName] = useState(localStorage.getItem('name') || '')
   const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '')
@@ -473,9 +530,7 @@ export default function DashboardPage() {
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
 
   // UI state
-  const [showInfo, setShowInfo] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
 
   // Upload state
   const [thermalTif, setThermalTif] = useState<File | null>(null)
@@ -550,7 +605,8 @@ export default function DashboardPage() {
         setActiveJob(d)
         if (d.status === 'completato' || d.status === 'errore') {
           clearInterval(pollRef.current!)
-          setActiveJob(null)
+          // Su errore mantieni il job visibile così l'utente può scaricare il log
+          if (d.status === 'completato') setActiveJob(null)
           // Refresh history & credits
           apiFetch('/missions/history')
             .then((r) => r.json())
@@ -677,14 +733,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              className="btn-ghost"
-              style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem', gap: '0.35rem' }}
-              onClick={() => setShowInfo(true)}
-            >
-              <Info size={15} /> Info
-            </button>
-
             <div
               className="badge badge-amber"
               style={{ cursor: 'default' }}
@@ -692,55 +740,13 @@ export default function DashboardPage() {
               <Zap size={12} /> {credits} elaborazioni
             </div>
 
-            <div className="relative">
-              <button
-                onClick={() => setProfileOpen(!profileOpen)}
-                className="flex items-center gap-2 btn-ghost"
-                style={{ padding: '0.4rem 0.75rem' }}
-              >
-                <div
-                  className="flex items-center justify-center rounded-full"
-                  style={{ width: 28, height: 28, background: 'linear-gradient(135deg,#f59e0b,#f97316)', color: '#000', fontWeight: 700, fontSize: '0.7rem' }}
-                >
-                  {initials}
-                </div>
-                <ChevronDown size={13} style={{ color: '#64748b' }} />
-              </button>
-
-              <AnimatePresence>
-                {profileOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    className="absolute right-0 mt-2 rounded-xl overflow-hidden"
-                    style={{
-                      width: 180,
-                      background: '#0d1117',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                      zIndex: 50,
-                    }}
-                  >
-                    <button
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', textAlign: 'left' }}
-                      onClick={() => { setProfileOpen(false); setShowProfile(true) }}
-                    >
-                      <User size={14} /> Il mio profilo
-                    </button>
-                    <div style={{ height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                    <button
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', textAlign: 'left' }}
-                      onClick={() => { localStorage.clear(); navigate('/login') }}
-                    >
-                      <LogOut size={14} /> Esci
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex items-center justify-center rounded-full btn-ghost"
+              style={{ width: 36, height: 36, padding: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', color: '#000', fontWeight: 700, fontSize: '0.75rem' }}
+            >
+              {initials}
+            </button>
           </div>
         </div>
       </nav>
@@ -774,7 +780,7 @@ export default function DashboardPage() {
             <span className="text-amber-gradient">{userName || 'utente'}</span>
           </h1>
           <p style={{ color: '#64748b', fontSize: '0.925rem' }}>
-            Carica un ortomosaico termico per avviare l'analisi AI.
+            Carica due ortomosaici per avviare l'analisi AI.
           </p>
         </motion.div>
 
@@ -984,68 +990,6 @@ export default function DashboardPage() {
           )}
         </motion.div>
 
-        {/* History */}
-        <motion.div variants={cardAnim} className="card mb-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
-              <History size={17} />
-            </div>
-            <h2 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Storico Elaborazioni</h2>
-          </div>
-
-          {history.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-              Nessuna elaborazione ancora. Carica il tuo primo ortomosaico!
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>File</th>
-                    <th>Data</th>
-                    <th>Stato</th>
-                    <th>Pannelli</th>
-                    <th>Download</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((job) => (
-                    <tr key={job.id}>
-                      <td style={{ color: '#f1f5f9' }}>{job.filename || `Job ${job.id.slice(0, 8)}`}</td>
-                      <td>{job.created_at ? new Date(job.created_at).toLocaleDateString('it-IT') : '—'}</td>
-                      <td>
-                        <span className={`badge ${job.status === 'completato' ? 'badge-green' : job.status === 'errore' ? 'badge-red' : 'badge-amber'}`}>
-                          {statusLabel(job.status)}
-                        </span>
-                      </td>
-                      <td>{job.panel_count ?? '—'}</td>
-                      <td>
-                        {job.status === 'completato' ? (
-                          <div className="flex gap-1.5 flex-wrap">
-                            {['kml', 'json', 'csv'].map((fmt) => (
-                              <button
-                                key={fmt}
-                                onClick={() => downloadFile(job.id, fmt)}
-                                className="btn-ghost"
-                                style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', textTransform: 'uppercase' }}
-                              >
-                                {fmt}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: '#475569', fontSize: '0.8rem' }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </motion.div>
-
         {/* Reviews */}
         <motion.div variants={cardAnim} className="card mb-6">
           <div className="flex items-center gap-3 mb-5">
@@ -1149,9 +1093,6 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
-      </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
@@ -1160,6 +1101,8 @@ export default function DashboardPage() {
             email={userEmail}
             ragioneSociale={ragioneSociale}
             vatNumber={vatNumber}
+            history={history}
+            downloadFile={downloadFile}
             onClose={() => setShowProfile(false)}
           />
         )}
@@ -1188,18 +1131,29 @@ export default function DashboardPage() {
           >
             {/* Header */}
             <div className="flex items-center gap-3 mb-4">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                style={{ width: 20, height: 20, border: '2px solid rgba(245,158,11,0.25)', borderTopColor: '#f59e0b', borderRadius: '50%', flexShrink: 0 }}
-              />
+              {activeJob?.status === 'errore' ? (
+                <AlertTriangle size={20} color="#ef4444" style={{ flexShrink: 0 }} />
+              ) : (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                  style={{ width: 20, height: 20, border: '2px solid rgba(245,158,11,0.25)', borderTopColor: '#f59e0b', borderRadius: '50%', flexShrink: 0 }}
+                />
+              )}
               <div style={{ flex: 1 }}>
-                <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>
-                  {uploading && !activeJob ? 'Caricamento file…' : 'Elaborazione in corso'}
+                <div style={{ color: activeJob?.status === 'errore' ? '#ef4444' : '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>
+                  {activeJob?.status === 'errore' ? 'Elaborazione fallita' : uploading && !activeJob ? 'Caricamento file…' : 'Elaborazione in corso'}
                 </div>
                 <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Analisi AI pannelli solari</div>
               </div>
-              {activeJob && (
+              {activeJob?.status === 'errore' ? (
+                <button
+                  onClick={() => setActiveJob(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 0, display: 'flex' }}
+                >
+                  <X size={16} />
+                </button>
+              ) : activeJob && (
                 <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
                   {statusEta(activeJob.status)}
                 </span>
@@ -1267,6 +1221,36 @@ export default function DashboardPage() {
                 <span style={{ fontSize: '0.7rem', color: '#475569' }}>ID: {activeJob.id.slice(0, 8)}</span>
               )}
             </div>
+
+            {/* Bottone download log errore */}
+            {activeJob?.status === 'errore' && (
+              <button
+                onClick={() => {
+                  const lines = [
+                    'SolarDino — Log errore elaborazione',
+                    '='.repeat(40),
+                    `Job ID:    ${activeJob.id}`,
+                    `File:      ${activeJob.filename || '—'}`,
+                    `Data:      ${activeJob.created_at ? new Date(activeJob.created_at).toLocaleString('it-IT') : '—'}`,
+                    `Stato:     errore`,
+                    `Dettaglio: ${activeJob.error_message || 'Nessun dettaglio disponibile'}`,
+                    '',
+                    'Per assistenza contatta support@solardino.it',
+                  ]
+                  const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `solardino_errore_${activeJob.id.slice(0, 8)}.txt`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                className="btn-ghost w-full mt-3"
+                style={{ fontSize: '0.8rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
+                <FileDown size={14} /> Scarica log errore
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
