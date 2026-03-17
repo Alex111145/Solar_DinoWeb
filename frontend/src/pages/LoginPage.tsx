@@ -24,7 +24,7 @@ const stats = [
     icon: <MapPin size={18} />,
     label: 'GPS / Geolocalizzato',
     value: 'Coordinate precise',
-    desc: 'Ogni anomalia con coordinate GPS reali',
+    desc: 'Ogni anomalia è geolocalizzata con coordinate GPS reali',
     features: ['Rilevamento hotspot pannelli'],
   },
   {
@@ -179,15 +179,18 @@ export default function LoginPage() {
         {isDark ? 'Modalità chiara' : 'Modalità scura'}
       </button>
 
+      {/* ── Centered wrapper ──────────────────────────────────── */}
+      <div className="flex flex-col lg:flex-row relative z-10 w-full flex-1" style={{ maxWidth: 1280, margin: '0 auto' }}>
+
       {/* ── Left panel ────────────────────────────────────────── */}
       <motion.div
-        className="flex flex-col relative z-10 px-6 pt-14 pb-10 lg:px-14 xl:px-20 lg:justify-center"
-        style={{ width: '100%', maxWidth: '100%' }}
+        className="flex flex-col px-6 pt-14 pb-10 lg:px-12 xl:px-16 lg:justify-center"
+        style={{ flex: 1, minWidth: 0 }}
         variants={container}
         initial="hidden"
         animate="show"
       >
-        <div style={{ maxWidth: 520, margin: '0 auto', width: '100%' }} className="lg:max-w-none">
+        <div style={{ maxWidth: 520, width: '100%' }}>
           {/* Logo */}
           <motion.div variants={item} className="flex items-center gap-3 mb-10">
             <div className="flex items-center justify-center rounded-xl" style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #f59e0b, #f97316)', boxShadow: '0 0 20px rgba(245,158,11,0.4)' }}>
@@ -264,7 +267,7 @@ export default function LoginPage() {
       </motion.div>
 
       {/* ── Right panel — form ────────────────────────────────── */}
-      <div className="flex items-start lg:items-center justify-center relative z-10 p-6 pb-14 lg:pb-6" style={{ flex: 1 }}>
+      <div className="flex items-start lg:items-center justify-start relative z-10 p-6 pb-14 lg:py-6 lg:pl-10 lg:pr-14" style={{ flex: '0 0 auto', width: '100%', maxWidth: 560 }}>
         <motion.div
           initial={{ opacity: 0, x: 0, y: 20 }}
           animate={{ opacity: 1, x: 0, y: 0 }}
@@ -351,6 +354,8 @@ export default function LoginPage() {
           </div>
         </motion.div>
       </div>
+
+      </div>{/* end centered wrapper */}
     </div>
   )
 }

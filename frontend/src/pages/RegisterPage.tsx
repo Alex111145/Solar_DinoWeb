@@ -58,10 +58,10 @@ export default function RegisterPage() {
       e.vat_number = 'La Partita IVA deve contenere esattamente 11 cifre'
     }
 
-    // Email: must have @ and valid TLD
+    // Email: must have @ and a domain with at least one dot + 2-char TLD
     if (!form.email.trim()) {
       e.email = 'Email obbligatoria'
-    } else if (!/^[^\s@]+@[^\s@]+\.(it|com|eu|net|org|io|co|biz|info|gov|edu)(\.[a-z]{2})?$/i.test(form.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(form.email)) {
       e.email = 'Email non valida (es. nome@azienda.it)'
     }
 
@@ -119,6 +119,17 @@ export default function RegisterPage() {
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-6" style={{ background: '#060912' }}>
       <div className="grid-overlay" />
 
+      {/* Back button — top left */}
+      <div style={{ position: 'absolute', top: '1.25rem', left: '1.25rem', zIndex: 20 }}>
+        <Link
+          to="/login"
+          className="flex items-center gap-2 btn-amber"
+          style={{ fontSize: '0.975rem', fontWeight: 700, textDecoration: 'none', padding: '0.7rem 1.5rem', borderRadius: 12 }}
+        >
+          <ArrowLeft size={18} /> Torna al login
+        </Link>
+      </div>
+
       {/* Aurora orbs */}
       <div
         className="absolute pointer-events-none"
@@ -153,17 +164,6 @@ export default function RegisterPage() {
         animate="show"
         style={{ width: '100%', maxWidth: 520, position: 'relative', zIndex: 10 }}
       >
-        {/* Back button */}
-        <motion.div variants={item} className="flex justify-center mb-5">
-          <Link
-            to="/login"
-            className="flex items-center gap-2 btn-amber"
-            style={{ fontSize: '0.975rem', fontWeight: 700, textDecoration: 'none', padding: '0.7rem 1.5rem', borderRadius: 12 }}
-          >
-            <ArrowLeft size={18} /> Torna al login
-          </Link>
-        </motion.div>
-
         {/* Logo */}
         <motion.div variants={item} className="flex items-center justify-center gap-3 mb-6">
           <div
