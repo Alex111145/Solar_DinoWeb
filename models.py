@@ -39,6 +39,11 @@ class Job(Base):
     hotspot_count   = Column(Integer, nullable=True, default=0)
     degraded_count  = Column(Integer, nullable=True, default=0)
     log             = Column(Text, nullable=True)
+    # Dati opzionali impianto
+    panel_model     = Column(String, nullable=True)   # Marca e modello
+    panel_dimensions= Column(String, nullable=True)   # Dimensioni fisiche (LxH mm)
+    panel_efficiency= Column(Float,  nullable=True)   # Efficienza nominale %
+    panel_temp_coeff= Column(Float,  nullable=True)   # Coefficiente temperatura %/°C
     created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at    = Column(DateTime, nullable=True)
 
@@ -60,6 +65,19 @@ class BonificoRequest(Base):
     approved_at  = Column(DateTime, nullable=True)
 
     company = relationship("Company", back_populates="bonifico_requests")
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    stars      = Column(Integer, nullable=False)          # 1–5
+    comment    = Column(Text, nullable=True)
+    status     = Column(String, default="pending")        # pending | approved | rejected
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
 
 
 class UsageLog(Base):

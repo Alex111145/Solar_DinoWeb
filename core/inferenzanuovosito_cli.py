@@ -107,14 +107,13 @@ def taglio_tile(image_path, output_dir, tile_size=800, overlap=0.70):
         print(f"❌ ERRORE: Ortomosaico {image_path} non trovato!")
         return 0
 
-    # Usa rasterio per leggere TIF geospaziali (evita errori OpenCV su float/multi-banda)
+    # Usa rasterio per leggere TIF geospaziali
     try:
         full_img = leggi_tif_come_bgr(image_path)
     except Exception as e:
-        full_img = cv2.imread(image_path)
-        if full_img is None:
-            print(f"❌ ERRORE: Impossibile leggere {image_path}: {e}")
-            return 0
+        print(f"❌ ERRORE rasterio: impossibile leggere {image_path}")
+        print(f"   Dettaglio: {e}")
+        return 0
 
     h_orig, w_orig = full_img.shape[:2]
     print(f"   Dimensioni mosaico: {w_orig} x {h_orig} px")
@@ -453,17 +452,16 @@ def main():
         print("🖼️  Generazione mosaico annotato...")
         try:
             mosaico = leggi_tif_come_bgr(args.tif)
-            if mosaico is not None:
-                for p in final_panels:
-                    color = CLASS_COLORS.get(p.get('class_id', 0), (0, 200, 0))
-                    if p.get('contour') is not None:
-                        cv2.drawContours(mosaico, [p['contour']], -1, color, 2)
-                        cv2.putText(mosaico, f"{p['score']:.2f}", (int(p['gx']), int(p['gy']) - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1, cv2.LINE_AA)
-                    else:
-                        cv2.circle(mosaico, (int(p['gx']), int(p['gy'])), DOT_RADIUS_MOSAIC, color, -1)
-                cv2.imwrite(out_mosaic, mosaico)
-                print(f"✅ Mosaico salvato: {out_mosaic}")
+            for p in final_panels:
+                color = CLASS_COLORS.get(p.get('class_id', 0), (0, 200, 0))
+                if p.get('contour') is not None:
+                    cv2.drawContours(mosaico, [p['contour']], -1, color, 2)
+                    cv2.putText(mosaico, f"{p['score']:.2f}", (int(p['gx']), int(p['gy']) - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1, cv2.LINE_AA)
+                else:
+                    cv2.circle(mosaico, (int(p['gx']), int(p['gy'])), DOT_RADIUS_MOSAIC, color, -1)
+            cv2.imwrite(out_mosaic, mosaico)
+            print(f"✅ Mosaico salvato: {out_mosaic}")
         except Exception as e:
             print(f"⚠️  Mosaico non generato: {e}")
 

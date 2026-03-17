@@ -25,25 +25,19 @@ PACKAGES = {
         "credits":   1,
         "price_id":  os.getenv("STRIPE_PRICE_SINGLE", ""),
         "label":     "Singola",
-        "price_eur": float(os.getenv("PRICE_SINGLE_EUR", "15.00")),
+        "price_eur": float(os.getenv("PRICE_SINGLE_EUR", "49.99")),
     },
     "pack5": {
         "credits":   5,
         "price_id":  os.getenv("STRIPE_PRICE_PACK5", ""),
         "label":     "Pack 5",
-        "price_eur": float(os.getenv("PRICE_PACK5_EUR", "65.00")),
+        "price_eur": float(os.getenv("PRICE_PACK5_EUR", "219.99")),
     },
     "pack10": {
         "credits":   10,
         "price_id":  os.getenv("STRIPE_PRICE_PACK10", ""),
         "label":     "Pack 10",
-        "price_eur": float(os.getenv("PRICE_PACK10_EUR", "120.00")),
-    },
-    "pack20": {
-        "credits":   20,
-        "price_id":  os.getenv("STRIPE_PRICE_PACK20", ""),
-        "label":     "Pack 20",
-        "price_eur": float(os.getenv("PRICE_PACK20_EUR", "220.00")),
+        "price_eur": float(os.getenv("PRICE_PACK10_EUR", "399.99")),
     },
 }
 
@@ -103,6 +97,7 @@ def create_checkout(
             metadata={
                 "company_id": str(current.id),
                 "credits":    str(pkg["credits"]),
+                "package":    body.package,
             },
         )
         return {"checkout_url": session.url}
@@ -130,6 +125,7 @@ async def stripe_webhook(
         sess       = event["data"]["object"]
         company_id = int(sess["metadata"]["company_id"])
         credits    = int(sess["metadata"]["credits"])
+        package    = sess["metadata"].get("package", "")
 
         db = SessionLocal()
         try:
@@ -137,6 +133,14 @@ async def stripe_webhook(
             if company:
                 company.credits += credits
                 db.commit()
+                amount_eur = (sess.get("amount_total") or 0) / 100
+                email_utils.notify_stripe_payment(
+                    company_name=company.ragione_sociale or company.name,
+                    company_email=company.email,
+                    package=package,
+                    amount_eur=amount_eur,
+                    credits=credits,
+                )
         finally:
             db.close()
 
