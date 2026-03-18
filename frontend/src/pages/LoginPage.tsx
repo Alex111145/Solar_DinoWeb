@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Sun, Zap, MapPin, FileDown, Eye, EyeOff, Star, Moon, Upload, Radio } from 'lucide-react'
+import { Sun, Zap, MapPin, FileDown, Eye, EyeOff, Star, Moon } from 'lucide-react'
 
 const container = {
   hidden: { opacity: 0 },
@@ -242,54 +242,6 @@ export default function LoginPage() {
 
         </div>
       </motion.div>
-
-      {/* ── Vertical scrolling banner ─────────────────────────── */}
-      <div
-        className="hidden xl:flex flex-col items-center justify-center relative z-10 py-10"
-        style={{ width: 200, flexShrink: 0, overflow: 'hidden' }}
-      >
-        <style>{`
-          @keyframes scroll-down {
-            0%   { transform: translateY(0); }
-            100% { transform: translateY(-50%); }
-          }
-          .ticker-track { animation: scroll-down 18s linear infinite; }
-          .ticker-track:hover { animation-play-state: paused; }
-        `}</style>
-
-        <div style={{ overflow: 'hidden', height: 460, width: '100%', maskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)' }}>
-          <div className="ticker-track flex flex-col gap-3">
-            {[
-              { icon: <Upload size={15} />, title: 'Metodo Standard', sub: 'Upload ortomosaico', desc: 'Carica il TIF termico da Pix4D, DJI Terra o qualsiasi software di fotogrammetria.' },
-              { icon: <Radio size={15} />, title: 'Metodo Enterprise', sub: 'DJI FlightHub 2', desc: 'Il drone vola, l\'AI analizza e i risultati tornano in FlightHub in automatico.' },
-              { icon: <Zap size={15} />, title: 'Hotspot in secondi', sub: 'Analisi AI', desc: 'Il modello individua pannelli guasti, hotspot e degradati con precisione millimetrica.' },
-              { icon: <MapPin size={15} />, title: 'Report geolocalizzati', sub: 'KML · GeoJSON · CSV', desc: 'Esporta i risultati pronti per Google Earth, QGIS o il tuo GIS preferito.' },
-              { icon: <FileDown size={15} />, title: 'Scarica subito', sub: 'Report istantaneo', desc: 'Appena l\'analisi è completata scarichi JSON, CSV, KML e GeoJSON.' },
-              // duplicate for seamless loop
-              { icon: <Upload size={15} />, title: 'Metodo Standard', sub: 'Upload ortomosaico', desc: 'Carica il TIF termico da Pix4D, DJI Terra o qualsiasi software di fotogrammetria.' },
-              { icon: <Radio size={15} />, title: 'Metodo Enterprise', sub: 'DJI FlightHub 2', desc: 'Il drone vola, l\'AI analizza e i risultati tornano in FlightHub in automatico.' },
-              { icon: <Zap size={15} />, title: 'Hotspot in secondi', sub: 'Analisi AI', desc: 'Il modello individua pannelli guasti, hotspot e degradati con precisione millimetrica.' },
-              { icon: <MapPin size={15} />, title: 'Report geolocalizzati', sub: 'KML · GeoJSON · CSV', desc: 'Esporta i risultati pronti per Google Earth, QGIS o il tuo GIS preferito.' },
-              { icon: <FileDown size={15} />, title: 'Scarica subito', sub: 'Report istantaneo', desc: 'Appena l\'analisi è completata scarichi JSON, CSV, KML e GeoJSON.' },
-            ].map((card, i) => (
-              <div
-                key={i}
-                className="rounded-2xl p-3.5"
-                style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, width: '100%' }}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div style={{ color: '#f59e0b' }}>{card.icon}</div>
-                  <div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: t.text, lineHeight: 1.2 }}>{card.title}</div>
-                    <div style={{ fontSize: '0.65rem', color: '#f59e0b', fontWeight: 600 }}>{card.sub}</div>
-                  </div>
-                </div>
-                <p style={{ fontSize: '0.72rem', color: t.textMuted, margin: 0, lineHeight: 1.55 }}>{card.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
 
       {/* ── Right panel — form ────────────────────────────────── */}
       <div className="flex items-start lg:items-center justify-start relative z-10 p-6 pb-14 lg:py-6 lg:pl-10 lg:pr-14" style={{ flex: '0 0 auto', width: '100%', maxWidth: 560 }}>
