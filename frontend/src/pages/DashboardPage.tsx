@@ -1318,9 +1318,9 @@ export default function DashboardPage() {
           </div>
 
           <button
-            className="btn-amber"
-            style={{ fontSize: '0.925rem' }}
-            disabled={credits <= 0}
+            className={fhStatus.connected && credits > 0 ? 'btn-amber' : 'btn-ghost'}
+            style={{ fontSize: '0.925rem', opacity: fhStatus.connected && credits > 0 ? 1 : 0.45, cursor: fhStatus.connected && credits > 0 ? 'pointer' : 'not-allowed' }}
+            disabled={!fhStatus.connected || credits <= 0}
             onClick={async () => {
               const token = localStorage.getItem('token')
               try {
@@ -1342,7 +1342,10 @@ export default function DashboardPage() {
           >
             <Zap size={16} /> Avvia Inferenza
           </button>
-          {credits <= 0 && (
+          {!fhStatus.connected && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 12 }}>Connetti FlightHub 2 per abilitare</span>
+          )}
+          {fhStatus.connected && credits <= 0 && (
             <span style={{ fontSize: '0.8rem', color: '#ef4444', marginLeft: 12 }}>Crediti insufficienti</span>
           )}
         </motion.div>
