@@ -158,6 +158,47 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 }
 
 // ── Consent Modal ──────────────────────────────────────────────────────────
+function EnterpriseConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
+  const [checked, setChecked] = useState(false)
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+        className="card"
+        style={{ maxWidth: 500, width: '100%', padding: '2rem', borderRadius: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 style={{ color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: 700 }}>Informativa utilizzo dati</h3>
+          <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+        </div>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: '1.25rem' }}>
+          Gli ortomosaici elaborati verranno conservati da SolarDino e potranno essere utilizzati — in forma anonima
+          e aggregata — per migliorare e riaddestrare il modello AI. I dati non verranno condivisi con terze parti.
+          Puoi richiedere la cancellazione in qualsiasi momento scrivendo a{' '}
+          <a href="mailto:support@solardino.it" style={{ color: '#f59e0b' }}>support@solardino.it</a>.
+          Il trattamento è effettuato nel rispetto del Regolamento (UE) 2016/679 (GDPR).
+        </p>
+        <label className="flex items-start gap-3 cursor-pointer mb-6">
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} style={{ marginTop: 2 }} />
+          <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            Ho letto e accetto le condizioni di utilizzo dei dati per il miglioramento del modello AI.
+          </span>
+        </label>
+        <div className="flex gap-3 justify-end">
+          <button className="btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn-amber" disabled={!checked} onClick={onConfirm}>
+            <Zap size={15} /> Avvia Inferenza
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
 function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: () => void }) {
   const [checked, setChecked] = useState(false)
   return (
@@ -688,6 +729,7 @@ export default function DashboardPage() {
   const [rgbTfw, setRgbTfw] = useState<File | null>(null)
   const [panelData, setPanelData] = useState({ marca: '', modello: '', dimensioni: '', efficienza: '', coefficiente: '' })
   const [showConsent, setShowConsent] = useState(false)
+  const [showEnterpriseConsent, setShowEnterpriseConsent] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [showBlocked, setShowBlocked] = useState(false)
@@ -1303,42 +1345,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Informativa dati */}
-          <div className="rounded-xl p-4 mb-5" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.18)' }}>
-            <div style={{ fontSize: '0.78rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-              Informativa utilizzo dati
-            </div>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.7 }}>
-              Cliccando <strong style={{ color: 'var(--text-primary)' }}>Avvia Inferenza</strong>, accetti che gli ortomosaici elaborati
-              vengano conservati da SolarDino e possano essere utilizzati — in forma anonima e aggregata — per
-              migliorare e riaddestrare il modello AI. I dati non verranno condivisi con terze parti.
-              Puoi richiedere la cancellazione in qualsiasi momento scrivendo a{' '}
-              <a href="mailto:support@solardino.it" style={{ color: '#f59e0b', textDecoration: 'none' }}>support@solardino.it</a>.
-            </p>
-          </div>
-
           <button
             className={fhStatus.connected && credits > 0 ? 'btn-amber' : 'btn-ghost'}
             style={{ fontSize: '0.925rem', opacity: fhStatus.connected && credits > 0 ? 1 : 0.45, cursor: fhStatus.connected && credits > 0 ? 'pointer' : 'not-allowed' }}
             disabled={!fhStatus.connected || credits <= 0}
-            onClick={async () => {
-              const token = localStorage.getItem('token')
-              try {
-                const res = await fetch('/flighthub/avvia-inferenza', {
-                  method: 'POST',
-                  headers: { Authorization: `Bearer ${token}` },
-                })
-                const data = await res.json()
-                if (res.ok) {
-                  setFhMsg(data.message)
-                  if (data.syncing) await fhSync()
-                } else {
-                  setFhMsg(data.detail || 'Errore durante l\'avvio')
-                }
-              } catch {
-                setFhMsg('Errore di rete')
-              }
-            }}
+            onClick={() => setShowEnterpriseConsent(true)}
           >
             <Zap size={16} /> Avvia Inferenza
           </button>
@@ -1574,6 +1585,33 @@ export default function DashboardPage() {
           <ConsentModal
             onClose={() => setShowConsent(false)}
             onConfirm={() => { setShowConsent(false); doUpload() }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showEnterpriseConsent && (
+          <EnterpriseConsentModal
+            onClose={() => setShowEnterpriseConsent(false)}
+            onConfirm={async () => {
+              setShowEnterpriseConsent(false)
+              const token = localStorage.getItem('token')
+              try {
+                const res = await fetch('/flighthub/avvia-inferenza', {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                })
+                const data = await res.json()
+                if (res.ok) {
+                  setFhMsg(data.message)
+                  if (data.syncing) await fhSync()
+                } else {
+                  setFhMsg(data.detail || "Errore durante l'avvio")
+                }
+              } catch {
+                setFhMsg('Errore di rete')
+              }
+            }}
           />
         )}
       </AnimatePresence>
