@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Upload, CreditCard, History, Star, LogOut,
-  X, Play, FileDown, Check, AlertTriangle, Trash2,
+  X, FileDown, Check, AlertTriangle, Trash2,
   Mail, Lock, Building2, ChevronRight, Zap, Moon,
   Wifi, WifiOff, RefreshCw, Radio,
 } from 'lucide-react'
@@ -713,6 +713,9 @@ export default function DashboardPage() {
   const [reviewComment, setReviewComment] = useState('')
   const [reviewMsg, setReviewMsg] = useState('')
 
+  // Modalità elaborazione
+  const [strada, setStrada] = useState<'A' | 'B'>('A')
+
   // FlightHub 2
   const [fhStatus, setFhStatus] = useState<FhStatus>({ connected: false, missions: [] })
   const [showFhModal, setShowFhModal] = useState(false)
@@ -1020,21 +1023,64 @@ export default function DashboardPage() {
           </p>
         </motion.div>
 
-        {/* Video demo */}
+        {/* Metodo selector */}
         <motion.div variants={cardAnim} className="card mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Play size={15} style={{ color: '#f59e0b' }} />
-            <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.925rem' }}>Come funziona SolarDino</span>
+          <div className="flex items-center gap-2 mb-4">
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Modalità elaborazione
+            </span>
           </div>
-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
-            <video
-              controls
-              style={{ width: '100%', display: 'block', maxHeight: 400, background: '#000' }}
-              src="https://msyvtrsgxfderbyametg.supabase.co/storage/v1/object/sign/pth/g.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV85ZjNjY2UxNi1hMmJmLTQ5OGQtOTBiOS02NDEyZTI4ZmJlZDAiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdGgvZy5tcDQiLCJpYXQiOjE3NzM3NTAyNTQsImV4cCI6NDM2MzE1ODI1NH0.wTGPATzAYIhwAfcgWGVx03T9tE98tF5WSEICr57OyPE" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => setStrada('A')}
+              className="rounded-xl p-4 text-left transition-all"
+              style={{
+                background: strada === 'A' ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.03)',
+                border: strada === 'A' ? '1.5px solid rgba(245,158,11,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                cursor: 'pointer',
+              }}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div style={{ width: 32, height: 32, background: strada === 'A' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: strada === 'A' ? '#f59e0b' : 'var(--text-muted)' }}>
+                  <Upload size={15} />
+                </div>
+                <div>
+                  <div style={{ color: strada === 'A' ? '#f59e0b' : 'var(--text-primary)', fontWeight: 700, fontSize: '0.9rem' }}>Metodo Standard</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Software di Fotogrammetria · upload manuale</div>
+                </div>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0, lineHeight: 1.6 }}>
+                Carica manualmente il file TIF termico elaborato con software desktop (Pix4D, DJI Terra, ecc.).
+              </p>
+            </button>
+
+            <button
+              onClick={() => setStrada('B')}
+              className="rounded-xl p-4 text-left transition-all"
+              style={{
+                background: strada === 'B' ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.03)',
+                border: strada === 'B' ? '1.5px solid rgba(245,158,11,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                cursor: 'pointer',
+              }}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div style={{ width: 32, height: 32, background: strada === 'B' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: strada === 'B' ? '#f59e0b' : 'var(--text-muted)' }}>
+                  <Radio size={15} />
+                </div>
+                <div>
+                  <div style={{ color: strada === 'B' ? '#f59e0b' : 'var(--text-primary)', fontWeight: 700, fontSize: '0.9rem' }}>Metodo Enterprise</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>DJI FlightHub 2 · automatico</div>
+                </div>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0, lineHeight: 1.6 }}>
+                Collega DJI FlightHub 2: il drone vola, l'AI analizza e i risultati vengono caricati automaticamente.
+              </p>
+            </button>
           </div>
         </motion.div>
 
-        {/* Upload card */}
+        {/* Strada A: Upload manuale */}
+        {strada === 'A' && (
         <motion.div variants={cardAnim} className="card mb-6">
           <div className="flex items-center gap-3 mb-5">
             <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
@@ -1105,6 +1151,144 @@ export default function DashboardPage() {
             <span style={{ fontSize: '0.8rem', color: '#ef4444', marginLeft: 12 }}>Crediti insufficienti</span>
           )}
         </motion.div>
+        )}
+
+        {/* Strada B: FlightHub 2 */}
+        {strada === 'B' && (
+        <motion.div variants={cardAnim} className="card mb-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+              <Radio size={17} />
+            </div>
+            <div>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>
+                FlightHub 2 — Enterprise
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                Integrazione automatica con DJI FlightHub 2
+              </p>
+            </div>
+            <div className="ml-auto">
+              {fhStatus.connected
+                ? <span className="badge badge-green"><Wifi size={11} /> Connesso</span>
+                : <span className="badge badge-red"><WifiOff size={11} /> Non connesso</span>
+              }
+            </div>
+          </div>
+
+          {fhMsg && (
+            <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.82rem' }}>
+              {fhMsg}
+            </div>
+          )}
+
+          {!fhStatus.connected ? (
+            <div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: '1rem' }}>
+                Collega il tuo account DJI FlightHub 2 per ricevere e analizzare automaticamente le mappe ortomosaico.
+                Ogni volta che un volo completa l'elaborazione, SolarDino AI scarica l'immagine, identifica i pannelli
+                guasti e carica i risultati direttamente in FlightHub 2 — senza che tu debba fare nulla.
+              </p>
+              <button className="btn-amber" style={{ fontSize: '0.9rem' }} onClick={() => setShowFhModal(true)}>
+                <Wifi size={15} /> Connetti FlightHub 2
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div className="flex flex-wrap items-center gap-3 mb-5">
+                <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Workspace</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>{fhStatus.workspace_id}</div>
+                </div>
+                {fhStatus.last_sync_at && (
+                  <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ultimo sync</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {new Date(fhStatus.last_sync_at).toLocaleString('it-IT')}
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-2 ml-auto">
+                  <button
+                    className="btn-amber flex items-center gap-2"
+                    style={{ fontSize: '0.82rem', padding: '0.5rem 1rem' }}
+                    disabled={fhSyncing}
+                    onClick={fhSync}
+                  >
+                    <RefreshCw size={13} style={{ animation: fhSyncing ? 'spin-slow 1s linear infinite' : 'none' }} />
+                    {fhSyncing ? 'Sincronizzazione…' : 'Sincronizza ora'}
+                  </button>
+                  <button
+                    className="btn-ghost flex items-center gap-2"
+                    style={{ fontSize: '0.82rem', padding: '0.5rem 1rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+                    onClick={fhDisconnect}
+                  >
+                    <WifiOff size={13} /> Disconnetti
+                  </button>
+                </div>
+              </div>
+
+              {/* Missions list */}
+              {fhStatus.missions.length === 0 ? (
+                <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                    Nessuna missione ancora elaborata. Clicca "Sincronizza ora" o configura il webhook DJI.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {fhStatus.missions.map((m) => (
+                    <div key={m.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.875rem', marginBottom: 4 }}>
+                            {m.fh_map_name || m.fh_map_id}
+                          </div>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className={`badge ${m.status === 'done' ? 'badge-green' : m.status === 'error' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: '0.65rem' }}>
+                              {m.status === 'done' ? 'Completato' : m.status === 'error' ? 'Errore' : m.status === 'downloading' ? 'Download…' : m.status === 'processing' ? 'Elaborazione…' : m.status === 'uploading' ? 'Upload risultati…' : 'In attesa'}
+                            </span>
+                            {m.status === 'done' && m.panels_detected != null && (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                {m.panels_detected} pannelli · {m.hotspot_count ?? 0} hotspot
+                              </span>
+                            )}
+                            {m.results_uploaded && (
+                              <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>
+                                <Check size={10} /> Risultati su FlightHub
+                              </span>
+                            )}
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              {new Date(m.created_at).toLocaleDateString('it-IT')}
+                            </span>
+                          </div>
+                          {m.error_msg && (
+                            <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: 4 }}>{m.error_msg}</div>
+                          )}
+                        </div>
+                        {m.status === 'done' && (
+                          <div className="flex gap-1">
+                            {['kml', 'json', 'csv'].map((fmt) => (
+                              <button
+                                key={fmt}
+                                onClick={() => fhDownload(m.id, fmt)}
+                                className="btn-ghost flex items-center gap-1"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', textTransform: 'uppercase' }}
+                              >
+                                <FileDown size={11} /> {fmt}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </motion.div>
+        )}
 
         {/* Active job — floating popup (rendered outside flow at bottom of return) */}
 
@@ -1116,7 +1300,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Acquista Elaborazioni</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Crediti disponibili: <strong style={{ color: '#f59e0b' }}>{credits}</strong></p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Scegli il pacchetto più adatto alle tue esigenze</p>
             </div>
           </div>
 
@@ -1297,141 +1481,6 @@ export default function DashboardPage() {
             </div>
           </motion.div>
         )}
-
-        {/* ── FlightHub 2 Enterprise ───────────────────────────────────── */}
-        <motion.div variants={cardAnim} className="card mb-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
-              <Radio size={17} />
-            </div>
-            <div>
-              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>
-                FlightHub 2 — Enterprise
-              </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
-                Integrazione automatica con DJI FlightHub 2
-              </p>
-            </div>
-            <div className="ml-auto">
-              {fhStatus.connected
-                ? <span className="badge badge-green"><Wifi size={11} /> Connesso</span>
-                : <span className="badge badge-red"><WifiOff size={11} /> Non connesso</span>
-              }
-            </div>
-          </div>
-
-          {fhMsg && (
-            <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.82rem' }}>
-              {fhMsg}
-            </div>
-          )}
-
-          {!fhStatus.connected ? (
-            <div>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: '1rem' }}>
-                Collega il tuo account DJI FlightHub 2 per ricevere e analizzare automaticamente le mappe ortomosaico.
-                Ogni volta che un volo completa l'elaborazione, SolarDino AI scarica l'immagine, identifica i pannelli
-                guasti e carica i risultati direttamente in FlightHub 2 — senza che tu debba fare nulla.
-              </p>
-              <button className="btn-amber" style={{ fontSize: '0.9rem' }} onClick={() => setShowFhModal(true)}>
-                <Wifi size={15} /> Connetti FlightHub 2
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div className="flex flex-wrap items-center gap-3 mb-5">
-                <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Workspace</div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>{fhStatus.workspace_id}</div>
-                </div>
-                {fhStatus.last_sync_at && (
-                  <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ultimo sync</div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {new Date(fhStatus.last_sync_at).toLocaleString('it-IT')}
-                    </div>
-                  </div>
-                )}
-                <div className="flex gap-2 ml-auto">
-                  <button
-                    className="btn-amber flex items-center gap-2"
-                    style={{ fontSize: '0.82rem', padding: '0.5rem 1rem' }}
-                    disabled={fhSyncing}
-                    onClick={fhSync}
-                  >
-                    <RefreshCw size={13} style={{ animation: fhSyncing ? 'spin-slow 1s linear infinite' : 'none' }} />
-                    {fhSyncing ? 'Sincronizzazione…' : 'Sincronizza ora'}
-                  </button>
-                  <button
-                    className="btn-ghost flex items-center gap-2"
-                    style={{ fontSize: '0.82rem', padding: '0.5rem 1rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
-                    onClick={fhDisconnect}
-                  >
-                    <WifiOff size={13} /> Disconnetti
-                  </button>
-                </div>
-              </div>
-
-              {/* Missions list */}
-              {fhStatus.missions.length === 0 ? (
-                <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
-                    Nessuna missione ancora elaborata. Clicca "Sincronizza ora" o configura il webhook DJI.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {fhStatus.missions.map((m) => (
-                    <div key={m.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div>
-                          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.875rem', marginBottom: 4 }}>
-                            {m.fh_map_name || m.fh_map_id}
-                          </div>
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className={`badge ${m.status === 'done' ? 'badge-green' : m.status === 'error' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: '0.65rem' }}>
-                              {m.status === 'done' ? 'Completato' : m.status === 'error' ? 'Errore' : m.status === 'downloading' ? 'Download…' : m.status === 'processing' ? 'Elaborazione…' : m.status === 'uploading' ? 'Upload risultati…' : 'In attesa'}
-                            </span>
-                            {m.status === 'done' && m.panels_detected != null && (
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {m.panels_detected} pannelli · {m.hotspot_count ?? 0} hotspot
-                              </span>
-                            )}
-                            {m.results_uploaded && (
-                              <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>
-                                <Check size={10} /> Risultati su FlightHub
-                              </span>
-                            )}
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                              {new Date(m.created_at).toLocaleDateString('it-IT')}
-                            </span>
-                          </div>
-                          {m.error_msg && (
-                            <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: 4 }}>{m.error_msg}</div>
-                          )}
-                        </div>
-                        {m.status === 'done' && (
-                          <div className="flex gap-1">
-                            {['kml', 'json', 'csv'].map((fmt) => (
-                              <button
-                                key={fmt}
-                                onClick={() => fhDownload(m.id, fmt)}
-                                className="btn-ghost flex items-center gap-1"
-                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', textTransform: 'uppercase' }}
-                              >
-                                <FileDown size={11} /> {fmt}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </motion.div>
 
         {/* Support footer */}
         <motion.div variants={cardAnim} className="mb-8">
