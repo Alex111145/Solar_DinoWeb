@@ -15,5 +15,8 @@ python-jose[cryptography]==3.3.0
 # Payments
 stripe==10.10.0
 
+# HTTP client (Supabase Storage)
+httpx==0.27.2
+
 # Env vars
 python-dotenv==1.0.1

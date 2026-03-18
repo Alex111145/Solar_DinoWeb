@@ -27,6 +27,10 @@ interface Company {
   is_active?: boolean
   panel_count?: number
   mission_count?: number
+  last_ip?: string
+  welcome_bonus_used?: boolean
+  last_login_at?: string
+  created_at?: string
 }
 
 interface ReviewItem {
@@ -129,7 +133,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
           {[
             { label: 'Ragione sociale', value: company.ragione_sociale || '—' },
             { label: 'Partita IVA', value: company.vat_number || '—' },
-            { label: 'Nome referente', value: company.name || '—' },
+            { label: 'Nome', value: company.name || '—' },
             { label: 'Email', value: company.email || '—' },
             { label: 'Crediti residui', value: String(company.credits ?? 0) },
             { label: 'Elaborazioni', value: String(company.mission_count ?? 0) },
@@ -207,6 +211,9 @@ export default function AdminPage() {
   const [enterpriseLogs, setEnterpriseLogs] = useState<{id:number,company_name:string,company_email:string,vat_number:string,fh_workspace_id:string,data_consent:boolean,created_at:string}[]>([])
 
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [confirmCreditId, setConfirmCreditId] = useState<string | null>(null)
+  const [confirmCreditStep, setConfirmCreditStep] = useState(0) // 0=chiuso, 1-3=step
   const [msg, setMsg] = useState('')
 
   const [pendingReviews, setPendingReviews] = useState(0)
@@ -245,6 +252,30 @@ export default function AdminPage() {
         setTimeout(() => setMsg(''), 3000)
       }
     } catch { }
+  }
+
+  async function addCredit(id: string) {
+    try {
+      const res = await apiFetch(`/admin/companies/${id}/add-credit`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setCompanies((prev) => prev.map((c) => c.id === id ? { ...c, credits: data.credits } : c))
+        setMsg('+1 credito aggiunto')
+        setTimeout(() => setMsg(''), 3000)
+      }
+    } catch { }
+  }
+
+  async function deleteCompany(id: string) {
+    try {
+      const res = await apiFetch(`/admin/companies/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setCompanies((prev) => prev.filter((c) => c.id !== id))
+        setMsg('Azienda eliminata')
+        setTimeout(() => setMsg(''), 3000)
+      }
+    } catch { }
+    setConfirmDeleteId(null)
   }
 
   async function handleReview(id: string, action: 'approve' | 'reject') {
@@ -427,6 +458,9 @@ export default function AdminPage() {
                         <th>Email</th>
                         <th>Crediti rimasti</th>
                         <th>Crediti acquistati</th>
+                        <th>Registrata il</th>
+                        <th>Ultimo accesso</th>
+                        <th>Ultimo IP</th>
                         <th>Stato</th>
                         <th>Azioni</th>
                       </tr>
@@ -447,28 +481,59 @@ export default function AdminPage() {
                           </td>
                           <td>{c.total_credits_bought ?? c.mission_count ?? 0}</td>
                           <td>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                              {c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : '—'}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                              {c.last_login_at ? new Date(c.last_login_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
+                              {c.last_ip || '—'}
+                            </span>
+                          </td>
+                          <td>
                             <span className={`badge ${c.is_active ? 'badge-green' : 'badge-red'}`}>
                               {c.is_active ? 'Attivato' : 'Disabilitata'}
                             </span>
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
-                            {c.is_active ? (
+                            <div className="flex items-center gap-2">
                               <button
                                 className="btn-ghost"
-                                style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
-                                onClick={() => toggleCompany(c.id, false)}
+                                style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)', whiteSpace: 'nowrap' }}
+                                onClick={() => { setConfirmCreditId(c.id); setConfirmCreditStep((c.credits ?? 0) > 0 || c.welcome_bonus_used ? 1 : 0) }}
                               >
-                                Disabilita
+                                +1 credito
                               </button>
-                            ) : (
+                              {c.is_active ? (
+                                <button
+                                  className="btn-ghost"
+                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+                                  onClick={() => toggleCompany(c.id, false)}
+                                >
+                                  Disabilita
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn-ghost"
+                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.25)' }}
+                                  onClick={() => toggleCompany(c.id, true)}
+                                >
+                                  Attiva
+                                </button>
+                              )}
                               <button
                                 className="btn-ghost"
-                                style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.25)' }}
-                                onClick={() => toggleCompany(c.id, true)}
+                                style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#94a3b8', borderColor: 'rgba(148,163,184,0.2)' }}
+                                onClick={() => setConfirmDeleteId(c.id)}
                               >
-                                Attiva
+                                Cancella
                               </button>
-                            )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -863,6 +928,216 @@ export default function AdminPage() {
       <AnimatePresence>
         {selectedCompany && (
           <CompanyModal company={selectedCompany} onClose={() => setSelectedCompany(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Confirm add credit modal */}
+      <AnimatePresence>
+        {confirmCreditId && (
+          <div
+            className="modal-overlay"
+            onClick={() => { setConfirmCreditId(null); setConfirmCreditStep(0) }}
+            style={{ background: confirmCreditStep >= 1 ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)' }}
+          >
+            <motion.div
+              key={confirmCreditStep}
+              initial={{ opacity: 0, scale: 0.7, rotate: confirmCreditStep >= 1 ? -4 : 0 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                rotate: 0,
+                x: confirmCreditStep >= 2 ? [0, -6, 6, -4, 4, 0] : 0,
+              }}
+              transition={{
+                duration: 0.35,
+                x: { duration: 0.4, delay: 0.1 },
+              }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: confirmCreditStep === 0 ? '#0d1117' : confirmCreditStep === 1 ? '#0f0a00' : confirmCreditStep === 2 ? '#110000' : '#0d0000',
+                border: confirmCreditStep === 0
+                  ? '1px solid rgba(245,158,11,0.3)'
+                  : confirmCreditStep === 1
+                  ? '2px solid rgba(245,158,11,0.6)'
+                  : confirmCreditStep === 2
+                  ? '2px solid rgba(239,68,68,0.7)'
+                  : '3px solid #ef4444',
+                borderRadius: confirmCreditStep >= 3 ? 12 : 20,
+                padding: '2rem',
+                maxWidth: 400,
+                width: '90%',
+                textAlign: 'center',
+                boxShadow: confirmCreditStep >= 2
+                  ? `0 0 ${confirmCreditStep * 20}px rgba(239,68,68,${confirmCreditStep * 0.15})`
+                  : 'none',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Alarm stripes background for step 3 */}
+              {confirmCreditStep === 3 && (
+                <div style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+                  background: 'repeating-linear-gradient(45deg, rgba(239,68,68,0.04) 0px, rgba(239,68,68,0.04) 10px, transparent 10px, transparent 20px)',
+                }} />
+              )}
+
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                {/* Alarm icon */}
+                {confirmCreditStep === 0 ? (
+                  <div style={{ fontSize: 42, marginBottom: 12 }}>🎁</div>
+                ) : (
+                  <motion.div
+                    animate={confirmCreditStep >= 2 ? { rotate: [0, -15, 15, -10, 10, 0] } : {}}
+                    transition={{ duration: 0.5, repeat: confirmCreditStep >= 2 ? Infinity : 0, repeatDelay: 1.2 }}
+                    style={{ marginBottom: 12, display: 'inline-block' }}
+                  >
+                    {/* SVG alarm bell */}
+                    <svg width={confirmCreditStep >= 3 ? 64 : 52} height={confirmCreditStep >= 3 ? 64 : 52} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="32" cy="32" r="30"
+                        fill={confirmCreditStep === 1 ? 'rgba(245,158,11,0.12)' : confirmCreditStep === 2 ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.25)'}
+                        stroke={confirmCreditStep === 1 ? '#f59e0b' : '#ef4444'}
+                        strokeWidth={confirmCreditStep >= 3 ? 3 : 2}
+                      />
+                      {/* Bell body */}
+                      <path d="M32 14c-7.7 0-14 6.3-14 14v8l-3 4h34l-3-4v-8c0-7.7-6.3-14-14-14z"
+                        fill={confirmCreditStep === 1 ? '#f59e0b' : '#ef4444'}
+                        opacity="0.9"
+                      />
+                      {/* Bell clapper */}
+                      <circle cx="32" cy="46" r="3"
+                        fill={confirmCreditStep === 1 ? '#f59e0b' : '#ef4444'}
+                      />
+                      {/* Exclamation */}
+                      <text x="32" y="38" textAnchor="middle" fill="white" fontSize="14" fontWeight="900">!</text>
+                      {/* Vibration lines */}
+                      {confirmCreditStep >= 2 && (
+                        <>
+                          <path d="M12 24 Q8 28 12 32" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" opacity="0.7"/>
+                          <path d="M52 24 Q56 28 52 32" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" opacity="0.7"/>
+                        </>
+                      )}
+                    </svg>
+                  </motion.div>
+                )}
+
+                {/* Flashing dot for step 3 */}
+                {confirmCreditStep === 3 && (
+                  <motion.div
+                    animate={{ opacity: [1, 0, 1] }}
+                    transition={{ duration: 0.6, repeat: Infinity }}
+                    style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', margin: '0 auto 12px' }}
+                  />
+                )}
+
+                <h3 style={{
+                  color: confirmCreditStep === 0 ? '#f1f5f9' : confirmCreditStep === 1 ? '#f59e0b' : '#ef4444',
+                  fontWeight: 900,
+                  fontSize: confirmCreditStep >= 2 ? '1.25rem' : '1.05rem',
+                  marginBottom: 8,
+                  letterSpacing: confirmCreditStep >= 3 ? '0.05em' : 'normal',
+                  textTransform: confirmCreditStep >= 3 ? 'uppercase' : 'none',
+                }}>
+                  {confirmCreditStep === 0 && 'Regalare 1 credito?'}
+                  {confirmCreditStep === 1 && 'Sicuro?'}
+                  {confirmCreditStep === 2 && 'Sicuro sicuro?'}
+                  {confirmCreditStep === 3 && '⚠ Sicuro sicuro sicuro? ⚠'}
+                </h3>
+
+                <p style={{
+                  color: confirmCreditStep >= 2 ? '#fca5a5' : '#64748b',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.6,
+                  marginBottom: 24,
+                }}>
+                  {confirmCreditStep === 0 && "Verrà aggiunto 1 credito all'azienda selezionata."}
+                  {confirmCreditStep === 1 && 'Questa azienda ha già dei crediti. Vuoi davvero aggiungerne un altro?'}
+                  {confirmCreditStep === 2 && 'Stai regalando un credito extra a un cliente già attivo.'}
+                  {confirmCreditStep === 3 && 'ULTIMA CHANCE. Questa azione è irreversibile. Sei proprio sicuro?'}
+                </p>
+
+                <div className="flex gap-3 justify-center">
+                  <button
+                    className="btn-ghost"
+                    style={{ padding: '0.6rem 1.4rem', color: '#94a3b8' }}
+                    onClick={() => { setConfirmCreditId(null); setConfirmCreditStep(0) }}
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    style={{
+                      padding: '0.6rem 1.4rem',
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      border: `2px solid ${confirmCreditStep >= 2 ? '#ef4444' : 'rgba(245,158,11,0.5)'}`,
+                      background: confirmCreditStep >= 3 ? 'rgba(239,68,68,0.15)' : 'transparent',
+                      color: confirmCreditStep >= 2 ? '#ef4444' : '#f59e0b',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      if (confirmCreditStep < 3) {
+                        setConfirmCreditStep(confirmCreditStep + 1)
+                      } else {
+                        addCredit(confirmCreditId)
+                        setConfirmCreditId(null)
+                        setConfirmCreditStep(0)
+                      }
+                    }}
+                  >
+                    {confirmCreditStep < 3 ? 'Sì' : 'Sì, aggiungi'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm delete modal */}
+      <AnimatePresence>
+        {confirmDeleteId && (
+          <div className="modal-overlay" onClick={() => setConfirmDeleteId(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#0d1117',
+                border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: 20,
+                padding: '2rem',
+                maxWidth: 380,
+                width: '90%',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🗑️</div>
+              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.05rem', marginBottom: 8 }}>
+                Eliminare l'azienda?
+              </h3>
+              <p style={{ color: '#64748b', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: 24 }}>
+                L'azienda verrà disattivata e non potrà più accedere. L'operazione è reversibile dal database.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  className="btn-ghost"
+                  style={{ padding: '0.6rem 1.4rem', color: '#94a3b8' }}
+                  onClick={() => setConfirmDeleteId(null)}
+                >
+                  Annulla
+                </button>
+                <button
+                  className="btn-ghost"
+                  style={{ padding: '0.6rem 1.4rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)', fontWeight: 700 }}
+                  onClick={() => deleteCompany(confirmDeleteId)}
+                >
+                  Sì, elimina
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

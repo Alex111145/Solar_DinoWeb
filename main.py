@@ -28,6 +28,9 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE companies ADD COLUMN vat_number VARCHAR",
             "ALTER TABLE companies ADD COLUMN deleted_at TIMESTAMP",
             "ALTER TABLE companies ADD COLUMN last_ip VARCHAR",
+            "ALTER TABLE companies ADD COLUMN pec VARCHAR",
+            "ALTER TABLE companies ADD COLUMN welcome_bonus_used BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE companies ADD COLUMN last_login_at TIMESTAMP",
             "ALTER TABLE jobs ADD COLUMN panel_model VARCHAR",
             "ALTER TABLE jobs ADD COLUMN panel_dimensions VARCHAR",
             "ALTER TABLE jobs ADD COLUMN panel_efficiency FLOAT",
@@ -35,12 +38,15 @@ async def lifespan(app: FastAPI):
             "CREATE TABLE IF NOT EXISTS reviews (id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id), stars INTEGER NOT NULL, comment TEXT, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
             # FlightHub 2 tables (idempotenti — create_all le crea, le ALTER sono no-op se esistono)
             "ALTER TABLE flighthub_connections ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP",
+            # Permetti email duplicate tra aziende diverse: rimuovi unique su email, aggiungi composite su (email, vat_number)
+            "ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_email_key",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_email_vat ON companies (email, vat_number) WHERE deleted_at IS NULL",
         ]:
             try:
                 conn.execute(text(col_sql))
                 conn.commit()
             except Exception:
-                pass  # colonna già esistente
+                conn.rollback()  # reset transazione abortita (necessario su PostgreSQL)
 
     # Crea l'utente admin se non esiste
     db = SessionLocal()
@@ -126,6 +132,8 @@ def root():
 @app.get("/admin", include_in_schema=False)
 def spa_routes():
     return FileResponse("static/app/index.html")
+
+
 
 
 @app.get("/favicon.ico", include_in_schema=False)

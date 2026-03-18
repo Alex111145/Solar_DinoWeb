@@ -9,7 +9,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import auth_utils
+from auth_utils import sync_credits_by_vat
 import models
+import storage_utils
 from database import get_db
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -107,8 +109,10 @@ def list_companies(
             "jobs_completed":   jobs_done,
             "panels_detected":  panels,
             "amount_owed_eur":  round(amount_owed, 2),
-            "last_ip":          c.last_ip or "—",
-            "created_at":       c.created_at.isoformat(),
+            "last_ip":              c.last_ip or "—",
+            "welcome_bonus_used":   bool(c.welcome_bonus_used),
+            "last_login_at":        c.last_login_at.isoformat() if c.last_login_at else None,
+            "created_at":           c.created_at.isoformat(),
         })
 
     return result
@@ -163,6 +167,7 @@ def update_company(
         company.is_active = body.is_active
     if body.credits is not None:
         company.credits = body.credits
+        sync_credits_by_vat(db, company.vat_number, body.credits)
     if body.name:
         company.name = body.name.strip()
 
@@ -198,6 +203,22 @@ def deactivate_company(
     return {"message": "Azienda disattivata"}
 
 
+@router.post("/companies/{company_id}/add-credit")
+def add_credit(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Azienda non trovata")
+    company.credits += 1
+    company.welcome_bonus_used = True
+    sync_credits_by_vat(db, company.vat_number, company.credits)
+    db.commit()
+    return {"message": f"+1 credito aggiunto a {company.name}", "credits": company.credits}
+
+
 @router.delete("/companies/{company_id}")
 def delete_company(
     company_id: int,
@@ -208,10 +229,9 @@ def delete_company(
     if not company:
         raise HTTPException(status_code=404, detail="Azienda non trovata")
 
-    company.deleted_at = datetime.now(timezone.utc)
-    company.is_active  = False
+    db.delete(company)
     db.commit()
-    return {"message": "Azienda eliminata (soft delete)"}
+    return {"message": "Azienda eliminata definitivamente"}
 
 
 @router.get("/companies/{company_id}/jobs")
@@ -353,7 +373,7 @@ def billing_report(
             "credits":      b.credits,
             "amount_eur":   b.amount_eur,
             "date":         b.approved_at.isoformat() if b.approved_at else b.created_at.isoformat(),
-            "has_receipt":  bool(b.receipt_path and os.path.exists(b.receipt_path)),
+            "has_receipt":  bool(b.receipt_path),
         } for b in bonifici]
 
         rows.append({
@@ -374,12 +394,15 @@ def download_receipt(
     db: Session = Depends(get_db),
     _: models.Company = Depends(auth_utils.require_admin),
 ):
+    from fastapi.responses import RedirectResponse
     req = db.query(models.BonificoRequest).filter(models.BonificoRequest.id == req_id).first()
     if not req or not req.receipt_path:
         raise HTTPException(status_code=404, detail="Ricevuta non trovata")
-    if not os.path.exists(req.receipt_path):
-        raise HTTPException(status_code=404, detail="File ricevuta non trovato")
-    return FileResponse(path=req.receipt_path, filename=os.path.basename(req.receipt_path))
+    try:
+        signed_url = storage_utils.get_signed_url(req.receipt_path, expires_in=300)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
+    return RedirectResponse(url=signed_url)
 
 
 @router.get("/usage")
@@ -458,6 +481,7 @@ def approve_bonifico(
     company = db.query(models.Company).filter(models.Company.id == req.company_id).first()
     if company:
         company.credits += req.credits
+        sync_credits_by_vat(db, company.vat_number, company.credits)
 
     req.status      = "approved"
     req.approved_at = datetime.now(timezone.utc)
@@ -580,14 +604,12 @@ def list_uploads(
 
         jobs_data = []
         for j in jobs:
-            job_dir = os.path.join(UPLOAD_DIR, j.id)
             files = []
-            if os.path.isdir(job_dir):
-                for fname in sorted(os.listdir(job_dir)):
-                    fpath = os.path.join(job_dir, fname)
-                    if os.path.isfile(fpath):
-                        size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 2)
-                        files.append({"name": fname, "size_mb": size_mb})
+            if j.result_path:
+                try:
+                    files = storage_utils.list_files(j.result_path)
+                except Exception:
+                    pass
 
             jobs_data.append({
                 "job_id":      j.id,
@@ -615,20 +637,21 @@ def download_uploaded_file(
     db:       Session = Depends(get_db),
     _:        models.Company = Depends(auth_utils.require_admin),
 ):
-    """Scarica un file originale caricato dall'utente."""
-    # sicurezza: blocca path traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
+    """Scarica un file del job da Supabase Storage."""
+    from fastapi.responses import RedirectResponse
+    if ".." in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Nome file non valido")
 
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
-    if not job:
+    if not job or not job.result_path:
         raise HTTPException(status_code=404, detail="Job non trovato")
 
-    file_path = os.path.join(UPLOAD_DIR, job_id, filename)
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="File non trovato")
-
-    return FileResponse(path=file_path, filename=filename)
+    storage_path = f"{job.result_path}/{filename}"
+    try:
+        signed_url = storage_utils.get_signed_url(storage_path, expires_in=300)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
+    return RedirectResponse(url=signed_url)
 
 
 # ---------------------------------------------------------------------------

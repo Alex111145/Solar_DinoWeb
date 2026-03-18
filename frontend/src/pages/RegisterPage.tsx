@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Sun, Gift, ArrowLeft } from 'lucide-react'
+import { Sun, ArrowLeft } from 'lucide-react'
 
 const item = {
   hidden: { opacity: 0, y: 20 },
@@ -19,6 +19,7 @@ export default function RegisterPage() {
     ragione_sociale: '',
     name: '',
     vat_number: '',
+    pec: '',
     email: '',
     password: '',
   })
@@ -56,6 +57,13 @@ export default function RegisterPage() {
       e.vat_number = 'Inserire solo le 11 cifre numeriche, senza prefisso IT'
     } else if (!/^\d{11}$/.test(form.vat_number.trim())) {
       e.vat_number = 'La Partita IVA deve contenere esattamente 11 cifre'
+    }
+
+    // PEC: required + valid email format
+    if (!form.pec.trim()) {
+      e.pec = 'PEC aziendale obbligatoria'
+    } else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(form.pec)) {
+      e.pec = 'Formato PEC non valido (es. nome@arubapec.it)'
     }
 
     // Email: must have @ and a domain with at least one dot + 2-char TLD
@@ -177,17 +185,6 @@ export default function RegisterPage() {
           </span>
         </motion.div>
 
-        {/* Badge */}
-        <motion.div variants={item} className="flex justify-center mb-6">
-          <span
-            className="badge badge-amber flex items-center gap-2"
-            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', borderRadius: 12 }}
-          >
-            <Gift size={14} />
-            2 Elaborazioni gratuite
-          </span>
-        </motion.div>
-
         {/* Card */}
         <motion.div
           variants={item}
@@ -236,7 +233,7 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="form-label">Nome referente</label>
+                <label className="form-label">Nome</label>
                 <input
                   className="form-input"
                   type="text"
@@ -259,6 +256,20 @@ export default function RegisterPage() {
                 />
                 {errors.vat_number && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.vat_number}</p>}
               </div>
+            </div>
+
+            <div>
+              <label className="form-label">PEC aziendale</label>
+              <input
+                className="form-input"
+                type="email"
+                placeholder="nome@arubapec.it"
+                value={form.pec}
+                onChange={(e) => update('pec', e.target.value)}
+                style={errors.pec ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
+              />
+              {errors.pec && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.pec}</p>}
+              <p style={{ color: '#475569', fontSize: '0.72rem', marginTop: 4 }}>La PEC è obbligatoria per le aziende italiane (es. arubapec.it, legalmail.it)</p>
             </div>
 
             <div>

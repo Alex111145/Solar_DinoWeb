@@ -630,7 +630,7 @@ def download_fh_result(
 
 
 # ---------------------------------------------------------------------------
-# Avvia Inferenza Enterprise — log consenso dati + trigger sync
+# Avvia elaborazione Enterprise — log consenso dati + trigger sync
 # ---------------------------------------------------------------------------
 
 @router.post("/avvia-inferenza")

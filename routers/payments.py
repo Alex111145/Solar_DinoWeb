@@ -1,8 +1,8 @@
 import os
-import shutil
 import uuid
 
 import stripe
+import storage_utils
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 import email_utils
 
 import auth_utils
+from auth_utils import sync_credits_by_vat
 import models
 from database import get_db, SessionLocal
 
@@ -132,6 +133,7 @@ async def stripe_webhook(
             company = db.query(models.Company).filter(models.Company.id == company_id).first()
             if company:
                 company.credits += credits
+                sync_credits_by_vat(db, company.vat_number, company.credits)
                 db.commit()
                 amount_eur = (sess.get("amount_total") or 0) / 100
                 email_utils.notify_stripe_payment(
@@ -151,10 +153,6 @@ async def stripe_webhook(
 # Bonifico requests
 # ---------------------------------------------------------------------------
 
-RECEIPTS_DIR = os.getenv("UPLOAD_DIR", "elaborazioni") + "/ricevute"
-os.makedirs(RECEIPTS_DIR, exist_ok=True)
-
-
 @router.post("/bonifico-request", status_code=201)
 async def bonifico_request(
     background_tasks: BackgroundTasks,
@@ -172,12 +170,15 @@ async def bonifico_request(
     if receipt.content_type not in allowed:
         raise HTTPException(status_code=400, detail="Formato non supportato. Usa JPG, PNG o PDF.")
 
-    # Salva ricevuta
+    # Carica ricevuta su Supabase Storage
     ext = os.path.splitext(receipt.filename)[-1] or ".jpg"
     filename = f"{current.id}_{uuid.uuid4().hex}{ext}"
-    path = os.path.join(RECEIPTS_DIR, filename)
-    with open(path, "wb") as f:
-        shutil.copyfileobj(receipt.file, f)
+    storage_path = f"ricevute/{filename}"
+    data = await receipt.read()
+    try:
+        storage_utils.upload_bytes(data, storage_path, receipt.content_type or "application/octet-stream")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Errore upload ricevuta: {e}")
 
     req = models.BonificoRequest(
         company_id   = current.id,
@@ -185,7 +186,7 @@ async def bonifico_request(
         credits      = pkg["credits"],
         amount_eur   = pkg["price_eur"],
         status       = "pending",
-        receipt_path = path,
+        receipt_path = storage_path,   # path su Supabase, non locale
     )
     db.add(req)
     db.commit()

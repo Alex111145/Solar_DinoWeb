@@ -23,7 +23,10 @@ class Company(Base):
     is_active          = Column(Boolean, default=True)
     deleted_at         = Column(DateTime, nullable=True)             # Soft delete
     last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
-    created_at         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    pec                  = Column(String, nullable=True)
+    welcome_bonus_used   = Column(Boolean, default=False)   # True dopo il primo credito regalato dall'admin
+    last_login_at        = Column(DateTime, nullable=True)   # Ultimo accesso
+    created_at           = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     jobs               = relationship("Job", back_populates="company", cascade="all, delete")
     usage_logs         = relationship("UsageLog", back_populates="company", cascade="all, delete")
@@ -135,6 +138,48 @@ class FlightHubJob(Base):
 
     company = relationship("Company")
     job     = relationship("Job")
+
+
+class TrialRequest(Base):
+    """Richiesta di prova gratuita da parte di un'azienda."""
+    __tablename__ = "trial_requests"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    ip         = Column(String, nullable=False, index=True)
+    message    = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
+
+
+class PecVerificationToken(Base):
+    """Token per verificare la PEC aziendale alla registrazione."""
+    __tablename__ = "pec_verification_tokens"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    token      = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used       = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
+
+
+class EmailChangeToken(Base):
+    """Token temporaneo per confermare il cambio email."""
+    __tablename__ = "email_change_tokens"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    new_email  = Column(String, nullable=False)
+    token      = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used       = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
 
 
 class EnterpriseInferenceLog(Base):

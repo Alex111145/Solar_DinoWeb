@@ -1,12 +1,20 @@
-from datetime import datetime, timezone
+import os
+import secrets
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import auth_utils
 import models
 from database import get_db
+from email_utils import send_email
+import difflib
+import json
+import re
+import urllib.request as _urllib
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -21,6 +29,141 @@ def _domain(email: str) -> str:
     return email.split("@")[-1].lower()
 
 
+# ── P.IVA checksum (algoritmo italiano) ─────────────────────────────────────
+
+def _validate_piva_checksum(piva: str) -> bool:
+    """Verifica il checksum della Partita IVA italiana (11 cifre)."""
+    if not re.match(r'^\d{11}$', piva):
+        return False
+    digits = [int(d) for d in piva]
+    s = 0
+    for i in range(10):
+        if i % 2 == 0:          # posizioni dispari (1,3,5,7,9) → somma diretta
+            s += digits[i]
+        else:                    # posizioni pari (2,4,6,8,10) → raddoppia, se ≥10 sottrai 9
+            d = digits[i] * 2
+            s += d if d < 10 else d - 9
+    return (10 - s % 10) % 10 == digits[10]
+
+
+# ── VIES API ─────────────────────────────────────────────────────────────────
+
+def _verify_vies(piva: str) -> dict:
+    """
+    Interroga il servizio VIES EU per la P.IVA italiana.
+    Ritorna {'valid': bool|None, 'name': str}
+    None = API non raggiungibile (non bloccare la registrazione)
+    Usa un thread separato con hard timeout di 5s per evitare blocchi.
+    """
+    import concurrent.futures
+
+    def _call():
+        url = f"https://ec.europa.eu/taxation_customs/vies/rest-api/ms/IT/vat/{piva}"
+        req = _urllib.Request(url, headers={"Accept": "application/json", "User-Agent": "SolarDino/2.0"})
+        with _urllib.urlopen(req, timeout=4) as resp:
+            return json.loads(resp.read())
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_call)
+            data = future.result(timeout=5)   # hard cutoff: 5 secondi totali
+        return {
+            "valid": bool(data.get("isValid", False)),
+            "name":  (data.get("name") or "").strip(),
+        }
+    except concurrent.futures.TimeoutError:
+        print("[VIES] Timeout hard (5s) — salto verifica")
+        return {"valid": None, "name": ""}
+    except Exception as exc:
+        print(f"[VIES] Errore chiamata API: {exc}")
+        return {"valid": None, "name": ""}
+
+
+def _names_match(name_a: str, name_b: str, threshold: float = 0.55) -> bool:
+    """Confronto fuzzy tra ragioni sociali, ignora forme giuridiche e punteggiatura."""
+    _SUFFIXES = {
+        "SRL", "S.R.L", "SPA", "S.P.A", "SNC", "S.N.C", "SAS", "S.A.S",
+        "SRLS", "S.R.L.S", "SS", "S.S", "SOC", "COOP", "ARL", "SCARL",
+        "SAP", "SC", "DI", "E", "&",
+    }
+    def normalize(n: str) -> str:
+        n = re.sub(r'[^\w\s]', ' ', n.upper())
+        words = [w for w in n.split() if w not in _SUFFIXES and len(w) > 1]
+        return ' '.join(words)
+
+    a = normalize(name_a)
+    b = normalize(name_b)
+    if not a or not b:
+        return True   # se uno dei due è vuoto dopo normalizzazione, skip
+    ratio = difflib.SequenceMatcher(None, a, b).ratio()
+    print(f"[VIES] Fuzzy match '{a}' vs '{b}' → {ratio:.2f}")
+    return ratio >= threshold
+
+
+# ── PEC validation ───────────────────────────────────────────────────────────
+
+_PEC_DOMAINS = {
+    # Provider accreditati AgID principali
+    "arubapec.it", "pec.aruba.it",
+    "legalmail.it", "cert.legalmail.it",
+    "pec.it",
+    "postecert.it", "posta-certificata.it",
+    "pecimprese.it",
+    "namirial.it", "pec.namirial.it",
+    "registerpec.it",
+    "pecmail.it",
+    "gigapec.it",
+    "mypec.eu",
+    "pec.cgn.it",
+    "sicurpec.it",
+    "agenziapec.it",
+    "lex-mail.it",
+    "pecaziendale.it",
+    "lamiapec.it",
+    "oneri.it",
+    "pecservizi.it",
+    "actaliscertymail.it",
+    "pec.biz",
+    "interlex.it",
+    # Ordini professionali
+    "pecavvocati.it",
+    "conaf.it",
+    "pec.commercialisti.it",
+    "ingpec.eu",
+    "pec.geometri.it",
+    "pec.agrotecnici.it",
+    "ordinearchitetti.it",
+    # Telco / provider storici
+    "pec.libero.it",
+    "pec.tiscali.it",
+    "pec.buffetti.it",
+    "pectel.it",
+    "pec.telecompost.it",
+}
+
+
+def _is_valid_pec(pec: str) -> bool:
+    """
+    Valida formato PEC:
+    - email valida
+    - dominio in lista provider AgID accreditati
+      OPPURE dominio che inizia con 'pec.' o contiene '.pec.'
+    """
+    pec = pec.lower().strip()
+    if not re.match(r'^[^\s@]+@[^\s@]+\.[a-z]{2,}$', pec):
+        return False
+    domain = pec.split("@")[-1]
+    if domain in _PEC_DOMAINS:
+        return True
+    # Accetta pattern tipo username@pec.azienda.it o username@azienda.pec.it
+    parts = domain.split(".")
+    if parts[0] == "pec":
+        return True
+    if len(parts) > 2 and "pec" in parts[:-1]:
+        return True
+    return False
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -31,6 +174,7 @@ class RegisterRequest(BaseModel):
     name:            str
     ragione_sociale: str
     vat_number:      str   # Partita IVA
+    pec:             str   # PEC aziendale
     password:        str
 
 
@@ -42,12 +186,51 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     vat    = req.vat_number.strip().upper().replace(" ", "")
     rs     = req.ragione_sociale.strip()
 
+    pec = req.pec.lower().strip() if req.pec else ""
+
     if not vat:
         raise HTTPException(status_code=400, detail="Partita IVA obbligatoria")
     if not rs:
         raise HTTPException(status_code=400, detail="Ragione sociale obbligatoria")
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri")
+
+    # ── 1. Checksum P.IVA ────────────────────────────────────────────────────
+    if not _validate_piva_checksum(vat):
+        raise HTTPException(
+            status_code=400,
+            detail="Partita IVA non valida. Verifica le 11 cifre inserite (il codice di controllo non corrisponde).",
+        )
+
+    # ── 2. PEC ───────────────────────────────────────────────────────────────
+    if not pec:
+        raise HTTPException(status_code=400, detail="PEC aziendale obbligatoria")
+    if not _is_valid_pec(pec):
+        raise HTTPException(
+            status_code=400,
+            detail="PEC non valida. Inserisci un indirizzo PEC certificato (es. nome@arubapec.it, nome@legalmail.it).",
+        )
+
+    # ── 3. VIES — verifica P.IVA + confronto ragione sociale ─────────────────
+    vies = _verify_vies(vat)
+    if vies["valid"] is False:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Partita IVA non trovata nei registri europei. "
+                "Verifica il numero inserito o contatta l'amministratore se pensi sia un errore."
+            ),
+        )
+    if vies["valid"] is True and vies["name"] and vies["name"] != "---":
+        if not _names_match(rs, vies["name"]):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"La ragione sociale non corrisponde ai dati ufficiali. "
+                    f"Inserita: «{rs}» — Registrata: «{vies['name']}». "
+                    f"Verifica la ragione sociale o contatta l'amministratore."
+                ),
+            )
 
     # Controllo P.IVA — se esiste ma è soft-deleted, riattiva senza bonus
     deleted_company = db.query(models.Company).filter(
@@ -56,14 +239,15 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     ).first()
 
     if deleted_company:
-        # Controlla che la nuova email non sia già usata da qualcun altro
+        # Controlla che la email non sia già usata da un altro account della stessa azienda
         email_conflict = db.query(models.Company).filter(
             models.Company.email == email,
+            models.Company.vat_number == vat,
             models.Company.id != deleted_company.id,
             models.Company.deleted_at.is_(None),
         ).first()
         if email_conflict:
-            raise HTTPException(status_code=400, detail="Email già registrata da un altro account")
+            raise HTTPException(status_code=400, detail="Impossibile creare l'account: questa email è già presente nella tua azienda.")
 
         # Riattiva senza bonus crediti
         deleted_company.email           = email
@@ -86,41 +270,29 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             "is_admin":     False,
         }
 
-    # Controllo P.IVA attiva (non deleted)
-    if db.query(models.Company).filter(
-        models.Company.vat_number == vat,
-        models.Company.deleted_at.is_(None)
-    ).first():
-        raise HTTPException(
-            status_code=400,
-            detail="Questa Partita IVA è già registrata. Contatta l'amministratore per accedere al tuo account."
-        )
-
-    # Controllo email esatta (escludi soft-deleted)
+    # Controllo: stessa email + stessa P.IVA non ammessa (email duplicata nella stessa azienda)
     if db.query(models.Company).filter(
         models.Company.email == email,
-        models.Company.deleted_at.is_(None)
+        models.Company.vat_number == vat,
+        models.Company.deleted_at.is_(None),
     ).first():
-        raise HTTPException(status_code=400, detail="Email già registrata")
+        raise HTTPException(status_code=400, detail="Impossibile creare l'account: questa email è già presente nella tua azienda.")
 
-    # Controllo dominio aziendale come fallback
-    if domain not in _FREE_DOMAINS:
-        if db.query(models.Company).filter(
-            models.Company.email.like(f"%@{domain}"),
-            models.Company.deleted_at.is_(None)
-        ).first():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Un account con dominio @{domain} esiste già. Contatta l'amministratore."
-            )
+    # Eredita i crediti dagli account esistenti con stessa P.IVA (pool condiviso)
+    existing_vat = db.query(models.Company).filter(
+        models.Company.vat_number == vat,
+        models.Company.deleted_at.is_(None),
+    ).first()
+    inherited_credits = existing_vat.credits if existing_vat else 0
 
     company = models.Company(
         email           = email,
         name            = req.name.strip(),
         ragione_sociale = rs,
         vat_number      = vat,
+        pec             = pec,
         password_hash   = auth_utils.hash_password(req.password),
-        credits         = 2,
+        credits         = inherited_credits,
         is_active       = True,
     )
     db.add(company)
@@ -138,6 +310,42 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/verify-pec/{token}", response_class=HTMLResponse)
+def verify_pec(token: str, db: Session = Depends(get_db)):
+    record = db.query(models.PecVerificationToken).filter(
+        models.PecVerificationToken.token == token,
+        models.PecVerificationToken.used == False,
+    ).first()
+
+    if not record:
+        return HTMLResponse(content=_html_result(
+            "Link non valido",
+            "Questo link non è valido o è già stato utilizzato.",
+            success=False,
+        ), status_code=400)
+
+    if datetime.now(timezone.utc) > record.expires_at.replace(tzinfo=timezone.utc):
+        return HTMLResponse(content=_html_result(
+            "Link scaduto",
+            "Il link è scaduto (validità 48 ore). Registrati nuovamente.",
+            success=False,
+        ), status_code=400)
+
+    company = db.query(models.Company).filter(models.Company.id == record.company_id).first()
+    if not company:
+        return HTMLResponse(content=_html_result("Errore", "Account non trovato.", success=False), status_code=400)
+
+    company.is_active = True
+    record.used = True
+    db.commit()
+
+    return HTMLResponse(content=_html_result(
+        "Account attivato!",
+        f"La PEC è stata verificata con successo.<br>Puoi ora accedere con la tua email <strong>{company.email}</strong>.",
+        success=True,
+    ))
+
+
 @router.post("/login")
 def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     company = db.query(models.Company).filter(
@@ -152,7 +360,8 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
     # Salva IP (considera X-Forwarded-For per proxy/Render)
     forwarded = request.headers.get("x-forwarded-for")
-    company.last_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
+    company.last_ip       = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
+    company.last_login_at = datetime.now(timezone.utc)
     db.commit()
 
     token = auth_utils.create_token({"sub": str(company.id)})
@@ -211,9 +420,157 @@ def change_email(
     ).first():
         raise HTTPException(status_code=400, detail="Email già in uso")
 
-    current.email = new_email
+    # Invalida eventuali token precedenti per questo utente
+    db.query(models.EmailChangeToken).filter(
+        models.EmailChangeToken.company_id == current.id,
+        models.EmailChangeToken.used == False,
+    ).update({"used": True})
+
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now(timezone.utc) + timedelta(hours=24)
+
+    db.add(models.EmailChangeToken(
+        company_id = current.id,
+        new_email  = new_email,
+        token      = token,
+        expires_at = expires,
+    ))
     db.commit()
-    return {"message": "Email aggiornata"}
+
+    base_url = os.getenv("BASE_URL", "https://solardino.it")
+    confirm_url = f"{base_url}/auth/confirm-email/{token}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:560px;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.13);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:36px 40px;text-align:center;">
+            <div style="display:inline-block;background:#f59e0b;border-radius:50%;width:56px;height:56px;line-height:56px;font-size:28px;margin-bottom:16px;">☀️</div>
+            <h1 style="margin:0;color:#f1f5f9;font-size:22px;font-weight:700;letter-spacing:-0.3px;">SolarDino</h1>
+            <p style="margin:6px 0 0;color:#94a3b8;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;">Conferma cambio email</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background:#ffffff;padding:40px 40px 32px;">
+            <p style="margin:0 0 8px;color:#64748b;font-size:14px;">Ciao,</p>
+            <p style="margin:0 0 24px;color:#1e293b;font-size:16px;line-height:1.6;">
+              Hai richiesto di aggiornare l'indirizzo email del tuo account SolarDino al seguente:
+            </p>
+
+            <!-- New email pill -->
+            <div style="background:#f8fafc;border:2px solid #f59e0b;border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:28px;">
+              <p style="margin:0;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Nuova email</p>
+              <p style="margin:6px 0 0;color:#0f172a;font-size:18px;font-weight:700;">{new_email}</p>
+            </div>
+
+            <p style="margin:0 0 28px;color:#475569;font-size:14px;line-height:1.6;">
+              Clicca il bottone qui sotto per confermare la modifica. Il link è valido per <strong>24 ore</strong>.
+            </p>
+
+            <!-- CTA Button -->
+            <div style="text-align:center;margin-bottom:32px;">
+              <a href="{confirm_url}"
+                 style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;font-weight:700;font-size:16px;padding:16px 40px;border-radius:12px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 4px 14px rgba(245,158,11,0.4);">
+                ✅ &nbsp;Conferma nuova email
+              </a>
+            </div>
+
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 24px;">
+
+            <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">
+              Se non hai richiesto questo cambio, puoi ignorare questa email in modo sicuro.<br>
+              La tua email attuale rimarrà invariata.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+            <p style="margin:0;color:#94a3b8;font-size:12px;">
+              SolarDino — AI Solar Panel Analysis &nbsp;·&nbsp; © 2026<br>
+              <span style="color:#cbd5e1;">Questa email è stata inviata automaticamente, non rispondere.</span>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    send_email(new_email, "SolarDino — Conferma il cambio email", html)
+
+    return {"message": "Email di verifica inviata. Controlla la casella della nuova email per confermare."}
+
+
+@router.get("/confirm-email/{token}", response_class=HTMLResponse)
+def confirm_email_change(token: str, db: Session = Depends(get_db)):
+    record = db.query(models.EmailChangeToken).filter(
+        models.EmailChangeToken.token == token,
+        models.EmailChangeToken.used == False,
+    ).first()
+
+    if not record:
+        return HTMLResponse(content=_html_result(
+            "Link non valido",
+            "Questo link non è valido o è già stato utilizzato.",
+            success=False,
+        ), status_code=400)
+
+    if datetime.now(timezone.utc) > record.expires_at.replace(tzinfo=timezone.utc):
+        return HTMLResponse(content=_html_result(
+            "Link scaduto",
+            "Il link è scaduto. Richiedi un nuovo cambio email dalla dashboard.",
+            success=False,
+        ), status_code=400)
+
+    company = db.query(models.Company).filter(models.Company.id == record.company_id).first()
+    if not company:
+        return HTMLResponse(content=_html_result(
+            "Errore",
+            "Account non trovato.",
+            success=False,
+        ), status_code=400)
+
+    company.email   = record.new_email
+    record.used     = True
+    db.commit()
+
+    return HTMLResponse(content=_html_result(
+        "Email aggiornata!",
+        f"La tua email è stata aggiornata a <strong>{record.new_email}</strong>.<br>Accedi ora con la nuova email.",
+        success=True,
+    ))
+
+
+def _html_result(title: str, message: str, success: bool) -> str:
+    color = "#34d399" if success else "#f87171"
+    icon  = "✅" if success else "❌"
+    return f"""<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><title>{title} — SolarDino</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{{margin:0;font-family:sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;}}
+.card{{background:#1e293b;border-radius:16px;padding:40px;max-width:480px;text-align:center;border:1px solid #334155;}}
+h1{{color:{color};margin-top:0;}}a{{color:#f59e0b;}}
+</style></head>
+<body><div class="card">
+<div style="font-size:48px;">{icon}</div>
+<h1>{title}</h1>
+<p style="color:#94a3b8;">{message}</p>
+<a href="/" style="display:inline-block;margin-top:24px;padding:12px 24px;background:#f59e0b;color:#0f172a;font-weight:700;border-radius:10px;text-decoration:none;">
+  Vai alla dashboard
+</a>
+</div></body></html>"""
 
 
 @router.post("/change-password")
@@ -233,4 +590,147 @@ def change_password(
 
     current.password_hash = auth_utils.hash_password(new)
     db.commit()
+
+    html = f"""<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:560px;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.13);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:36px 40px;text-align:center;">
+            <div style="display:inline-block;background:#f59e0b;border-radius:50%;width:56px;height:56px;line-height:56px;font-size:28px;margin-bottom:16px;">☀️</div>
+            <h1 style="margin:0;color:#f1f5f9;font-size:22px;font-weight:700;letter-spacing:-0.3px;">SolarDino</h1>
+            <p style="margin:6px 0 0;color:#94a3b8;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;">Avviso di sicurezza</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#ffffff;padding:40px 40px 32px;">
+            <p style="margin:0 0 8px;color:#64748b;font-size:14px;">Ciao {current.name},</p>
+            <p style="margin:0 0 24px;color:#1e293b;font-size:16px;line-height:1.6;">
+              La password del tuo account SolarDino è stata modificata con successo.
+            </p>
+            <div style="background:#f0fdf4;border:2px solid #34d399;border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:28px;">
+              <p style="margin:0;color:#065f46;font-size:15px;font-weight:600;">✅ Password aggiornata</p>
+              <p style="margin:6px 0 0;color:#6b7280;font-size:13px;">Modifica effettuata in data {datetime.now(timezone.utc).strftime('%d/%m/%Y alle %H:%M')} UTC</p>
+            </div>
+            <p style="margin:0 0 28px;color:#475569;font-size:14px;line-height:1.6;">
+              Se non sei stato tu a effettuare questa modifica, contatta immediatamente il supporto.
+            </p>
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 24px;">
+            <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">
+              Questa è un'email automatica di sicurezza. Non rispondere a questo messaggio.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+            <p style="margin:0;color:#94a3b8;font-size:12px;">
+              SolarDino — AI Solar Panel Analysis &nbsp;·&nbsp; © 2026
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    send_email(current.email, "SolarDino — Password modificata", html)
+
     return {"message": "Password aggiornata con successo"}
+
+
+@router.get("/check-vat/{vat}")
+def check_vat(vat: str, db: Session = Depends(get_db)):
+    """Verifica se esiste già un'azienda con questa P.IVA."""
+    print(f"[CHECK-VAT] Richiesta per P.IVA: '{vat}'")
+    vat = vat.strip().upper().replace(" ", "")
+    if not vat:
+        print("[CHECK-VAT] P.IVA vuota")
+        raise HTTPException(status_code=400, detail="Partita IVA obbligatoria")
+
+    print(f"[CHECK-VAT] Cerco azienda con vat_number='{vat}' nel DB...")
+    try:
+        company = db.query(models.Company).filter(
+            models.Company.vat_number == vat,
+            models.Company.deleted_at.is_(None),
+        ).first()
+    except Exception as e:
+        print(f"[CHECK-VAT] ERRORE DB: {e}")
+        raise HTTPException(status_code=500, detail="Errore database")
+
+    if not company:
+        print(f"[CHECK-VAT] Nessuna azienda trovata per P.IVA '{vat}'")
+        raise HTTPException(
+            status_code=404,
+            detail="Nessuna azienda trovata con questa Partita IVA. Usa la registrazione completa.",
+        )
+
+    print(f"[CHECK-VAT] Trovata: '{company.ragione_sociale}' (id={company.id})")
+    return {
+        "found": True,
+        "ragione_sociale": company.ragione_sociale or "",
+    }
+
+
+@router.post("/register-fast")
+def register_fast(body: dict, db: Session = Depends(get_db)):
+    """Registrazione semplificata per chi appartiene a un'azienda già registrata."""
+    vat      = (body.get("vat_number") or "").strip().upper().replace(" ", "")
+    name     = (body.get("name") or "").strip()
+    email    = (body.get("email") or "").lower().strip()
+    password = body.get("password") or ""
+
+    if not vat or not name or not email or not password:
+        raise HTTPException(status_code=400, detail="Tutti i campi sono obbligatori")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri")
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="Email non valida")
+
+    existing = db.query(models.Company).filter(
+        models.Company.vat_number == vat,
+        models.Company.deleted_at.is_(None),
+    ).first()
+
+    if not existing:
+        raise HTTPException(
+            status_code=404,
+            detail="Azienda non trovata. Usa la registrazione completa.",
+        )
+
+    # Email già presente nella stessa azienda?
+    if db.query(models.Company).filter(
+        models.Company.email == email,
+        models.Company.vat_number == vat,
+        models.Company.deleted_at.is_(None),
+    ).first():
+        raise HTTPException(
+            status_code=400,
+            detail="Impossibile creare l'account: questa email è già presente nella tua azienda.",
+        )
+
+    company = models.Company(
+        email           = email,
+        name            = name,
+        ragione_sociale = existing.ragione_sociale,
+        vat_number      = vat,
+        pec             = existing.pec,
+        password_hash   = auth_utils.hash_password(password),
+        credits         = existing.credits,
+        is_active       = True,
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+
+    token = auth_utils.create_token({"sub": str(company.id)})
+    return {
+        "access_token": token,
+        "token_type":   "bearer",
+        "name":         company.name,
+        "email":        company.email,
+        "credits":      company.credits,
+        "is_admin":     False,
+    }

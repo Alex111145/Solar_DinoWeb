@@ -191,7 +191,7 @@ function EnterpriseConsentModal({ onConfirm, onClose }: { onConfirm: () => void;
         <div className="flex gap-3 justify-end">
           <button className="btn-ghost" onClick={onClose}>Annulla</button>
           <button className="btn-amber" disabled={!checked} onClick={onConfirm}>
-            <Zap size={15} /> Avvia Inferenza
+            <Zap size={15} /> Avvia Elaborazione
           </button>
         </div>
       </motion.div>
@@ -258,6 +258,7 @@ function ProfileSidebar({
   const navigate = useNavigate()
   const [openSection, setOpenSection] = useState<string | null>(null)
   const [newEmail, setNewEmail] = useState('')
+  const [emailPwd, setEmailPwd] = useState('')
   const [oldPwd, setOldPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [pwdConfirm, setPwdConfirm] = useState(false)
@@ -304,11 +305,16 @@ function ProfileSidebar({
       const res = await apiFetch('/auth/change-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newEmail }),
+        body: JSON.stringify({ new_email: newEmail, password: emailPwd }),
       })
       if (res.ok) {
-        setMsg('Ti abbiamo inviato una email di conferma alla tua vecchia email. Segui il link per confermare la modifica.')
-      } else setMsg('Errore aggiornamento email')
+        setMsg('Email di verifica inviata. Controlla la casella della nuova email e clicca il link per confermare.')
+        setNewEmail('')
+        setEmailPwd('')
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setMsg(err.detail || 'Errore aggiornamento email')
+      }
     } catch { setMsg('Errore') }
   }
 
@@ -426,7 +432,7 @@ function ProfileSidebar({
                   {[
                     { label: 'Ragione sociale', value: ragioneSociale || '—' },
                     { label: 'Partita IVA', value: vatNumber || '—' },
-                    { label: 'Nome referente', value: name || '—' },
+                    { label: 'Nome', value: name || '—' },
                     { label: 'Email', value: email || '—' },
                     { label: 'Password', value: '••••••••' },
                   ].map(({ label, value }) => (
@@ -485,8 +491,16 @@ function ProfileSidebar({
                   onChange={(e) => setNewEmail(e.target.value)}
                   style={{ fontSize: '0.85rem' }}
                 />
+                <input
+                  className="form-input mt-2"
+                  type="password"
+                  placeholder="Password attuale (per conferma)"
+                  value={emailPwd}
+                  onChange={(e) => setEmailPwd(e.target.value)}
+                  style={{ fontSize: '0.85rem' }}
+                />
                 <button className="btn-amber w-full mt-3" style={{ fontSize: '0.85rem', padding: '0.6rem' }} onClick={changeEmail}>
-                  Aggiorna email
+                  Invia email di verifica
                 </button>
               </div>
             )}
@@ -677,6 +691,11 @@ export default function DashboardPage() {
   const [credits, setCredits] = useState(parseInt(localStorage.getItem('credits') || '0'))
   const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
+  const [trialAlreadyRequested, setTrialAlreadyRequested] = useState(true) // default true per nascondere fino a verifica
+  const [trialMessage, setTrialMessage] = useState('')
+  const [trialLoading, setTrialLoading] = useState(false)
+  const [trialSent, setTrialSent] = useState(false)
+  const [showTrialModal, setShowTrialModal] = useState(false)
 
   // Theme state
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
@@ -749,7 +768,6 @@ export default function DashboardPage() {
   const [bonificoMsg, setBonificoMsg] = useState('')
 
   // Reviews
-  const [reviews, setReviews] = useState<Review[]>([])
   const [myReview, setMyReview] = useState<Review | null>(null)
   const [starValue, setStarValue] = useState(0)
   const [reviewComment, setReviewComment] = useState('')
@@ -792,11 +810,6 @@ export default function DashboardPage() {
       .then((d) => setPackages(Array.isArray(d) ? d : d.packages || []))
       .catch(() => {})
 
-    apiFetch('/reviews')
-      .then((r) => r.json())
-      .then((d) => setReviews(Array.isArray(d) ? d : d.reviews || []))
-      .catch(() => {})
-
     apiFetch('/reviews/mine')
       .then((r) => r.json())
       .then((d) => { if (d && d.id) setMyReview(d) })
@@ -806,7 +819,29 @@ export default function DashboardPage() {
       .then((r) => r.json())
       .then((d) => setFhStatus(d))
       .catch(() => {})
+
+    apiFetch('/missions/trial-status')
+      .then((r) => r.json())
+      .then((d) => setTrialAlreadyRequested(d.already_requested === true))
+      .catch(() => setTrialAlreadyRequested(false))
   }, [])
+
+  async function sendTrialRequest() {
+    setTrialLoading(true)
+    try {
+      const res = await apiFetch('/missions/request-trial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: trialMessage }),
+      })
+      if (res.ok) {
+        setTrialSent(true)
+        setTrialAlreadyRequested(true)
+        setShowTrialModal(false)
+      }
+    } catch { /* noop */ }
+    setTrialLoading(false)
+  }
 
   // ── Job polling ────────────────────────────────────────────────────────
   const startPolling = useCallback((jobId: string) => {
@@ -1045,14 +1080,20 @@ export default function DashboardPage() {
           <motion.div
             variants={cardAnim}
             className="flex items-center gap-3 rounded-2xl p-4 mb-6"
-            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}
+            style={!trialAlreadyRequested && !trialSent
+              ? { background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }
+              : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}
           >
             <AlertTriangle size={18} style={{ flexShrink: 0 }} />
             <span style={{ fontSize: '0.875rem' }}>
-              <strong>Crediti esauriti.</strong> Acquista un pacchetto per continuare le elaborazioni.
+              <strong>Crediti esauriti.</strong>{' '}
+              {!trialAlreadyRequested && !trialSent
+                ? 'Invia la tua richiesta di prova gratuita per iniziare.'
+                : 'Acquista un pacchetto per continuare le elaborazioni.'}
             </span>
           </motion.div>
         )}
+
 
         {/* Welcome */}
         <motion.div variants={cardAnim} className="mb-8">
@@ -1064,6 +1105,48 @@ export default function DashboardPage() {
             Carica due ortomosaici per avviare l'analisi AI.
           </p>
         </motion.div>
+
+        {/* Richiedi credito gratuito */}
+        {credits <= 0 && !trialAlreadyRequested && !trialSent && (
+          <motion.div
+            variants={cardAnim}
+            className="card mb-6"
+            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.07), rgba(249,115,22,0.04))', border: '1.5px solid rgba(245,158,11,0.28)' }}
+          >
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg,#f59e0b,#f97316)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                  🎁
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Prova gratuita</div>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.975rem', marginBottom: 3 }}>
+                    Richiedi il tuo primo credito gratuito
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    Invia una richiesta all'amministratore con i dati della tua azienda e un messaggio opzionale.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTrialModal(true)}
+                style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.65rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Richiedi credito gratuito
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {trialSent && (
+          <motion.div
+            variants={cardAnim}
+            className="rounded-2xl p-4 mb-6"
+            style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', fontSize: '0.875rem' }}
+          >
+            ✅ Richiesta inviata! L'amministratore valuterà e aggiungerà il credito.
+          </motion.div>
+        )}
 
         {/* Metodo selector */}
         <motion.div variants={cardAnim} className="card mb-6">
@@ -1340,7 +1423,7 @@ export default function DashboardPage() {
               <Zap size={17} />
             </div>
             <div>
-              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Avvia Inferenza</h2>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Avvia Elaborazione</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Analisi AI automatica tramite FlightHub 2</p>
             </div>
           </div>
@@ -1390,7 +1473,7 @@ export default function DashboardPage() {
             disabled={!fhStatus.connected || credits <= 0}
             onClick={() => setShowEnterpriseConsent(true)}
           >
-            <Zap size={16} /> Avvia Inferenza
+            <Zap size={16} /> Avvia Elaborazione
           </button>
           {!fhStatus.connected && (
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 12 }}>Connetti FlightHub 2 per abilitare</span>
@@ -1557,41 +1640,6 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
-        {/* Recensioni pubbliche degli altri utenti */}
-        {reviews.filter((r) => r.id !== myReview?.id).length > 0 && (
-          <motion.div variants={cardAnim} className="card mb-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
-                <Star size={17} />
-              </div>
-              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Recensioni</h2>
-            </div>
-            <div className="flex flex-col gap-3">
-              {reviews.filter((r) => r.id !== myReview?.id).map((r) => (
-                <div
-                  key={r.id}
-                  className="rounded-xl p-4"
-                  style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <Star key={n} size={14} fill={n <= r.stars ? '#f59e0b' : 'none'} color={n <= r.stars ? '#f59e0b' : '#475569'} />
-                      ))}
-                    </div>
-                    {r.company && (
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{r.company}</span>
-                    )}
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                      {r.created_at ? new Date(r.created_at).toLocaleDateString('it-IT') : ''}
-                    </span>
-                  </div>
-                  {r.comment && <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', margin: 0 }}>{r.comment}</p>}
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
 
         {/* Support footer */}
         <motion.div variants={cardAnim} className="mb-8">
@@ -1946,6 +1994,50 @@ export default function DashboardPage() {
               </button>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal richiesta prova gratuita */}
+      <AnimatePresence>
+        {showTrialModal && (
+          <div className="modal-overlay" onClick={() => setShowTrialModal(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: 'var(--bg)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 20, padding: '2rem', maxWidth: 440, width: '90%' }}
+            >
+              <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.15rem', marginBottom: 8 }}>
+                Richiedi una prova gratuita
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: 20 }}>
+                La richiesta verrà inviata all'amministratore con i dati della tua azienda. Puoi aggiungere un messaggio opzionale.
+              </p>
+              <textarea
+                placeholder="Messaggio opzionale (es. settore, numero di pannelli da analizzare...)"
+                value={trialMessage}
+                onChange={(e) => setTrialMessage(e.target.value)}
+                rows={4}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '0.75rem', color: 'var(--text-primary)', fontSize: '0.875rem', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => setShowTrialModal(false)}
+                  style={{ flex: 1, background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '0.7rem', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={sendTrialRequest}
+                  disabled={trialLoading}
+                  style={{ flex: 2, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.7rem', color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
+                >
+                  {trialLoading ? 'Invio...' : 'Invia richiesta'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

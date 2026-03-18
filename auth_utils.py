@@ -67,6 +67,16 @@ def get_current_company(
     return company
 
 
+def sync_credits_by_vat(db: Session, vat_number: str, new_credits: int) -> None:
+    """Allinea i crediti di tutti gli account con la stessa Partita IVA."""
+    if not vat_number:
+        return
+    db.query(models.Company).filter(
+        models.Company.vat_number == vat_number,
+        models.Company.deleted_at.is_(None),
+    ).update({"credits": new_credits})
+
+
 def require_admin(
     company: models.Company = Depends(get_current_company),
 ) -> models.Company:
