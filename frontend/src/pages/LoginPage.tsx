@@ -167,7 +167,7 @@ export default function LoginPage() {
         style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}
       >
         <motion.div variants={fadeUp} className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-6" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600 }}>
-          <Zap size={12} /> AI per ispezione fotovoltaica — MaskDINO
+          <Zap size={12} /> AI per ispezione fotovoltaica
         </motion.div>
 
         <motion.h1
@@ -338,7 +338,7 @@ export default function LoginPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
-            { icon: <Zap size={20} />, title: 'Rilevamento AI hotspot', desc: 'Modello MaskDINO addestrato su migliaia di immagini termiche. Identifica pannelli guasti, hotspot e moduli degradati con alta precisione.' },
+            { icon: <Zap size={20} />, title: 'Rilevamento AI hotspot', desc: 'Modello AI addestrato su migliaia di immagini termiche. Identifica pannelli guasti, hotspot e moduli degradati con alta precisione.' },
             { icon: <MapPin size={20} />, title: 'Geolocalizzazione GPS', desc: 'Ogni anomalia rilevata è georeferenziata con coordinate GPS reali, pronta per essere visualizzata su qualsiasi GIS o Google Earth.' },
             { icon: <FileDown size={20} />, title: 'Export multi-formato', desc: 'Scarica i risultati in KML, GeoJSON, CSV e JSON. Compatibili con QGIS, ArcGIS, Google Earth e i principali strumenti GIS.' },
             { icon: <Clock size={20} />, title: 'Analisi in < 60 secondi', desc: 'Dall\'upload alla generazione del report completo in meno di un minuto. Nessuna attesa, nessun server dedicato da gestire.' },
