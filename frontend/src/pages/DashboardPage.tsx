@@ -1290,6 +1290,64 @@ export default function DashboardPage() {
         </motion.div>
         )}
 
+        {/* Strada B: Avvia Inferenza + consenso dati */}
+        {strada === 'B' && (
+        <motion.div variants={cardAnim} className="card mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+              <Zap size={17} />
+            </div>
+            <div>
+              <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Avvia Inferenza</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Analisi AI automatica tramite FlightHub 2</p>
+            </div>
+          </div>
+
+          {/* Informativa dati */}
+          <div className="rounded-xl p-4 mb-5" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.18)' }}>
+            <div style={{ fontSize: '0.78rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+              Informativa utilizzo dati
+            </div>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.7 }}>
+              Cliccando <strong style={{ color: 'var(--text-primary)' }}>Avvia Inferenza</strong>, accetti che gli ortomosaici elaborati
+              vengano conservati da SolarDino e possano essere utilizzati — in forma anonima e aggregata — per
+              migliorare e riaddestrare il modello AI. I dati non verranno condivisi con terze parti.
+              Puoi richiedere la cancellazione in qualsiasi momento scrivendo a{' '}
+              <a href="mailto:support@solardino.it" style={{ color: '#f59e0b', textDecoration: 'none' }}>support@solardino.it</a>.
+            </p>
+          </div>
+
+          <button
+            className="btn-amber"
+            style={{ fontSize: '0.925rem' }}
+            disabled={credits <= 0}
+            onClick={async () => {
+              const token = localStorage.getItem('token')
+              try {
+                const res = await fetch('/flighthub/avvia-inferenza', {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                })
+                const data = await res.json()
+                if (res.ok) {
+                  setFhMsg(data.message)
+                  if (data.syncing) await fhSync()
+                } else {
+                  setFhMsg(data.detail || 'Errore durante l\'avvio')
+                }
+              } catch {
+                setFhMsg('Errore di rete')
+              }
+            }}
+          >
+            <Zap size={16} /> Avvia Inferenza
+          </button>
+          {credits <= 0 && (
+            <span style={{ fontSize: '0.8rem', color: '#ef4444', marginLeft: 12 }}>Crediti insufficienti</span>
+          )}
+        </motion.div>
+        )}
+
         {/* Active job — floating popup (rendered outside flow at bottom of return) */}
 
         {/* Credits / Payments */}

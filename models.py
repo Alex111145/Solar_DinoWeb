@@ -135,3 +135,19 @@ class FlightHubJob(Base):
 
     company = relationship("Company")
     job     = relationship("Job")
+
+
+class EnterpriseInferenceLog(Base):
+    """Log di ogni avvio inferenza Enterprise con consenso al riutilizzo dati."""
+    __tablename__ = "enterprise_inference_logs"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    company_id      = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_name    = Column(String, nullable=True)
+    company_email   = Column(String, nullable=True)
+    vat_number      = Column(String, nullable=True)
+    fh_workspace_id = Column(String, nullable=True)
+    data_consent    = Column(Boolean, default=True)   # ha accettato riutilizzo dati
+    created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")

@@ -629,3 +629,67 @@ def download_uploaded_file(
         raise HTTPException(status_code=404, detail="File non trovato")
 
     return FileResponse(path=file_path, filename=filename)
+
+
+# ---------------------------------------------------------------------------
+# Enterprise inference logs
+# ---------------------------------------------------------------------------
+
+@router.get("/enterprise-logs")
+def enterprise_logs(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Lista di tutti i clienti Enterprise che hanno avviato l'inferenza (con consenso dati)."""
+    logs = (
+        db.query(models.EnterpriseInferenceLog)
+        .order_by(models.EnterpriseInferenceLog.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id":              l.id,
+            "company_id":      l.company_id,
+            "company_name":    l.company_name,
+            "company_email":   l.company_email,
+            "vat_number":      l.vat_number,
+            "fh_workspace_id": l.fh_workspace_id,
+            "data_consent":    l.data_consent,
+            "created_at":      l.created_at.isoformat(),
+        }
+        for l in logs
+    ]
+
+
+@router.get("/enterprise-logs/csv")
+def enterprise_logs_csv(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Scarica tutti i log Enterprise in formato CSV."""
+    import csv, io
+    from fastapi.responses import StreamingResponse
+
+    logs = (
+        db.query(models.EnterpriseInferenceLog)
+        .order_by(models.EnterpriseInferenceLog.created_at.desc())
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Company ID", "Nome", "Email", "P.IVA", "FlightHub Workspace", "Consenso dati", "Data"])
+    for l in logs:
+        writer.writerow([
+            l.id, l.company_id, l.company_name, l.company_email,
+            l.vat_number or "", l.fh_workspace_id or "",
+            "Sì" if l.data_consent else "No",
+            l.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=enterprise_clients.csv"},
+    )

@@ -627,3 +627,90 @@ def download_fh_result(
         raise HTTPException(status_code=404, detail="File non ancora disponibile")
 
     return FileResponse(path=path, filename=fname, media_type=media_type)
+
+
+# ---------------------------------------------------------------------------
+# Avvia Inferenza Enterprise — log consenso dati + trigger sync
+# ---------------------------------------------------------------------------
+
+@router.post("/avvia-inferenza")
+def avvia_inferenza_enterprise(
+    background_tasks: BackgroundTasks,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """
+    Registra il consenso al riutilizzo dei dati per il retraining del modello
+    e avvia la sincronizzazione FlightHub 2 (se connessa).
+    """
+    if not current.is_active:
+        raise HTTPException(status_code=403, detail="Account disabilitato")
+
+    # Recupera workspace_id se connesso
+    conn = db.query(models.FlightHubConnection).filter(
+        models.FlightHubConnection.company_id == current.id
+    ).first()
+
+    # Salva log consenso
+    log = models.EnterpriseInferenceLog(
+        company_id      = current.id,
+        company_name    = current.ragione_sociale or current.name,
+        company_email   = current.email,
+        vat_number      = current.vat_number,
+        fh_workspace_id = conn.workspace_id if conn else None,
+        data_consent    = True,
+    )
+    db.add(log)
+    db.commit()
+
+    # Avvia sync FlightHub in background se connessa
+    if conn:
+        background_tasks.add_task(_trigger_fh_sync, current.id)
+        return {"message": "Inferenza avviata. Sincronizzazione FlightHub in corso.", "syncing": True}
+
+    return {"message": "Consenso registrato. Collega FlightHub 2 per avviare l'inferenza automatica.", "syncing": False}
+
+
+def _trigger_fh_sync(company_id: int):
+    """Background task: sincronizza FlightHub per l'azienda specificata."""
+    from database import DATABASE_URL
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+    )
+    Sess = sessionmaker(bind=engine)
+    db   = Sess()
+    try:
+        conn = db.query(models.FlightHubConnection).filter(
+            models.FlightHubConnection.company_id == company_id
+        ).first()
+        if not conn:
+            return
+        token = _get_access_token(conn, db)
+        maps  = _dji_get(f"/workspaces/{conn.workspace_id}/maps", token)
+        for m in (maps.get("data") or []):
+            existing = db.query(models.FlightHubJob).filter(
+                models.FlightHubJob.fh_map_id   == str(m.get("id")),
+                models.FlightHubJob.company_id  == company_id,
+            ).first()
+            if not existing:
+                fh_job = models.FlightHubJob(
+                    company_id    = company_id,
+                    fh_mission_id = str(m.get("mission_id") or ""),
+                    fh_map_id     = str(m.get("id")),
+                    fh_map_name   = m.get("name"),
+                    status        = "pending",
+                )
+                db.add(fh_job)
+                db.commit()
+                db.refresh(fh_job)
+                _run_flighthub_pipeline(fh_job.id, conn.workspace_id, token)
+        conn.last_sync_at = datetime.now(timezone.utc)
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()

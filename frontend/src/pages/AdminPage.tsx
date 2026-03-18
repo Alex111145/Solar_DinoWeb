@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, LogOut, Users, BarChart2, Star,
   Check, X, TrendingUp, Building2, Euro,
-  FolderOpen, FileDown, ChevronRight, ChevronDown,
+  FolderOpen, FileDown, ChevronRight, ChevronDown, Radio,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -194,7 +194,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
 // ── Main Admin Page ────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'uploads'>('companies')
+  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'uploads' | 'enterprise'>('companies')
 
   const [stats, setStats] = useState<Stats>({})
   const [companies, setCompanies] = useState<Company[]>([])
@@ -204,6 +204,7 @@ export default function AdminPage() {
   const [uploads, setUploads] = useState<UploadCompany[]>([])
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
+  const [enterpriseLogs, setEnterpriseLogs] = useState<{id:number,company_name:string,company_email:string,vat_number:string,fh_workspace_id:string,data_consent:boolean,created_at:string}[]>([])
 
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [msg, setMsg] = useState('')
@@ -227,6 +228,9 @@ export default function AdminPage() {
     }).catch(() => {})
     apiFetch('/admin/uploads').then((r) => r.json()).then((d) => {
       setUploads(Array.isArray(d) ? d : [])
+    }).catch(() => {})
+    apiFetch('/admin/enterprise-logs').then((r) => r.json()).then((d) => {
+      setEnterpriseLogs(Array.isArray(d) ? d : [])
     }).catch(() => {})
   }, [])
 
@@ -277,8 +281,8 @@ export default function AdminPage() {
   const statCards = [
     { icon: <Building2 size={18} />, label: 'Aziende attive', value: stats.active_companies || 0, prefix: '' },
     { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati', value: stats.total_panels || 0, prefix: '' },
-    { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue || 0, prefix: '€' },
     { icon: <TrendingUp size={18} />, label: 'Fatturato mese', value: stats.monthly_revenue || 0, prefix: '€' },
+    { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue || 0, prefix: '€' },
   ]
 
   return (
@@ -371,6 +375,7 @@ export default function AdminPage() {
               { key: 'billing', label: 'Utilizzo & Fatturazione', icon: <BarChart2 size={14} /> },
               { key: 'reviews', label: 'Recensioni', icon: <Star size={14} />, badge: pendingReviews },
               { key: 'uploads', label: 'Dati caricati', icon: <FolderOpen size={14} /> },
+              { key: 'enterprise', label: 'Enterprise', icon: <Radio size={14} /> },
             ].map((t) => (
               <button
                 key={t.key}
@@ -782,6 +787,71 @@ export default function AdminPage() {
                       </div>
                     )
                   })}
+                </div>
+              )}
+            </motion.div>
+          )}
+          {tab === 'enterprise' && (
+            <motion.div
+              key="enterprise"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="card mt-4"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
+                  Clienti Enterprise — Log Inferenze
+                </h3>
+                <a
+                  href="/admin/enterprise-logs/csv"
+                  download
+                  onClick={(e) => {
+                    e.preventDefault()
+                    const token = localStorage.getItem('token')
+                    fetch('/admin/enterprise-logs/csv', { headers: { Authorization: `Bearer ${token}` } })
+                      .then((r) => r.blob())
+                      .then((blob) => {
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url; a.download = 'enterprise_clients.csv'; a.click()
+                        URL.revokeObjectURL(url)
+                      })
+                  }}
+                  className="btn-ghost flex items-center gap-1.5"
+                  style={{ fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
+                >
+                  <FileDown size={13} /> Esporta CSV
+                </a>
+              </div>
+
+              {enterpriseLogs.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
+                  Nessun cliente Enterprise ha ancora avviato l'inferenza
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {enterpriseLogs.map((l) => (
+                    <div key={l.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.875rem' }}>{l.company_name || l.company_email}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{l.company_email}</div>
+                          {l.vat_number && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>P.IVA: {l.vat_number}</div>}
+                          {l.fh_workspace_id && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Workspace: {l.fh_workspace_id}</div>}
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>
+                            <Check size={9} /> Consenso dati
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                            {new Date(l.created_at).toLocaleString('it-IT')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </motion.div>
