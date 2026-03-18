@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Sun, Zap, MapPin, FileDown, Eye, EyeOff, Star, Moon, Radio } from 'lucide-react'
+import { Sun, Zap, MapPin, FileDown, Eye, EyeOff, Star, Moon } from 'lucide-react'
 
 const container = {
   hidden: { opacity: 0 },
@@ -19,13 +19,6 @@ const stats = [
     value: 'Rilevamento Hot Spot Pannelli',
     desc: 'Segmentazione semantica con modelli DINO',
     features: ['Analisi termografica automatizzata', 'Overlay RGB + Termico'],
-  },
-  {
-    icon: <Radio size={18} />,
-    label: 'Enterprise / FlightHub 2',
-    value: 'Integrazione DJI automatica',
-    desc: 'Collega DJI FlightHub 2: il drone vola, l\'AI analizza e carica i risultati in automatico.',
-    features: ['Nessun upload manuale', 'Risultati direttamente in FlightHub 2'],
   },
   {
     icon: <MapPin size={18} />,
@@ -247,6 +240,29 @@ export default function LoginPage() {
             ))}
           </motion.div>
 
+          {/* Reviews */}
+          {reviews.length > 0 && (
+            <motion.div variants={item} style={{ maxWidth: 460 }}>
+              <div style={{ fontSize: '0.72rem', color: t.textFaint, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+                Cosa dicono i clienti
+              </div>
+              <div className="flex flex-col gap-2">
+                {reviews.slice(0, 3).map((r) => (
+                  <div key={r.id} className="rounded-2xl p-3.5" style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}` }}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <Star key={n} size={12} fill={n <= r.stars ? '#f59e0b' : 'none'} color={n <= r.stars ? '#f59e0b' : t.textFaint} />
+                        ))}
+                      </div>
+                      {r.company && <span style={{ fontSize: '0.75rem', color: t.textSec, fontWeight: 500 }}>{r.company}</span>}
+                    </div>
+                    {r.comment && <p style={{ fontSize: '0.8rem', color: t.textMuted, margin: 0, lineHeight: 1.5 }}>{r.comment}</p>}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
         </div>
       </motion.div>
 
@@ -340,30 +356,6 @@ export default function LoginPage() {
       </div>
 
       </div>{/* end centered wrapper */}
-
-      {/* ── Reviews — full width ──────────────────────────────── */}
-      {reviews.length > 0 && (
-        <div className="relative z-10 w-full px-6 lg:px-16 pb-12 pt-2" style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ fontSize: '0.72rem', color: t.textFaint, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
-            Cosa dicono i clienti
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reviews.map((r) => (
-              <div key={r.id} className="rounded-2xl p-5" style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}` }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star key={n} size={15} fill={n <= r.stars ? '#f59e0b' : 'none'} color={n <= r.stars ? '#f59e0b' : t.textFaint} />
-                    ))}
-                  </div>
-                  {r.company && <span style={{ fontSize: '0.8rem', color: t.textSec, fontWeight: 600 }}>{r.company}</span>}
-                </div>
-                {r.comment && <p style={{ fontSize: '0.875rem', color: t.textMuted, margin: 0, lineHeight: 1.6 }}>{r.comment}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
