@@ -714,7 +714,7 @@ export default function DashboardPage() {
   const [reviewMsg, setReviewMsg] = useState('')
 
   // Modalità elaborazione
-  const [strada, setStrada] = useState<'A' | 'B'>('A')
+  const [strada, setStrada] = useState<'A' | 'B' | null>(null)
 
   // FlightHub 2
   const [fhStatus, setFhStatus] = useState<FhStatus>({ connected: false, missions: [] })
@@ -1032,7 +1032,7 @@ export default function DashboardPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
-              onClick={() => setStrada('A')}
+              onClick={() => setStrada(strada === 'A' ? null : 'A')}
               className="rounded-xl p-4 text-left transition-all"
               style={{
                 background: strada === 'A' ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.03)',
@@ -1055,7 +1055,7 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => setStrada('B')}
+              onClick={() => setStrada(strada === 'B' ? null : 'B')}
               className="rounded-xl p-4 text-left transition-all"
               style={{
                 background: strada === 'B' ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.03)',
