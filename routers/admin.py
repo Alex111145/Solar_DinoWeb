@@ -530,9 +530,9 @@ def reject_review(
     r = db.query(models.Review).filter(models.Review.id == review_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Recensione non trovata")
-    r.status = "rejected"
+    db.delete(r)
     db.commit()
-    return {"message": "Recensione rifiutata"}
+    return {"message": "Recensione rifiutata ed eliminata"}
 
 
 @router.delete("/reviews/{review_id}")
