@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 from database import Base
 
 
+
+
+
 class Company(Base):
     __tablename__ = "companies"
 
@@ -92,3 +95,43 @@ class UsageLog(Base):
 
     company = relationship("Company", back_populates="usage_logs")
     job     = relationship("Job", back_populates="usage_log")
+
+
+# ── FlightHub 2 Enterprise Integration ──────────────────────────────────────
+
+class FlightHubConnection(Base):
+    """Credenziali DJI FlightHub 2 salvate per azienda."""
+    __tablename__ = "flighthub_connections"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    company_id    = Column(Integer, ForeignKey("companies.id"), unique=True, nullable=False)
+    workspace_id  = Column(String, nullable=False)   # DJI Workspace ID
+    client_id     = Column(String, nullable=False)   # OAuth2 client_id
+    client_secret = Column(String, nullable=False)   # OAuth2 client_secret
+    access_token  = Column(Text,   nullable=True)    # token corrente (cache)
+    token_expires = Column(DateTime, nullable=True)  # scadenza token
+    last_sync_at  = Column(DateTime, nullable=True)  # ultima sincronizzazione
+    created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
+
+
+class FlightHubJob(Base):
+    """Job originato da DJI FlightHub 2 (mappa scaricata automaticamente)."""
+    __tablename__ = "flighthub_jobs"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    company_id       = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    fh_mission_id    = Column(String, nullable=False)   # ID missione su DJI
+    fh_map_id        = Column(String, nullable=False)   # ID mappa su DJI
+    fh_map_name      = Column(String, nullable=True)    # nome mappa
+    job_id           = Column(String, ForeignKey("jobs.id"), nullable=True)  # job interno
+    # pending | downloading | processing | uploading | done | error
+    status           = Column(String, default="pending")
+    error_msg        = Column(Text, nullable=True)
+    results_uploaded = Column(Boolean, default=False)
+    created_at       = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at     = Column(DateTime, nullable=True)
+
+    company = relationship("Company")
+    job     = relationship("Job")

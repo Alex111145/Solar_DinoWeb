@@ -132,17 +132,19 @@ def _run_pipeline(job_id: str, tif_path: str, tfw_path: str, job_dir: str):
 @router.post("/upload")
 async def upload_mission(
     background_tasks: BackgroundTasks,
-    tif_termico:      UploadFile       = File(...),
-    tfw_termico:      UploadFile       = File(...),
-    tif_rgb:          UploadFile       = File(...),
-    tfw_rgb:          UploadFile       = File(...),
-    panel_model:      Optional[str]    = Form(None),
-    panel_dimensions: Optional[str]    = Form(None),
-    panel_efficiency: Optional[float]  = Form(None),
-    panel_temp_coeff: Optional[float]  = Form(None),
+    tif_termico:      UploadFile          = File(...),
+    tfw_termico:      Optional[UploadFile] = File(None),
+    tif_rgb:          Optional[UploadFile] = File(None),
+    tfw_rgb:          Optional[UploadFile] = File(None),
+    panel_model:      Optional[str]        = Form(None),
+    panel_dimensions: Optional[str]        = Form(None),
+    panel_efficiency: Optional[float]      = Form(None),
+    panel_temp_coeff: Optional[float]      = Form(None),
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
+    if not current.is_active:
+        raise HTTPException(status_code=403, detail="Account disabilitato")
     if current.credits <= 0:
         raise HTTPException(
             status_code=402,
@@ -153,27 +155,32 @@ async def upload_mission(
     job_dir = os.path.join(UPLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
-    # Save all 4 files — normalizza estensione in minuscolo, rimuove spazi
     def _norm(filename: str) -> str:
         filename = filename.strip()
         name, ext = os.path.splitext(filename)
         return name.strip() + ext.lower()
 
     tif_termico_path = os.path.join(job_dir, "termico_" + _norm(tif_termico.filename))
-    tfw_termico_path = os.path.join(job_dir, "termico_" + _norm(tfw_termico.filename))
-    tif_rgb_path     = os.path.join(job_dir, "rgb_"     + _norm(tif_rgb.filename))
-    tfw_rgb_path     = os.path.join(job_dir, "rgb_"     + _norm(tfw_rgb.filename))
+    with open(tif_termico_path, "wb") as f:
+        shutil.copyfileobj(tif_termico.file, f)
 
-    for src, dst in [
-        (tif_termico, tif_termico_path),
-        (tfw_termico, tfw_termico_path),
-        (tif_rgb,     tif_rgb_path),
-        (tfw_rgb,     tfw_rgb_path),
-    ]:
-        with open(dst, "wb") as f:
-            shutil.copyfileobj(src.file, f)
+    tfw_termico_path = ""
+    if tfw_termico and tfw_termico.filename:
+        tfw_termico_path = os.path.join(job_dir, "termico_" + _norm(tfw_termico.filename))
+        with open(tfw_termico_path, "wb") as f:
+            shutil.copyfileobj(tfw_termico.file, f)
 
-    # Deduct 1 credit
+    if tif_rgb and tif_rgb.filename:
+        tif_rgb_path = os.path.join(job_dir, "rgb_" + _norm(tif_rgb.filename))
+        with open(tif_rgb_path, "wb") as f:
+            shutil.copyfileobj(tif_rgb.file, f)
+
+    if tfw_rgb and tfw_rgb.filename:
+        tfw_rgb_path = os.path.join(job_dir, "rgb_" + _norm(tfw_rgb.filename))
+        with open(tfw_rgb_path, "wb") as f:
+            shutil.copyfileobj(tfw_rgb.file, f)
+
+    # Scala 1 credito
     current.credits -= 1
 
     job = models.Job(
@@ -189,7 +196,6 @@ async def upload_mission(
     db.add(job)
     db.commit()
 
-    # Pipeline runs on the thermal ortomosaic
     background_tasks.add_task(_run_pipeline, job_id, tif_termico_path, tfw_termico_path, job_dir)
 
     return {

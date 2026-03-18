@@ -13,7 +13,7 @@ import auth_utils
 import models
 from sqlalchemy import text
 from database import Base, SessionLocal, engine
-from routers import admin, auth, missions, payments, reviews
+from routers import admin, auth, flighthub, missions, payments, reviews
 
 
 @asynccontextmanager
@@ -33,6 +33,8 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE jobs ADD COLUMN panel_efficiency FLOAT",
             "ALTER TABLE jobs ADD COLUMN panel_temp_coeff FLOAT",
             "CREATE TABLE IF NOT EXISTS reviews (id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id), stars INTEGER NOT NULL, comment TEXT, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
+            # FlightHub 2 tables (idempotenti — create_all le crea, le ALTER sono no-op se esistono)
+            "ALTER TABLE flighthub_connections ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP",
         ]:
             try:
                 conn.execute(text(col_sql))
@@ -103,6 +105,7 @@ app.include_router(missions.router)
 app.include_router(admin.router)
 app.include_router(payments.router)
 app.include_router(reviews.router)
+app.include_router(flighthub.router)
 
 # Serve old static files (admin.html, etc.)
 app.mount("/static", StaticFiles(directory="static"), name="static")
