@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, LogOut, Users, BarChart2, Star,
   Check, X, TrendingUp, Building2, Euro,
+  FolderOpen, FileDown, ChevronRight, ChevronDown,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -46,6 +47,26 @@ interface BillingItem {
   payment_method?: string
   receipt_url?: string
   stripe_receipt_url?: string
+}
+
+interface UploadedFile {
+  name: string
+  size_mb: number
+}
+
+interface UploadJob {
+  job_id: string
+  tif_filename?: string
+  status: string
+  created_at: string
+  files: UploadedFile[]
+}
+
+interface UploadCompany {
+  company_id: number
+  company_name: string
+  company_email: string
+  jobs: UploadJob[]
 }
 
 // ── Animated counter ───────────────────────────────────────────────────────
@@ -173,12 +194,16 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
 // ── Main Admin Page ────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews'>('companies')
+  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'uploads'>('companies')
 
   const [stats, setStats] = useState<Stats>({})
   const [companies, setCompanies] = useState<Company[]>([])
   const [billing, setBilling] = useState<BillingItem[]>([])
   const [adminReviews, setAdminReviews] = useState<ReviewItem[]>([])
+
+  const [uploads, setUploads] = useState<UploadCompany[]>([])
+  const [expandedCompany, setExpandedCompany] = useState<number | null>(null)
+  const [expandedJob, setExpandedJob] = useState<string | null>(null)
 
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [msg, setMsg] = useState('')
@@ -199,6 +224,9 @@ export default function AdminPage() {
       const arr = Array.isArray(d) ? d : d.reviews || []
       setAdminReviews(arr)
       setPendingReviews(arr.filter((r: ReviewItem) => r.status !== 'approved' && r.status !== 'approvata' && r.status !== 'rejected').length)
+    }).catch(() => {})
+    apiFetch('/admin/uploads').then((r) => r.json()).then((d) => {
+      setUploads(Array.isArray(d) ? d : [])
     }).catch(() => {})
   }, [])
 
@@ -342,6 +370,7 @@ export default function AdminPage() {
               { key: 'companies', label: 'Aziende', icon: <Users size={14} /> },
               { key: 'billing', label: 'Utilizzo & Fatturazione', icon: <BarChart2 size={14} /> },
               { key: 'reviews', label: 'Recensioni', icon: <Star size={14} />, badge: pendingReviews },
+              { key: 'uploads', label: 'Dati caricati', icon: <FolderOpen size={14} /> },
             ].map((t) => (
               <button
                 key={t.key}
@@ -602,6 +631,154 @@ export default function AdminPage() {
                             )}
                           </div>
                         </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+          {tab === 'uploads' && (
+            <motion.div
+              key="uploads"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="card mt-4"
+            >
+              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
+                File caricati dagli utenti
+              </h3>
+
+              {uploads.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
+                  Nessun file caricato
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {uploads.map((company) => {
+                    const isCompanyOpen = expandedCompany === company.company_id
+                    const totalFiles = company.jobs.reduce((s, j) => s + j.files.length, 0)
+                    return (
+                      <div
+                        key={company.company_id}
+                        className="rounded-xl overflow-hidden"
+                        style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+                      >
+                        {/* Company header */}
+                        <button
+                          className="w-full flex items-center justify-between p-4"
+                          style={{ background: 'rgba(255,255,255,0.03)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                          onClick={() => setExpandedCompany(isCompanyOpen ? null : company.company_id)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <FolderOpen size={16} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                            <div style={{ textAlign: 'left' }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{company.company_name}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{company.company_email}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
+                              {company.jobs.length} job · {totalFiles} file
+                            </span>
+                            {isCompanyOpen
+                              ? <ChevronDown size={15} style={{ color: '#64748b' }} />
+                              : <ChevronRight size={15} style={{ color: '#64748b' }} />
+                            }
+                          </div>
+                        </button>
+
+                        {/* Jobs list */}
+                        {isCompanyOpen && (
+                          <div style={{ padding: '0.5rem 1rem 1rem' }}>
+                            {company.jobs.map((job) => {
+                              const isJobOpen = expandedJob === job.job_id
+                              return (
+                                <div
+                                  key={job.job_id}
+                                  className="rounded-xl overflow-hidden mb-2"
+                                  style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+                                >
+                                  {/* Job header */}
+                                  <button
+                                    className="w-full flex items-center justify-between p-3"
+                                    style={{ background: 'rgba(255,255,255,0.02)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                                    onClick={() => setExpandedJob(isJobOpen ? null : job.job_id)}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div style={{ textAlign: 'left' }}>
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 500, color: '#f1f5f9' }}>
+                                          {job.tif_filename || `Job ${job.job_id.slice(0, 8)}`}
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                          {new Date(job.created_at).toLocaleDateString('it-IT')} · {job.files.length} file
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`badge ${job.status === 'completato' ? 'badge-green' : job.status === 'errore' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: '0.65rem' }}>
+                                        {job.status}
+                                      </span>
+                                      {isJobOpen
+                                        ? <ChevronDown size={14} style={{ color: '#64748b' }} />
+                                        : <ChevronRight size={14} style={{ color: '#64748b' }} />
+                                      }
+                                    </div>
+                                  </button>
+
+                                  {/* File list */}
+                                  {isJobOpen && (
+                                    <div style={{ padding: '0.5rem 0.75rem 0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                      {job.files.length === 0 ? (
+                                        <div style={{ fontSize: '0.8rem', color: '#475569', padding: '0.5rem 0' }}>Nessun file trovato su disco</div>
+                                      ) : (
+                                        <div className="flex flex-col gap-1.5">
+                                          {job.files.map((file) => (
+                                            <div
+                                              key={file.name}
+                                              className="flex items-center justify-between rounded-lg px-3 py-2"
+                                              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+                                            >
+                                              <div>
+                                                <span style={{ fontSize: '0.8rem', color: '#f1f5f9', fontWeight: 500 }}>{file.name}</span>
+                                                <span style={{ fontSize: '0.7rem', color: '#475569', marginLeft: 8 }}>{file.size_mb} MB</span>
+                                              </div>
+                                              <a
+                                                href={`/api/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`}
+                                                download={file.name}
+                                                onClick={async (e) => {
+                                                  e.preventDefault()
+                                                  const token = localStorage.getItem('token')
+                                                  const res = await fetch(`/api/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`, {
+                                                    headers: { Authorization: `Bearer ${token}` },
+                                                  })
+                                                  if (!res.ok) return
+                                                  const blob = await res.blob()
+                                                  const url = URL.createObjectURL(blob)
+                                                  const a = document.createElement('a')
+                                                  a.href = url
+                                                  a.download = file.name
+                                                  a.click()
+                                                  URL.revokeObjectURL(url)
+                                                }}
+                                                className="btn-ghost flex items-center gap-1.5"
+                                                style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem' }}
+                                              >
+                                                <FileDown size={13} /> Scarica
+                                              </a>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
