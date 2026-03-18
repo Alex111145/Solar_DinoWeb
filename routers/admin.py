@@ -15,6 +15,7 @@ from database import get_db
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 PRICE_PER_PANEL = float(os.getenv("PRICE_PER_PANEL", "0.01"))  # € per pannello rilevato
+UPLOAD_DIR      = os.getenv("UPLOAD_DIR", "elaborazioni")
 
 
 # ---------------------------------------------------------------------------
@@ -546,3 +547,85 @@ def delete_review(
     db.delete(r)
     db.commit()
     return {"message": "Recensione eliminata"}
+
+
+# ---------------------------------------------------------------------------
+# Uploads — file caricati dagli utenti
+# ---------------------------------------------------------------------------
+
+@router.get("/uploads")
+def list_uploads(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Per ogni azienda, lista tutti i job con i file caricati."""
+    companies = (
+        db.query(models.Company)
+        .filter(
+            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.deleted_at.is_(None),
+        )
+        .order_by(models.Company.created_at.desc())
+        .all()
+    )
+
+    result = []
+    for c in companies:
+        jobs = (
+            db.query(models.Job)
+            .filter(models.Job.company_id == c.id)
+            .order_by(models.Job.created_at.desc())
+            .all()
+        )
+
+        jobs_data = []
+        for j in jobs:
+            job_dir = os.path.join(UPLOAD_DIR, j.id)
+            files = []
+            if os.path.isdir(job_dir):
+                for fname in sorted(os.listdir(job_dir)):
+                    fpath = os.path.join(job_dir, fname)
+                    if os.path.isfile(fpath):
+                        size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 2)
+                        files.append({"name": fname, "size_mb": size_mb})
+
+            jobs_data.append({
+                "job_id":      j.id,
+                "tif_filename": j.tif_filename,
+                "status":      j.status,
+                "created_at":  j.created_at.isoformat(),
+                "files":       files,
+            })
+
+        if jobs_data:
+            result.append({
+                "company_id":      c.id,
+                "company_name":    c.ragione_sociale or c.name or c.email,
+                "company_email":   c.email,
+                "jobs":            jobs_data,
+            })
+
+    return result
+
+
+@router.get("/jobs/{job_id}/files/{filename}")
+def download_uploaded_file(
+    job_id:   str,
+    filename: str,
+    db:       Session = Depends(get_db),
+    _:        models.Company = Depends(auth_utils.require_admin),
+):
+    """Scarica un file originale caricato dall'utente."""
+    # sicurezza: blocca path traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Nome file non valido")
+
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job non trovato")
+
+    file_path = os.path.join(UPLOAD_DIR, job_id, filename)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="File non trovato")
+
+    return FileResponse(path=file_path, filename=filename)
