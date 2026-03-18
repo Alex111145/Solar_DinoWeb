@@ -1345,6 +1345,45 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Dati pannelli opzionali */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem', marginBottom: '1.25rem' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Dati pannelli
+              </span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '1px 6px' }}>
+                opzionale
+              </span>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '0.875rem' }}>
+              Inserendo marca, modello, efficienza nominale e coefficiente di temperatura, il report includerà il
+              <strong style={{ color: 'var(--text-secondary)' }}> calcolo della perdita di potenza stimata</strong> per
+              ogni pannello anomalo e la <strong style={{ color: 'var(--text-secondary)' }}>stima dell'impatto economico annuo</strong>.
+              Senza questi dati l'analisi rileva comunque tutti gli hotspot e i pannelli guasti.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {[
+                { k: 'marca', label: 'Marca' },
+                { k: 'modello', label: 'Modello' },
+                { k: 'dimensioni', label: 'Dimensioni (m)' },
+                { k: 'efficienza', label: 'Efficienza nominale (%)' },
+                { k: 'coefficiente', label: 'Coeff. temperatura (%/°C)' },
+              ].map(({ k, label }) => (
+                <div key={k}>
+                  <label className="form-label">{label}</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder={label}
+                    value={panelData[k as keyof typeof panelData]}
+                    onChange={(e) => setPanelData((p) => ({ ...p, [k]: e.target.value }))}
+                    style={{ fontSize: '0.85rem' }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
           <button
             className={fhStatus.connected && credits > 0 ? 'btn-amber' : 'btn-ghost'}
             style={{ fontSize: '0.925rem', opacity: fhStatus.connected && credits > 0 ? 1 : 0.45, cursor: fhStatus.connected && credits > 0 ? 'pointer' : 'not-allowed' }}
