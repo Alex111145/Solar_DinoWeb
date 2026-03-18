@@ -123,6 +123,7 @@ export default function LoginPage() {
       localStorage.setItem('email', data.email || regForm.email)
       localStorage.setItem('credits', String(data.credits ?? 2))
       localStorage.setItem('is_admin', 'false')
+      window.scrollTo(0, 0)
       navigate('/dashboard')
     } catch { setRegError('Errore di connessione'); setRegLoading(false) }
   }
@@ -160,6 +161,7 @@ export default function LoginPage() {
       localStorage.setItem('email', data.email || data.user?.email || email)
       localStorage.setItem('credits', String(data.credits ?? data.user?.credits ?? 0))
       localStorage.setItem('is_admin', String(data.is_admin ?? data.user?.is_admin ?? false))
+      window.scrollTo(0, 0)
       if (data.is_admin || data.user?.is_admin) navigate('/admin')
       else navigate('/dashboard')
     } catch {
