@@ -49,7 +49,7 @@ body::before {
   background:
     radial-gradient(ellipse 80% 50% at 20% 20%, rgba(245, 158, 11, 0.07) 0%, transparent 60%),
     radial-gradient(ellipse 60% 40% at 80% 70%, rgba(249, 115, 22, 0.05) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 60% at 50% 50%, rgba(6, 9, 18, 0) 0%, #060912 100%);
+    radial-gradient(ellipse 50% 60% at 50% 50%, rgba(6, 9, 18, 0) 0%, var(--bg) 100%);
   animation: aurora 18s ease-in-out infinite;
 }
 
@@ -67,8 +67,8 @@ body::after {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+    linear-gradient(var(--grid-line, rgba(255, 255, 255, 0.018)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line, rgba(255, 255, 255, 0.018)) 1px, transparent 1px);
   background-size: 48px 48px;
 }
 
@@ -78,14 +78,14 @@ body::after {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--scrollbar-track, rgba(255, 255, 255, 0.03));
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.2));
 }
 
 /* Card */
@@ -222,10 +222,10 @@ body::after {
 
 /* Glassmorphism navbar */
 .navbar-glass {
-  background: rgba(6, 9, 18, 0.85);
+  background: var(--navbar-bg, rgba(6, 9, 18, 0.85));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--navbar-border, rgba(255, 255, 255, 0.07));
 }
 
 /* Amber gradient text */
@@ -304,7 +304,7 @@ body::after {
   cursor: pointer;
   padding: 2px;
   transition: transform 0.15s ease;
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-muted);
 }
 
 .star-btn.filled {
