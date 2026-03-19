@@ -24,6 +24,9 @@ class Company(Base):
     is_manager             = Column(Boolean, default=False, index=True)
     must_change_password   = Column(Boolean, default=False)           # True per nuovi slave account
     subscription_active    = Column(Boolean, default=False)           # True se abbonamento Stripe attivo
+    subscription_plan      = Column(String, nullable=True)             # starter | medium | unlimited | unlimited_annual
+    subscription_start_date = Column(DateTime, nullable=True)          # Data inizio abbonamento corrente
+    subscription_end_date   = Column(DateTime, nullable=True)          # Data scadenza abbonamento corrente
     deleted_at             = Column(DateTime, nullable=True, index=True) # Soft delete — usato in quasi ogni query
     last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
     pec                  = Column(String, nullable=True)

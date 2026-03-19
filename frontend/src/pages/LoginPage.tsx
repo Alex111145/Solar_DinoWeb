@@ -261,7 +261,7 @@ export default function LoginPage() {
         style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}
       >
         <motion.div variants={fadeUp} className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-6" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600 }}>
-          <Zap size={12} /> AI per ispezione fotovoltaica
+          Accedi
         </motion.div>
 
         <motion.h1
@@ -311,35 +311,6 @@ export default function LoginPage() {
         </motion.div>
       </motion.section>
 
-      {/* ── Free trial banner ────────────────────────────────────── */}
-      <section className="relative z-10 px-6 lg:px-12 pb-10" style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
-          className="rounded-3xl p-8 flex flex-col sm:flex-row items-center justify-between gap-6"
-          style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(249,115,22,0.05))', border: '1.5px solid rgba(245,158,11,0.25)' }}
-        >
-          <div className="flex items-center gap-5">
-            <div style={{ width: 56, height: 56, background: 'linear-gradient(135deg,#f59e0b,#f97316)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, flexShrink: 0 }}>
-              🎁
-            </div>
-            <div>
-              <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Prova gratuita</div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: t.text, margin: 0, letterSpacing: '-0.02em' }}>
-                Richiedi il tuo primo credito gratuito
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: t.textMuted, margin: '4px 0 0', lineHeight: 1.5 }}>
-                Registrati, accedi alla dashboard e richiedi un credito gratuito direttamente all'amministratore.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowRegister(true)}
-            style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 14, padding: '0.85rem 2rem', color: '#000', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 20px rgba(245,158,11,0.3)' }}
-          >
-            Inizia gratis →
-          </button>
-        </motion.div>
-      </section>
 
       {/* ── Method panels ───────────────────────────────────────── */}
       <section className="relative z-10 px-6 lg:px-12 pb-20" style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>

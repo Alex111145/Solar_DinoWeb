@@ -33,6 +33,10 @@ interface Company {
   welcome_bonus_used?: boolean
   last_login_at?: string
   created_at?: string
+  subscription_active?: boolean
+  subscription_plan?: string | null
+  subscription_start_date?: string | null
+  subscription_end_date?: string | null
 }
 
 interface ReviewItem {
@@ -59,10 +63,29 @@ interface BillingItem {
   id: number
   name?: string
   email?: string
+  vat_number?: string
   credits?: number
   jobs_completed?: number
   total_paid?: number
   payments?: BillingPayment[]
+}
+
+interface AdminTicketMsg {
+  id: number
+  sender: string
+  text: string
+  created_at: string
+}
+
+interface AdminTicketDetail {
+  id: number
+  subject: string
+  message: string
+  status: string
+  created_at: string
+  company_name?: string
+  company_email?: string
+  messages: AdminTicketMsg[]
 }
 
 interface UploadedFile {
@@ -91,7 +114,7 @@ interface AdminTicket {
   company_email?: string
   subject: string
   message: string
-  status: 'aperto' | 'in_elaborazione' | 'risolto'
+  status: 'in_elaborazione' | 'risolto'
   created_at: string
 }
 
@@ -279,8 +302,6 @@ export default function AdminPage() {
   const [adminReviews, setAdminReviews] = useState<ReviewItem[]>([])
 
   const [uploads, setUploads] = useState<UploadCompany[]>([])
-  const [replyTexts, setReplyTexts] = useState<Record<number, string>>({})
-  const [replyLoading, setReplyLoading] = useState<Record<number, boolean>>({})
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
   const [enterpriseLogs, setEnterpriseLogs] = useState<{id:number,company_name:string,company_email:string,vat_number:string,fh_workspace_id:string,data_consent:boolean,created_at:string}[]>([])
@@ -298,10 +319,29 @@ export default function AdminPage() {
   const [tickets, setTickets] = useState<AdminTicket[]>([])
   const [pendingTickets, setPendingTickets] = useState(0)
 
+  // Admin ticket chat modal
+  const [adminTicketDetail, setAdminTicketDetail] = useState<AdminTicketDetail | null>(null)
+  const [adminReplyText, setAdminReplyText] = useState('')
+  const [adminReplyLoading, setAdminReplyLoading] = useState(false)
+  const [adminTicketSubTab, setAdminTicketSubTab] = useState<'aperte' | 'chiuse'>('aperte')
+
   // Billing filters
   const [billingFilterCompany, setBillingFilterCompany] = useState('')
   const [billingFilterMonth, setBillingFilterMonth] = useState('')
   const [billingFilterYear, setBillingFilterYear] = useState('')
+
+  // Uploads filters
+  const [uploadsFilterCompany, setUploadsFilterCompany] = useState('')
+  const [uploadsFilterMonth, setUploadsFilterMonth] = useState('')
+  const [uploadsFilterYear, setUploadsFilterYear] = useState('')
+
+  // Reviews filters
+  const [reviewsFilterMonth, setReviewsFilterMonth] = useState('')
+  const [reviewsFilterYear, setReviewsFilterYear] = useState('')
+
+  // Tickets filters
+  const [ticketsFilterMonth, setTicketsFilterMonth] = useState('')
+  const [ticketsFilterYear, setTicketsFilterYear] = useState('')
 
   // Chiudi dropdown al click fuori
   useEffect(() => {
@@ -337,7 +377,7 @@ export default function AdminPage() {
       if (d) {
         const arr = Array.isArray(d) ? d : []
         setTickets(arr)
-        setPendingTickets(arr.filter((t: AdminTicket) => t.status === 'aperto').length)
+        setPendingTickets(arr.filter((t: AdminTicket) => t.status === 'in_elaborazione').length)
       }
     }).catch(() => {})
   }
@@ -443,27 +483,8 @@ export default function AdminPage() {
     } catch { }
   }
 
-  async function sendReply(ticketId: number) {
-    const text = (replyTexts[ticketId] || '').trim()
-    if (!text) return
-    setReplyLoading((prev) => ({ ...prev, [ticketId]: true }))
-    try {
-      const res = await apiFetch(`/admin/tickets/${ticketId}/reply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reply: text }),
-      })
-      if (res.ok) {
-        setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, status: 'in_elaborazione' } : t))
-        setReplyTexts((prev) => ({ ...prev, [ticketId]: '' }))
-        setMsg('Risposta inviata al cliente')
-        setTimeout(() => setMsg(''), 3000)
-      }
-    } catch { }
-    setReplyLoading((prev) => ({ ...prev, [ticketId]: false }))
-  }
 
-  async function updateTicketStatus(id: number, status: 'aperto' | 'in_elaborazione' | 'risolto') {
+  async function updateTicketStatus(id: number, status: 'in_elaborazione' | 'risolto') {
     try {
       const res = await apiFetch(`/admin/tickets/${id}/status`, {
         method: 'PATCH',
@@ -472,11 +493,44 @@ export default function AdminPage() {
       })
       if (res.ok) {
         setTickets((prev) => prev.map((t) => t.id === id ? { ...t, status } : t))
-        setPendingTickets(() => tickets.filter((t) => (t.id === id ? status : t.status) === 'aperto').length)
+        if (adminTicketDetail?.id === id) setAdminTicketDetail((prev) => prev ? { ...prev, status } : prev)
+        setPendingTickets(() => tickets.filter((t) => (t.id === id ? status : t.status) === 'in_elaborazione').length)
         setMsg('Stato aggiornato')
         setTimeout(() => setMsg(''), 3000)
       }
     } catch { }
+  }
+
+  async function openAdminTicket(ticketId: number) {
+    try {
+      const res = await apiFetch(`/admin/tickets/${ticketId}`)
+      if (res.ok) {
+        const d = await res.json()
+        setAdminTicketDetail(d)
+        setAdminReplyText('')
+      }
+    } catch { }
+  }
+
+  async function sendAdminReply() {
+    if (!adminTicketDetail || !adminReplyText.trim()) return
+    setAdminReplyLoading(true)
+    try {
+      const res = await apiFetch(`/admin/tickets/${adminTicketDetail.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: adminReplyText.trim() }),
+      })
+      if (res.ok) {
+        const newMsg: AdminTicketMsg = { id: Date.now(), sender: 'admin', text: adminReplyText.trim(), created_at: new Date().toISOString() }
+        setAdminTicketDetail((prev) => prev ? { ...prev, status: 'in_elaborazione', messages: [...prev.messages, newMsg] } : prev)
+        setTickets((prev) => prev.map((t) => t.id === adminTicketDetail.id ? { ...t, status: 'in_elaborazione' } : t))
+        setAdminReplyText('')
+        setMsg('Risposta inviata al cliente')
+        setTimeout(() => setMsg(''), 3000)
+      }
+    } catch { }
+    setAdminReplyLoading(false)
   }
 
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
@@ -485,7 +539,7 @@ export default function AdminPage() {
   const statCards = [
     { icon: <Building2 size={18} />, label: 'Aziende attive', value: stats.active_companies || 0, prefix: '' },
     { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
-    { icon: <TrendingUp size={18} />, label: 'Fatturato medio mese', value: stats.revenue_month_eur || 0, prefix: '€' },
+    { icon: <TrendingUp size={18} />, label: 'Fatturato mese corrente', value: stats.revenue_month_eur || 0, prefix: '€' },
     { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
   ]
 
@@ -547,7 +601,7 @@ export default function AdminPage() {
         </AnimatePresence>
 
         {/* Stats row */}
-        <motion.div variants={cardAnim} className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+        <motion.div variants={cardAnim} className="flex flex-wrap justify-center gap-4 mb-4">
           {statCards.map((s, i) => (
             <motion.div
               key={s.label}
@@ -555,6 +609,7 @@ export default function AdminPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.08, duration: 0.5 }}
               className="card flex flex-col gap-3"
+              style={{ minWidth: 180, flex: '1 1 200px', maxWidth: 260 }}
             >
               <div
                 style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}
@@ -641,8 +696,9 @@ export default function AdminPage() {
                   <thead>
                     <tr>
                       <th>Azienda</th>
-                      <th>Pannelli</th>
-                      <th>Crediti</th>
+                      <th>Abbonamento</th>
+                      <th>Scadenza</th>
+                      <th>Crediti rimasti</th>
                       <th>Registrata</th>
                       <th>Ultimo accesso</th>
                       <th>IP</th>
@@ -661,7 +717,33 @@ export default function AdminPage() {
                           {c.ragione_sociale || c.name || '—'}
                         </td>
                         <td>
-                          <span style={{ color: '#94a3b8', fontWeight: 600 }}>{c.panels_detected ?? 0}</span>
+                          {c.subscription_active && c.subscription_plan ? (
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 9px',
+                              borderRadius: 999,
+                              fontSize: '0.7rem',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                              ...(c.subscription_plan === 'starter'          ? { background: 'rgba(59,130,246,0.12)',  color: '#60a5fa' }
+                                : c.subscription_plan === 'medium'           ? { background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }
+                                : c.subscription_plan === 'unlimited_annual' ? { background: 'rgba(139,92,246,0.12)', color: '#a78bfa' }
+                                :                                              { background: 'rgba(34,197,94,0.12)',  color: '#22c55e' }),
+                            }}>
+                              {c.subscription_plan === 'starter'          ? 'Starter'
+                               : c.subscription_plan === 'medium'          ? 'Medium'
+                               : c.subscription_plan === 'unlimited_annual' ? 'Annual'
+                               : 'Unlimited'}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#475569', fontSize: '0.78rem' }}>—</span>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '0.75rem', color: c.subscription_end_date ? '#94a3b8' : '#475569' }}>
+                            {c.subscription_end_date ?? '—'}
+                          </span>
                         </td>
                         <td>
                           <span style={{ color: '#f59e0b', fontWeight: 600 }}>{c.credits ?? 0}</span>
@@ -973,17 +1055,56 @@ export default function AdminPage() {
               transition={{ duration: 0.25 }}
               className="card mt-4"
             >
-              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
-                Recensioni ({adminReviews.length})
-              </h3>
-
-              {adminReviews.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-                  Nessuna recensione
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
+                  Recensioni ({adminReviews.length})
+                </h3>
+                <div className="flex items-center gap-2">
+                  <select value={reviewsFilterMonth} onChange={(e) => setReviewsFilterMonth(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: reviewsFilterMonth ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}>
+                    <option value="">Tutti i mesi</option>
+                    {['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'].map((m, i) => (
+                      <option key={m} value={String(i + 1)}>{m}</option>
+                    ))}
+                  </select>
+                  <select value={reviewsFilterYear} onChange={(e) => setReviewsFilterYear(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: reviewsFilterYear ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}>
+                    <option value="">Tutti gli anni</option>
+                    {[2025, 2026, 2027].map((y) => <option key={y} value={String(y)}>{y}</option>)}
+                  </select>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {adminReviews.map((r) => {
+              </div>
+
+              {(() => {
+                const filteredReviews = adminReviews.filter((r) => {
+                  if (!r.created_at) return true
+                  const d = new Date(r.created_at)
+                  if (reviewsFilterMonth && String(d.getMonth() + 1) !== reviewsFilterMonth) return false
+                  if (reviewsFilterYear && String(d.getFullYear()) !== reviewsFilterYear) return false
+                  return true
+                })
+                // Raggruppa per mese
+                const byMonth: Record<string, typeof filteredReviews> = {}
+                filteredReviews.forEach((r) => {
+                  const key = r.created_at
+                    ? new Date(r.created_at).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+                    : 'Data sconosciuta'
+                  if (!byMonth[key]) byMonth[key] = []
+                  byMonth[key].push(r)
+                })
+                const months = Object.keys(byMonth)
+                if (months.length === 0) return (
+                  <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>Nessuna recensione</div>
+                )
+                return (
+                  <div className="flex flex-col gap-5">
+                    {months.map((month) => (
+                      <div key={month}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid rgba(245,158,11,0.15)' }}>
+                          {month} · {byMonth[month].length} recension{byMonth[month].length === 1 ? 'e' : 'i'}
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          {byMonth[month].map((r) => {
                     const approved = r.status === 'approved' || r.status === 'approvata'
                     return (
                       <div
@@ -1048,9 +1169,13 @@ export default function AdminPage() {
                         </div>
                       </div>
                     )
-                  })}
-                </div>
-              )}
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </motion.div>
           )}
           {tab === 'tickets' && (
@@ -1062,90 +1187,106 @@ export default function AdminPage() {
               transition={{ duration: 0.25 }}
               className="card mt-4"
             >
-              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
-                Segnalazioni / Ticket ({tickets.length})
-              </h3>
-
-              {tickets.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-                  Nessuna segnalazione
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
+                  Segnalazioni / Ticket
+                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Sub-tab */}
+                  <div className="flex gap-1" style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '3px' }}>
+                    {(['aperte', 'chiuse'] as const).map((sub) => (
+                      <button key={sub} onClick={() => setAdminTicketSubTab(sub)}
+                        style={{ background: adminTicketSubTab === sub ? 'rgba(245,158,11,0.15)' : 'transparent', border: adminTicketSubTab === sub ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent', color: adminTicketSubTab === sub ? '#f59e0b' : '#64748b', borderRadius: 8, padding: '0.3rem 0.9rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>
+                        {sub === 'aperte' ? `In elaborazione (${tickets.filter(t => t.status !== 'risolto').length})` : `Chiuse (${tickets.filter(t => t.status === 'risolto').length})`}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Filtri mese */}
+                  <select value={ticketsFilterMonth} onChange={(e) => setTicketsFilterMonth(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: ticketsFilterMonth ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}>
+                    <option value="">Tutti i mesi</option>
+                    {['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'].map((m, i) => (
+                      <option key={m} value={String(i + 1)}>{m}</option>
+                    ))}
+                  </select>
+                  <select value={ticketsFilterYear} onChange={(e) => setTicketsFilterYear(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: ticketsFilterYear ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}>
+                    <option value="">Tutti gli anni</option>
+                    {[2025, 2026, 2027].map((y) => <option key={y} value={String(y)}>{y}</option>)}
+                  </select>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {tickets.map((t) => {
-                    const statusColor = t.status === 'risolto' ? '#22c55e' : t.status === 'in_elaborazione' ? '#eab308' : '#94a3b8'
-                    const statusLabel = t.status === 'risolto' ? 'Risolto' : t.status === 'in_elaborazione' ? 'In elaborazione' : 'Aperto'
-                    return (
-                      <div
-                        key={t.id}
-                        className="rounded-xl p-4"
-                        style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${t.status === 'risolto' ? 'rgba(34,197,94,0.15)' : t.status === 'in_elaborazione' ? 'rgba(234,179,8,0.2)' : 'rgba(255,255,255,0.07)'}` }}
-                      >
-                        <div className="flex items-start justify-between gap-4 flex-wrap">
-                          <div style={{ flex: 1 }}>
-                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                              <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>#{t.id}</span>
-                              <span style={{ fontSize: '0.8rem', color: '#f1f5f9', fontWeight: 700 }}>{t.subject}</span>
-                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
+              </div>
+
+              {(() => {
+                const byStatus = tickets.filter(t => adminTicketSubTab === 'chiuse' ? t.status === 'risolto' : t.status !== 'risolto')
+                const filtered = byStatus.filter((t) => {
+                  if (!t.created_at) return true
+                  const d = new Date(t.created_at)
+                  if (ticketsFilterMonth && String(d.getMonth() + 1) !== ticketsFilterMonth) return false
+                  if (ticketsFilterYear && String(d.getFullYear()) !== ticketsFilterYear) return false
+                  return true
+                })
+                // Raggruppa per mese
+                const byMonth: Record<string, typeof filtered> = {}
+                filtered.forEach((t) => {
+                  const key = t.created_at
+                    ? new Date(t.created_at).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+                    : 'Data sconosciuta'
+                  if (!byMonth[key]) byMonth[key] = []
+                  byMonth[key].push(t)
+                })
+                const months = Object.keys(byMonth)
+                if (months.length === 0) return (
+                  <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>Nessuna segnalazione</div>
+                )
+                return (
+                  <div className="flex flex-col gap-5">
+                    {months.map((month) => (
+                      <div key={month}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid rgba(245,158,11,0.15)' }}>
+                          {month} · {byMonth[month].length} ticket
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {byMonth[month].map((t) => {
+                      const statusColor = t.status === 'risolto' ? '#22c55e' : '#eab308'
+                      const statusLabel = t.status === 'risolto' ? 'Chiuso' : 'In elaborazione'
+                      return (
+                        <button
+                          key={t.id}
+                          className="w-full text-left rounded-xl p-3"
+                          style={{
+                            background: 'rgba(255,255,255,0.025)',
+                            border: `1px solid ${t.status === 'risolto' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.07)'}`,
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => openAdminTicket(t.id)}
+                        >
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 700 }}>#{t.id}</span>
+                              <span style={{ fontSize: '0.85rem', color: '#f1f5f9', fontWeight: 600 }}>{t.subject}</span>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.12rem 0.4rem' }}>
                                 {statusLabel}
                               </span>
                             </div>
-                            <div className="flex items-center gap-3 mb-2 flex-wrap">
-                              <span style={{ fontSize: '0.78rem', color: '#64748b' }}>{t.company_name || '—'}</span>
-                              <span style={{ fontSize: '0.72rem', color: '#475569' }}>{t.company_email}</span>
-                              <span style={{ fontSize: '0.72rem', color: '#475569' }}>
-                                {new Date(t.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{t.company_name || '—'}</span>
+                              <span style={{ fontSize: '0.7rem', color: '#475569' }}>
+                                {new Date(t.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
                               </span>
+                              <ChevronRight size={13} style={{ color: '#475569' }} />
                             </div>
-                            <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{t.message}</p>
-                            {/* Reply form */}
-                            {t.status !== 'risolto' && (
-                              <div style={{ marginTop: 10 }}>
-                                <textarea
-                                  rows={2}
-                                  className="form-input"
-                                  style={{ fontSize: '0.8rem', resize: 'vertical', marginBottom: 6 }}
-                                  placeholder="Scrivi la risposta al cliente..."
-                                  value={replyTexts[t.id] || ''}
-                                  onChange={(e) => setReplyTexts((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                                />
-                                <button
-                                  className="btn-amber"
-                                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.8rem' }}
-                                  disabled={replyLoading[t.id] || !(replyTexts[t.id] || '').trim()}
-                                  onClick={() => sendReply(t.id)}
-                                >
-                                  {replyLoading[t.id] ? 'Invio...' : 'Invia risposta'}
-                                </button>
-                              </div>
-                            )}
                           </div>
-                          <div className="flex flex-col gap-1.5 flex-shrink-0">
-                            {t.status !== 'risolto' && (
-                              <button
-                                className="btn-ghost"
-                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.3)', whiteSpace: 'nowrap' }}
-                                onClick={() => updateTicketStatus(t.id, 'risolto')}
-                              >
-                                <Check size={12} /> Risolto
-                              </button>
-                            )}
-                            {t.status !== 'aperto' && (
-                              <button
-                                className="btn-ghost"
-                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#94a3b8', borderColor: 'rgba(148,163,184,0.2)', whiteSpace: 'nowrap' }}
-                                onClick={() => updateTicketStatus(t.id, 'aperto')}
-                              >
-                                Riapri
-                              </button>
-                            )}
-                          </div>
+                        </button>
+                      )
+                          })}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )
+              })()}
+
             </motion.div>
           )}
           {tab === 'uploads' && (
@@ -1157,17 +1298,50 @@ export default function AdminPage() {
               transition={{ duration: 0.25 }}
               className="card mt-4"
             >
-              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
-                File caricati dagli utenti
-              </h3>
-
-              {uploads.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-                  Nessun file caricato
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
+                  File caricati dagli utenti ({uploads.length} aziende)
+                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input type="text" placeholder="Filtra per azienda..."
+                    value={uploadsFilterCompany} onChange={(e) => setUploadsFilterCompany(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: '#f1f5f9', fontSize: '0.8rem', minWidth: 160 }} />
+                  <select value={uploadsFilterMonth} onChange={(e) => setUploadsFilterMonth(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: uploadsFilterMonth ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}>
+                    <option value="">Tutti i mesi</option>
+                    {['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'].map((m, i) => (
+                      <option key={m} value={String(i + 1)}>{m}</option>
+                    ))}
+                  </select>
+                  <select value={uploadsFilterYear} onChange={(e) => setUploadsFilterYear(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: uploadsFilterYear ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}>
+                    <option value="">Tutti gli anni</option>
+                    {[2025, 2026, 2027].map((y) => <option key={y} value={String(y)}>{y}</option>)}
+                  </select>
                 </div>
-              ) : (
+              </div>
+
+              {(() => {
+                const filteredUploads = uploads.filter((c) => {
+                  if (uploadsFilterCompany && !(c.company_name || '').toLowerCase().includes(uploadsFilterCompany.toLowerCase())) return false
+                  if (uploadsFilterMonth || uploadsFilterYear) {
+                    const hasMatch = c.jobs.some((j) => {
+                      if (!j.created_at) return false
+                      const d = new Date(j.created_at)
+                      if (uploadsFilterMonth && String(d.getMonth() + 1) !== uploadsFilterMonth) return false
+                      if (uploadsFilterYear && String(d.getFullYear()) !== uploadsFilterYear) return false
+                      return true
+                    })
+                    if (!hasMatch) return false
+                  }
+                  return true
+                })
+                if (filteredUploads.length === 0) return (
+                  <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>Nessun file caricato</div>
+                )
+                return (
                 <div className="flex flex-col gap-2">
-                  {uploads.map((company) => {
+                  {filteredUploads.map((company) => {
                     const isCompanyOpen = expandedCompany === company.company_id
                     const totalElab = company.jobs.length
                     const totalFiles = company.jobs.reduce((s, j) => s + j.files.length, 0)
@@ -1293,7 +1467,8 @@ export default function AdminPage() {
                     )
                   })}
                 </div>
-              )}
+                )
+              })()}
             </motion.div>
           )}
           {tab === 'enterprise' && (
@@ -1375,6 +1550,117 @@ export default function AdminPage() {
       <AnimatePresence>
         {selectedCompany && (
           <CompanyModal company={selectedCompany} onClose={() => setSelectedCompany(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* Ticket chat modal */}
+      <AnimatePresence>
+        {adminTicketDetail && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+            onClick={() => setAdminTicketDetail(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.22 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, width: '100%', maxWidth: 600, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}
+            >
+              {/* Header */}
+              <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
+                <div>
+                  <div style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>
+                    Ticket #{adminTicketDetail.id} · {adminTicketDetail.company_name}
+                  </div>
+                  <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.95rem' }}>{adminTicketDetail.subject}</div>
+                  <div style={{ marginTop: 4 }}>
+                    <span style={{
+                      fontSize: '0.68rem', fontWeight: 700, padding: '0.12rem 0.5rem', borderRadius: 5,
+                      ...(adminTicketDetail.status === 'risolto'
+                        ? { background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }
+                        : { background: 'rgba(234,179,8,0.12)', color: '#eab308', border: '1px solid rgba(234,179,8,0.3)' }),
+                    }}>
+                      {adminTicketDetail.status === 'risolto' ? 'Chiuso' : 'In elaborazione'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {adminTicketDetail.status !== 'risolto' && (
+                    <button
+                      className="btn-ghost"
+                      style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.3)', whiteSpace: 'nowrap' }}
+                      onClick={() => updateTicketStatus(adminTicketDetail.id, 'risolto')}
+                    >
+                      <Check size={12} /> Chiudi tiket
+                    </button>
+                  )}
+                  <button className="btn-ghost" style={{ padding: '0.3rem' }} onClick={() => setAdminTicketDetail(null)}>
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div style={{ padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
+                {adminTicketDetail.messages.length === 0 && (
+                  <div style={{ color: '#475569', fontSize: '0.82rem', textAlign: 'center', padding: '1rem 0' }}>
+                    Nessun messaggio ancora.
+                  </div>
+                )}
+                {adminTicketDetail.messages.map((m) => (
+                  <div
+                    key={m.id}
+                    style={{
+                      alignSelf: m.sender === 'admin' ? 'flex-end' : 'flex-start',
+                      maxWidth: '78%',
+                      background: m.sender === 'admin' ? 'linear-gradient(135deg,#f59e0b,#f97316)' : 'rgba(255,255,255,0.07)',
+                      border: m.sender === 'client' ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                      borderRadius: m.sender === 'admin' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                      padding: '0.6rem 0.85rem',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, marginBottom: 3, color: m.sender === 'admin' ? 'rgba(0,0,0,0.6)' : '#f59e0b' }}>
+                      {m.sender === 'admin' ? 'SolarDino (Admin)' : adminTicketDetail.company_name || 'Cliente'}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: m.sender === 'admin' ? '#000' : '#f1f5f9', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.text}</div>
+                    <div style={{ fontSize: '0.62rem', color: m.sender === 'admin' ? 'rgba(0,0,0,0.5)' : '#475569', marginTop: 4, textAlign: 'right' }}>
+                      {new Date(m.created_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Reply input */}
+              {adminTicketDetail.status !== 'risolto' ? (
+                <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
+                  <textarea
+                    rows={2}
+                    placeholder="Scrivi la risposta al cliente..."
+                    value={adminReplyText}
+                    onChange={(e) => setAdminReplyText(e.target.value)}
+                    style={{ flex: 1, background: '#060912', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '0.6rem 0.85rem', color: '#f1f5f9', fontSize: '0.85rem', resize: 'none' }}
+                  />
+                  <button
+                    className="btn-amber"
+                    style={{ fontSize: '0.8rem', padding: '0.6rem 1rem', flexShrink: 0 }}
+                    disabled={adminReplyLoading || !adminReplyText.trim()}
+                    onClick={sendAdminReply}
+                  >
+                    {adminReplyLoading ? 'Invio...' : 'Invia'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.07)', fontSize: '0.8rem', color: '#475569', textAlign: 'center', flexShrink: 0 }}>
+                  Ticket chiuso — il cliente ha ricevuto notifica.
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

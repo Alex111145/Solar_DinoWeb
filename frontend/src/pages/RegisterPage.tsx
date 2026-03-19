@@ -233,7 +233,7 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="form-label">Nome</label>
+                <label className="form-label">Cognome e Nome</label>
                 <input
                   className="form-input"
                   type="text"

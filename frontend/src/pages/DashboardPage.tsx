@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Upload, CreditCard, History, Star, LogOut,
@@ -236,7 +235,7 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
 interface SlaveAccount { id: number; name: string; email: string; is_active: boolean }
 
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete, subscriptionActive, isManager,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete, subscriptionActive, subscriptionPlan, subscriptionEndDate, isManager,
 }: {
   name: string
   email: string
@@ -251,9 +250,10 @@ function ProfileSidebar({
   onToggleTheme: () => void
   onRequestDelete: () => void
   subscriptionActive: boolean
+  subscriptionPlan: string | null
+  subscriptionEndDate: string | null
   isManager: boolean
 }) {
-  const navigate = useNavigate()
   const [openSection, setOpenSection] = useState<string | null>(null)
   const [newEmail, setNewEmail] = useState('')
   const [emailPwd, setEmailPwd] = useState('')
@@ -265,6 +265,7 @@ function ProfileSidebar({
   const [editComment, setEditComment] = useState(myReview?.comment ?? '')
   const [reviewMsg, setReviewMsg] = useState('')
   const [subMsg, setSubMsg] = useState('')
+  const [showCancelSubModal, setShowCancelSubModal] = useState(false)
 
   useEffect(() => {
     if (myReview) {
@@ -329,23 +330,23 @@ function ProfileSidebar({
   }
 
   async function cancelSubscription() {
+    setShowCancelSubModal(false)
     try {
-      const res = await apiFetch('/payments/portal', { method: 'POST' })
+      const res = await apiFetch('/payments/cancel-subscription', { method: 'POST' })
       if (res.ok) {
-        const data = await res.json()
-        window.location.href = data.portal_url
+        setSubMsg('Abbonamento cancellato. Non verrà rinnovato alla scadenza.')
       } else {
         const err = await res.json().catch(() => ({}))
-        setSubMsg(err.detail || 'Nessun abbonamento attivo trovato.')
-        setTimeout(() => setSubMsg(''), 4000)
+        setSubMsg(err.detail || 'Errore durante la cancellazione.')
       }
-    } catch { setSubMsg('Errore di rete'); setTimeout(() => setSubMsg(''), 4000) }
+    } catch { setSubMsg('Errore di rete') }
+    setTimeout(() => setSubMsg(''), 5000)
   }
 
-  function logout() {
+  async function logout() {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
     localStorage.clear()
-    navigate('/login')
-    fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
+    window.location.href = '/login'
   }
 
   const initials = name ? name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2) : '??'
@@ -418,6 +419,25 @@ function ProfileSidebar({
           {msg && (
             <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b', fontSize: '0.8rem' }}>
               {msg}
+            </div>
+          )}
+
+          {/* Banner scadenza abbonamento */}
+          {subscriptionActive && subscriptionEndDate && (
+            <div className="mb-2 rounded-xl px-4 py-3" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <div style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>
+                Abbonamento attivo
+              </div>
+              <div style={{ fontSize: '0.82rem', color: isDark ? '#f1f5f9' : '#1e293b', fontWeight: 600 }}>
+                {subscriptionPlan === 'starter' ? 'Starter'
+                  : subscriptionPlan === 'medium' ? 'Medium'
+                  : subscriptionPlan === 'unlimited' ? 'Unlimited'
+                  : subscriptionPlan === 'unlimited_annual' ? 'Annual'
+                  : subscriptionPlan ?? '—'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: isDark ? '#94a3b8' : '#64748b', marginTop: 2 }}>
+                Scade il <span style={{ fontWeight: 600, color: isDark ? '#f1f5f9' : '#334155' }}>{subscriptionEndDate}</span>
+              </div>
             </div>
           )}
 
@@ -685,7 +705,7 @@ function ProfileSidebar({
                   <button
                     className="btn-ghost w-full"
                     style={{ fontSize: '0.85rem', padding: '0.6rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
-                    onClick={cancelSubscription}
+                    onClick={() => setShowCancelSubModal(true)}
                   >
                     Annulla abbonamento
                   </button>
@@ -706,16 +726,75 @@ function ProfileSidebar({
           </button>
         </div>
       </motion.div>
+
+      {/* Modal conferma cancellazione abbonamento */}
+      {showCancelSubModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+          onClick={() => setShowCancelSubModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: isDark ? '#0d1117' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, borderRadius: 20, padding: '1.75rem', width: '100%', maxWidth: 400 }}
+          >
+            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: isDark ? '#f1f5f9' : '#1e293b', marginBottom: 10 }}>
+              Annullare l'abbonamento?
+            </div>
+            <p style={{ fontSize: '0.85rem', color: isDark ? '#94a3b8' : '#64748b', lineHeight: 1.6, marginBottom: 6 }}>
+              Non ti verranno addebitati costi per il rinnovo.{' '}
+              {subscriptionEndDate
+                ? <>Manterrai i crediti rimasti fino al <strong style={{ color: isDark ? '#f1f5f9' : '#1e293b' }}>{subscriptionEndDate}</strong>.</>
+                : 'Manterrai i crediti rimasti fino alla scadenza.'}
+            </p>
+            <p style={{ fontSize: '0.78rem', color: '#f59e0b', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              ⚠️ L'abbonamento è condiviso tra tutti gli account del tuo team. Annullarlo rimuoverà i benefici per tutta l'azienda.
+            </p>
+            <div className="flex gap-3">
+              <button
+                className="btn-ghost flex-1"
+                style={{ fontSize: '0.875rem', padding: '0.65rem' }}
+                onClick={() => setShowCancelSubModal(false)}
+              >
+                Torna indietro
+              </button>
+              <button
+                className="btn-ghost flex-1"
+                style={{ fontSize: '0.875rem', padding: '0.65rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                onClick={cancelSubscription}
+              >
+                Sì, annulla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
 
 // ── Support Card ────────────────────────────────────────────────────────────
-function SupportCard() {
+interface TicketListItem { id: number; subject: string; status: string; created_at: string }
+
+function statusBadge(s: string) {
+  if (s === 'risolto')         return { label: 'Chiuso',         bg: 'rgba(239,68,68,0.1)',   color: '#f87171' }
+  if (s === 'in_elaborazione') return { label: 'In elaborazione', bg: 'rgba(245,158,11,0.1)', color: '#f59e0b' }
+  return                              { label: 'Aperto',          bg: 'rgba(34,197,94,0.1)',  color: '#22c55e' }
+}
+
+function SupportCard({ onOpenTicket }: { onOpenTicket: (id: number) => void }) {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+  const [tickets, setTickets] = useState<TicketListItem[]>([])
+  const [showNewForm, setShowNewForm] = useState(false)
+
+  useEffect(() => {
+    apiFetch('/auth/tickets')
+      .then((r) => r.ok ? r.json() : [])
+      .then((d) => { if (Array.isArray(d)) setTickets(d) })
+      .catch(() => {})
+  }, [])
 
   async function send() {
     if (!subject.trim() || !message.trim()) return
@@ -736,6 +815,9 @@ function SupportCard() {
         setResult({ ok: true, text: successText })
         setSubject('')
         setMessage('')
+        setShowNewForm(false)
+        // Ricarica lista ticket
+        apiFetch('/auth/tickets').then((r) => r.ok ? r.json() : []).then((dl) => { if (Array.isArray(dl)) setTickets(dl) }).catch(() => {})
       } else {
         setResult({ ok: false, text: d.detail || 'Errore durante l\'invio.' })
       }
@@ -752,68 +834,123 @@ function SupportCard() {
       transition={{ duration: 0.5 }}
       className="card mb-8"
     >
-      <div className="flex items-center gap-3 mb-5">
-        <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
-          <Mail size={17} />
-        </div>
-        <div>
-          <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Richiesta di assistenza</h2>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>Il nostro team risponde entro 24h via email</div>
-        </div>
-      </div>
-      <div className="flex flex-col gap-3">
-        <div>
-          <label className="form-label">Oggetto</label>
-          <input
-            className="form-input"
-            placeholder="Es: problema con il download dei risultati"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            maxLength={120}
-          />
-        </div>
-        <div>
-          <label className="form-label">Messaggio</label>
-          <textarea
-            className="form-input"
-            rows={4}
-            placeholder="Descrivi il problema o la richiesta nel dettaglio..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            maxLength={5000}
-            style={{ resize: 'vertical' }}
-          />
-        </div>
-        {result && (
-          <div
-            className="rounded-xl p-3"
-            style={{
-              background: result.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
-              border: `1px solid ${result.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
-              color: result.ok ? '#22c55e' : '#ef4444',
-              fontSize: '0.85rem',
-            }}
-          >
-            {result.text}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+            <Mail size={17} />
           </div>
-        )}
+          <div>
+            <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Segnalazioni</h2>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>Il nostro team risponde entro 24h</div>
+          </div>
+        </div>
         <button
           className="btn-amber"
-          style={{ alignSelf: 'flex-start' }}
-          disabled={sending || !subject.trim() || !message.trim()}
-          onClick={send}
+          style={{ fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
+          onClick={() => { setShowNewForm((v) => !v); setResult(null) }}
         >
-          <Mail size={15} /> {sending ? 'Invio...' : 'Invia richiesta'}
+          {showNewForm ? 'Annulla' : '+ Nuova segnalazione'}
         </button>
       </div>
+
+      {/* Lista ticket esistenti */}
+      {tickets.length > 0 && (
+        <div className="flex flex-col gap-2 mb-4">
+          {tickets.map((t) => {
+            const badge = statusBadge(t.status)
+            return (
+              <button
+                key={t.id}
+                onClick={() => onOpenTicket(t.id)}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    #{t.id} — {t.subject}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {new Date(t.created_at).toLocaleDateString('it-IT')}
+                  </div>
+                </div>
+                <span style={{ flexShrink: 0, background: badge.bg, color: badge.color, fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {badge.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {tickets.length === 0 && !showNewForm && (
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          Nessuna segnalazione aperta. Usa il tasto in alto per aprirne una nuova.
+        </p>
+      )}
+
+      {/* Form nuova segnalazione */}
+      <AnimatePresence>
+        {showNewForm && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '1rem' }} className="flex flex-col gap-3">
+              <div>
+                <label className="form-label">Oggetto</label>
+                <input
+                  className="form-input"
+                  placeholder="Es: problema con il download dei risultati"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  maxLength={120}
+                />
+              </div>
+              <div>
+                <label className="form-label">Messaggio</label>
+                <textarea
+                  className="form-input"
+                  rows={4}
+                  placeholder="Descrivi il problema o la richiesta nel dettaglio..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  maxLength={5000}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+              {result && (
+                <div
+                  className="rounded-xl p-3"
+                  style={{
+                    background: result.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                    border: `1px solid ${result.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                    color: result.ok ? '#22c55e' : '#ef4444',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  {result.text}
+                </div>
+              )}
+              <button
+                className="btn-amber"
+                style={{ alignSelf: 'flex-start' }}
+                disabled={sending || !subject.trim() || !message.trim()}
+                onClick={send}
+              >
+                <Mail size={15} /> {sending ? 'Invio...' : 'Invia richiesta'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const navigate = useNavigate()
-
   // User state
   const [userName, setUserName] = useState(localStorage.getItem('name') || '')
   const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '')
@@ -822,6 +959,8 @@ export default function DashboardPage() {
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
   const [isManager, setIsManager] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState(false)
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(true) // default true until verified
   const [trialAlreadyRequested, setTrialAlreadyRequested] = useState(true) // default true per nascondere fino a verifica
   const [trialMessage, setTrialMessage] = useState('')
@@ -853,6 +992,8 @@ export default function DashboardPage() {
 
   // Delete account confirm modal (E)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  // Hard-delete team confirm modal (F)
+  const [showDeleteTeamModal, setShowDeleteTeamModal] = useState(false)
 
   // Theme state
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
@@ -947,6 +1088,8 @@ export default function DashboardPage() {
         if (d.vat_number) { setVatNumber(d.vat_number); localStorage.setItem('vat_number', d.vat_number) }
         if (d.is_manager !== undefined) setIsManager(!!d.is_manager)
         if (d.subscription_active !== undefined) setSubscriptionActive(!!d.subscription_active)
+        if (d.subscription_plan !== undefined) setSubscriptionPlan(d.subscription_plan ?? null)
+        if (d.subscription_end_date !== undefined) setSubscriptionEndDate(d.subscription_end_date ?? null)
         if (d.welcome_bonus_used !== undefined) setWelcomeBonusUsed(!!d.welcome_bonus_used)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
@@ -1085,7 +1228,12 @@ export default function DashboardPage() {
   }
 
   // ── Payments ───────────────────────────────────────────────────────────
+  const [subscribeLoading, setSubscribeLoading] = useState<Record<string, boolean>>({})
+  const [subscribeError, setSubscribeError] = useState('')
+
   async function subscribePlan(planKey: string) {
+    setSubscribeLoading((prev) => ({ ...prev, [planKey]: true }))
+    setSubscribeError('')
     try {
       const res = await apiFetch('/payments/subscribe', {
         method: 'POST',
@@ -1093,8 +1241,15 @@ export default function DashboardPage() {
         body: JSON.stringify({ package: planKey }),
       })
       const d = await res.json()
-      if (d.checkout_url) window.location.href = d.checkout_url
-    } catch { }
+      if (d.checkout_url) {
+        window.location.href = d.checkout_url
+      } else {
+        setSubscribeError(d.detail || 'Errore durante l\'attivazione. Riprova.')
+      }
+    } catch {
+      setSubscribeError('Errore di rete. Controlla la connessione e riprova.')
+    }
+    setSubscribeLoading((prev) => ({ ...prev, [planKey]: false }))
   }
 
   // ── Ticket conversation ────────────────────────────────────────────────
@@ -1273,7 +1428,17 @@ export default function DashboardPage() {
     try {
       await apiFetch('/auth/me', { method: 'DELETE' })
       localStorage.clear()
-      navigate('/login')
+      window.location.href = '/login'
+    } catch { /* noop */ }
+  }
+
+  // ── Hard-delete intero team (F) ─────────────────────────────────────────
+  async function deleteTeamFromMain() {
+    try {
+      await apiFetch('/auth/team/hard', { method: 'DELETE' })
+      setTeamSlaves([])
+      setShowDeleteTeamModal(false)
+      setShowTeamModal(false)
     } catch { /* noop */ }
   }
 
@@ -1400,15 +1565,14 @@ export default function DashboardPage() {
               </AnimatePresence>
             </div>
 
-            {/* Team icon (B) — only for manager */}
+            {/* Team button — only for manager */}
             {isManager && (
               <button
                 onClick={() => { setShowTeamModal(true); if (!teamSlavesLoaded) loadTeamSlaves() }}
-                className="btn-ghost flex items-center justify-center"
-                style={{ width: 36, height: 36, padding: 0 }}
-                title="Gestione Teams"
+                className="btn-ghost flex items-center gap-1.5"
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', fontWeight: 600 }}
               >
-                <Users size={17} />
+                <Users size={15} /> Gestione Teams
               </button>
             )}
 
@@ -1637,7 +1801,6 @@ export default function DashboardPage() {
             onClick={() => setShowConsent(true)}
             style={{ fontSize: '0.925rem' }}
           >
-            <Zap size={16} />
             {uploading ? 'Caricamento...' : 'Avvia Elaborazione AI'}
           </button>
           {credits <= 0 && (
@@ -1867,15 +2030,22 @@ export default function DashboardPage() {
           </div>
 
           {/* Abbonamenti Mensili */}
+          {subscribeError && (
+            <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', fontSize: '0.85rem' }}>
+              {subscribeError}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {([
-              { key: 'starter',  label: 'Starter',  credits: 10,   price: 99.99,  originalPrice: null,   popular: false, color: 'rgba(255,255,255,0.07)', btnStyle: { background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' } },
-              { key: 'medium',   label: 'Medium',   credits: 20,   price: 169.99, originalPrice: 199.99, popular: true,  color: 'rgba(245,158,11,0.35)',   btnStyle: { background: 'linear-gradient(90deg,#f59e0b,#f97316)', color: '#000' } },
-              { key: 'unlimited',label: 'Unlimited',credits: null, price: 299.99, originalPrice: 400,    popular: false, color: 'rgba(34,197,94,0.35)',    btnStyle: { background: '#22c55e', color: '#000' } },
-            ] as { key: string; label: string; credits: number | null; price: number; originalPrice: number | null; popular: boolean; color: string; btnStyle: React.CSSProperties }[]).map((plan) => {
+              { key: 'starter',          label: 'Starter',           credits: 10,   price: 99.99,   originalPrice: null,   popular: false, color: 'rgba(255,255,255,0.07)', btnStyle: { background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }, period: '/mese' },
+              { key: 'medium',           label: 'Medium',            credits: 20,   price: 169.99,  originalPrice: 199.99, popular: true,  color: 'rgba(245,158,11,0.35)',  btnStyle: { background: 'linear-gradient(90deg,#f59e0b,#f97316)', color: '#000' }, period: '/mese' },
+              { key: 'unlimited',        label: 'Unlimited',         credits: null, price: 299.99,  originalPrice: 400,    popular: false, color: 'rgba(34,197,94,0.35)',   btnStyle: { background: '#22c55e', color: '#000' }, period: '/mese' },
+              { key: 'unlimited_annual', label: 'Annual', credits: null, price: 2400.00, originalPrice: 3599.88, popular: false, color: 'rgba(139,92,246,0.4)',  btnStyle: { background: 'linear-gradient(90deg,#8b5cf6,#7c3aed)', color: '#fff' }, period: '/anno' },
+            ] as { key: string; label: string; credits: number | null; price: number; originalPrice: number | null; popular: boolean; color: string; btnStyle: React.CSSProperties; period: string }[]).map((plan) => {
               const discount = plan.originalPrice ? Math.round((1 - plan.price / plan.originalPrice) * 100) : 0
               const savings  = plan.originalPrice ? (plan.originalPrice - plan.price).toFixed(2) : null
               const perElab  = plan.credits != null ? (plan.price / plan.credits).toFixed(2) : null
+              const isLoading = !!subscribeLoading[plan.key]
               return (
                 <div
                   key={plan.key}
@@ -1898,7 +2068,7 @@ export default function DashboardPage() {
                     {/* elaborazioni */}
                     <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '2rem', lineHeight: 1 }}>
                       {plan.credits != null ? plan.credits : '∞'}
-                      <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>elaborazioni/mese</span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>elaborazioni{plan.period}</span>
                     </div>
                     {/* prezzo per elaborazione */}
                     {perElab && (
@@ -1916,19 +2086,20 @@ export default function DashboardPage() {
                     {/* prezzo */}
                     <div className="flex items-baseline gap-2" style={{ marginTop: 'auto', paddingTop: 6 }}>
                       {plan.originalPrice && (
-                        <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}/mese</span>
+                        <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}{plan.period}</span>
                       )}
                       <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.4rem' }}>
-                        €{plan.price.toFixed(2)}<span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--text-muted)' }}>/mese</span>
+                        €{plan.price.toFixed(2)}<span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--text-muted)' }}>{plan.period}</span>
                       </span>
                     </div>
                     {/* bottone */}
                     <button
                       className="w-full"
-                      style={{ ...plan.btnStyle, border: 'none', borderRadius: 10, padding: '0.65rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}
+                      style={{ ...plan.btnStyle, border: 'none', borderRadius: 10, padding: '0.65rem', fontSize: '0.85rem', fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', marginTop: 4, opacity: isLoading ? 0.7 : 1 }}
+                      disabled={isLoading}
                       onClick={() => subscribePlan(plan.key)}
                     >
-                      Attiva abbonamento
+                      {isLoading ? 'Reindirizzamento...' : 'Attiva abbonamento'}
                     </button>
                   </div>
                 </div>
@@ -1976,7 +2147,7 @@ export default function DashboardPage() {
 
 
         {/* Richiesta assistenza */}
-        <SupportCard />
+        <SupportCard onOpenTicket={openTicketModal} />
       </motion.div>
 
       {/* ── Modals ───────────────────────────────────────────────────── */}
@@ -2161,6 +2332,8 @@ export default function DashboardPage() {
             onToggleTheme={toggleTheme}
             isManager={isManager}
             subscriptionActive={subscriptionActive}
+            subscriptionPlan={subscriptionPlan}
+            subscriptionEndDate={subscriptionEndDate}
             onRequestDelete={() => setShowDeleteModal(true)}
           />
         )}
@@ -2329,7 +2502,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Users size={18} style={{ color: '#f59e0b' }} />
-                  <h3 style={{ color: 'var(--text-primary)', fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Gestione Teams</h3>
+                  <h3 style={{ color: 'var(--text-primary)', fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Gestione Team</h3>
                 </div>
                 <button onClick={() => setShowTeamModal(false)} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
               </div>
@@ -2375,6 +2548,19 @@ export default function DashboardPage() {
                   <UserPlus size={14} /> {teamSlaveLoading ? 'Creazione...' : 'Crea account'}
                 </button>
               </div>
+
+              {/* Danger zone — solo manager */}
+              {teamSlaves.length > 0 && (
+                <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(239,68,68,0.2)', paddingTop: '1rem' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#ef4444', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Zona pericolosa</div>
+                  <button
+                    onClick={() => setShowDeleteTeamModal(true)}
+                    style={{ width: '100%', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', padding: '0.55rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    <Trash2 size={13} /> Elimina tutti gli account del team
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
@@ -2412,6 +2598,38 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
+
+      {/* ── Delete Team Confirm Modal (F) ────────────────────────────────── */}
+      <AnimatePresence>
+        {showDeleteTeamModal && (
+          <div className="modal-overlay" onClick={() => setShowDeleteTeamModal(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card"
+              style={{ maxWidth: 420, width: '100%', padding: '2rem', borderRadius: 20, border: '1px solid rgba(239,68,68,0.3)', textAlign: 'center' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+              <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Eliminare tutto il team?</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: 24 }}>
+                Tutti gli account secondari del team verranno <strong>rimossi definitivamente dal database</strong>. Il tuo account manager rimarrà attivo. Questa operazione è irreversibile.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button className="btn-ghost" style={{ padding: '0.6rem 1.4rem' }} onClick={() => setShowDeleteTeamModal(false)}>Annulla</button>
+                <button
+                  style={{ padding: '0.6rem 1.4rem', background: '#ef4444', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+                  onClick={deleteTeamFromMain}
+                >
+                  Elimina definitivamente
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Modal richiesta prova gratuita */}
       <AnimatePresence>
@@ -2521,7 +2739,7 @@ export default function DashboardPage() {
                     placeholder="Scrivi un messaggio..."
                     value={ticketReplyText}
                     onChange={(e) => setTicketReplyText(e.target.value)}
-                    style={{ resize: 'none', fontSize: '0.85rem' }}
+                    style={{ resize: 'none', fontSize: '0.85rem', background: '#0d1117', color: '#f1f5f9', borderColor: 'rgba(255,255,255,0.12)' }}
                   />
                   <div className="flex gap-2">
                     <button
@@ -2542,8 +2760,9 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem 0' }}>
-                  Ticket chiuso. Apri una nuova segnalazione se hai bisogno di assistenza.
+                <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '0.85rem 1rem', fontSize: '0.82rem', color: '#f87171', lineHeight: 1.6 }}>
+                  <strong>Ticket chiuso dall'amministratore.</strong> Non è possibile aggiungere nuovi messaggi a questo ticket.
+                  Per ulteriore assistenza, apri una nuova segnalazione.
                 </div>
               )}
             </motion.div>

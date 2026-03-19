@@ -561,18 +561,34 @@ def logout(response: Response):
 
 
 @router.get("/me")
-def me(current: models.Company = Depends(auth_utils.get_current_company)):
+def me(current: models.Company = Depends(auth_utils.get_current_company), db: Session = Depends(get_db)):
+    # Per gli slave, le info sull'abbonamento vengono dal manager della stessa P.IVA
+    manager = current
+    if not current.is_manager and current.vat_number:
+        mgr = (
+            db.query(models.Company)
+            .filter(
+                models.Company.vat_number == current.vat_number,
+                models.Company.is_manager == True,
+                models.Company.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if mgr:
+            manager = mgr
     return {
-        "id":                  current.id,
-        "email":               current.email,
-        "name":                current.name,
-        "ragione_sociale":     current.ragione_sociale or "",
-        "vat_number":          current.vat_number or "",
-        "credits":             current.credits,
-        "is_admin":            current.email == auth_utils.ADMIN_EMAIL,
-        "is_manager":          bool(current.is_manager),
-        "subscription_active": bool(current.subscription_active),
-        "created_at":          current.created_at.isoformat(),
+        "id":                    current.id,
+        "email":                 current.email,
+        "name":                  current.name,
+        "ragione_sociale":       current.ragione_sociale or "",
+        "vat_number":            current.vat_number or "",
+        "credits":               current.credits,
+        "is_admin":              current.email == auth_utils.ADMIN_EMAIL,
+        "is_manager":            bool(current.is_manager),
+        "subscription_active":   bool(current.subscription_active),
+        "subscription_plan":     manager.subscription_plan,
+        "subscription_end_date": manager.subscription_end_date.strftime("%d/%m/%Y") if manager.subscription_end_date else None,
+        "created_at":            current.created_at.isoformat(),
     }
 
 
@@ -690,7 +706,7 @@ def reply_ticket(
         raise HTTPException(status_code=400, detail="Messaggio vuoto")
 
     msg = models.TicketMessage(ticket_id=ticket.id, sender="client", text=text)
-    ticket.status = "aperto"
+    ticket.status = "in_elaborazione"
     db.add(msg)
     db.commit()
     return {"message": "Messaggio inviato"}
