@@ -1,3 +1,5 @@
-front /Users/alessiogervasini/Desktop/solardino_web/frontend
+FRONT: cd /Users/alessiogervasini/Desktop/solardino_web/frontend  && npm run dev
 
-back  uvicorn main:app --reload --port 8000
+BACK:   uvicorn main:app --reload --port 8000
+
+
