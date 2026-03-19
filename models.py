@@ -21,6 +21,7 @@ class Company(Base):
     stripe_customer_id = Column(String, nullable=True)
     credits            = Column(Integer, default=1)
     is_active          = Column(Boolean, default=True)
+    is_manager         = Column(Boolean, default=False)              # True = account principale/manager dell'azienda
     deleted_at         = Column(DateTime, nullable=True)             # Soft delete
     last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
     pec                  = Column(String, nullable=True)
@@ -178,6 +179,35 @@ class EmailChangeToken(Base):
     expires_at = Column(DateTime, nullable=False)
     used       = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
+
+
+class SupportTicket(Base):
+    """Richiesta di assistenza inviata da un'azienda."""
+    __tablename__ = "support_tickets"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    subject    = Column(String, nullable=False)
+    message    = Column(Text, nullable=False)
+    status     = Column(String, default="aperto")   # aperto | in_elaborazione | risolto
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company")
+
+
+class StripePayment(Base):
+    """Pagamento Stripe completato (registrato dal webhook)."""
+    __tablename__ = "stripe_payments"
+
+    id             = Column(Integer, primary_key=True, index=True)
+    company_id     = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    stripe_session = Column(String, nullable=True, unique=True)
+    package        = Column(String, nullable=False)
+    credits        = Column(Integer, nullable=False)
+    amount_eur     = Column(Float, nullable=False)
+    created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     company = relationship("Company")
 

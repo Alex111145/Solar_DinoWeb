@@ -5,7 +5,7 @@ import {
   Sun, Upload, CreditCard, History, Star, LogOut,
   X, FileDown, Check, AlertTriangle, Trash2,
   Mail, Lock, Building2, ChevronRight, Zap, Moon,
-  Wifi, WifiOff, RefreshCw, Radio,
+  Wifi, WifiOff, RefreshCw, Radio, Users, UserPlus,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -240,8 +240,10 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
 
 // ── Info Modal ─────────────────────────────────────────────────────────────
 // ── Profile Sidebar ────────────────────────────────────────────────────────
+interface SlaveAccount { id: number; name: string; email: string; is_active: boolean }
+
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, isManager,
 }: {
   name: string
   email: string
@@ -254,6 +256,7 @@ function ProfileSidebar({
   onClose: () => void
   isDark: boolean
   onToggleTheme: () => void
+  isManager: boolean
 }) {
   const navigate = useNavigate()
   const [openSection, setOpenSection] = useState<string | null>(null)
@@ -268,6 +271,13 @@ function ProfileSidebar({
   const [editComment, setEditComment] = useState(myReview?.comment ?? '')
   const [reviewMsg, setReviewMsg] = useState('')
 
+  // Slave management state
+  const [slaves, setSlaves] = useState<SlaveAccount[]>([])
+  const [slavesLoaded, setSlavesLoaded] = useState(false)
+  const [slaveForm, setSlaveForm] = useState({ name: '', email: '', password: '' })
+  const [slaveMsg, setSlaveMsg] = useState('')
+  const [slaveLoading, setSlaveLoading] = useState(false)
+
   useEffect(() => {
     if (myReview) {
       setEditStars(myReview.stars)
@@ -277,6 +287,45 @@ function ProfileSidebar({
 
   function toggle(s: string) {
     setOpenSection((prev) => (prev === s ? null : s))
+    if (s === 'team' && !slavesLoaded) loadSlaves()
+  }
+
+  async function loadSlaves() {
+    try {
+      const res = await apiFetch('/auth/slaves')
+      if (res.ok) { setSlaves(await res.json()); setSlavesLoaded(true) }
+    } catch { /* noop */ }
+  }
+
+  async function createSlave() {
+    if (!slaveForm.name || !slaveForm.email || !slaveForm.password) {
+      setSlaveMsg('Compila tutti i campi'); return
+    }
+    setSlaveLoading(true)
+    setSlaveMsg('')
+    try {
+      const res = await apiFetch('/auth/create-slave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(slaveForm),
+      })
+      if (res.ok) {
+        setSlaveForm({ name: '', email: '', password: '' })
+        setSlaveMsg('Account creato con successo!')
+        await loadSlaves()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setSlaveMsg(err.detail || 'Errore creazione account')
+      }
+    } catch { setSlaveMsg('Errore di rete') }
+    setSlaveLoading(false)
+  }
+
+  async function deleteSlave(id: number) {
+    try {
+      const res = await apiFetch(`/auth/slaves/${id}`, { method: 'DELETE' })
+      if (res.ok) setSlaves((prev) => prev.filter((s) => s.id !== id))
+    } catch { /* noop */ }
   }
 
   async function updateReview() {
@@ -627,6 +676,91 @@ function ProfileSidebar({
               </div>
             )}
           </div>
+          {/* Gestione Team — solo manager */}
+          {isManager && (
+            <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
+              <button
+                className="w-full flex items-center justify-between p-4"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
+                onClick={() => toggle('team')}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium"><Users size={15} /> Gestione Team</span>
+                <ChevronRight size={15} style={{ transform: openSection === 'team' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
+              </button>
+              {openSection === 'team' && (
+                <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
+                  {/* Existing slaves */}
+                  {slaves.length > 0 && (
+                    <div className="flex flex-col gap-2 mt-3 mb-4">
+                      {slaves.map((s) => (
+                        <div key={s.id} className="flex items-center justify-between" style={{ padding: '0.55rem 0.75rem', background: st.rowBg, borderRadius: 10, border: `1px solid ${st.rowBorder}` }}>
+                          <div>
+                            <div style={{ fontSize: '0.82rem', color: st.text, fontWeight: 600 }}>{s.name}</div>
+                            <div style={{ fontSize: '0.72rem', color: st.textMuted }}>{s.email}</div>
+                          </div>
+                          <button
+                            onClick={() => deleteSlave(s.id)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.2rem', display: 'flex' }}
+                            title="Rimuovi"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {slavesLoaded && slaves.length === 0 && (
+                    <p style={{ fontSize: '0.8rem', color: st.textMuted, textAlign: 'center', padding: '0.75rem 0' }}>Nessun account secondario.</p>
+                  )}
+
+                  {/* Add slave form */}
+                  <div style={{ borderTop: slaves.length > 0 ? `1px solid ${st.borderSub}` : 'none', paddingTop: slaves.length > 0 ? '0.75rem' : '0.75rem' }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <UserPlus size={13} style={{ color: '#f59e0b' }} />
+                      <span style={{ fontSize: '0.78rem', color: st.textSec, fontWeight: 600 }}>Nuovo account dipendente</span>
+                    </div>
+                    <input
+                      className="form-input mb-2"
+                      placeholder="Nome dipendente"
+                      value={slaveForm.name}
+                      onChange={(e) => setSlaveForm((f) => ({ ...f, name: e.target.value }))}
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                    <input
+                      className="form-input mb-2"
+                      type="email"
+                      placeholder="Email dipendente"
+                      value={slaveForm.email}
+                      onChange={(e) => setSlaveForm((f) => ({ ...f, email: e.target.value }))}
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                    <input
+                      className="form-input mb-3"
+                      type="password"
+                      placeholder="Password temporanea"
+                      value={slaveForm.password}
+                      onChange={(e) => setSlaveForm((f) => ({ ...f, password: e.target.value }))}
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                    {slaveMsg && (
+                      <div className="rounded-xl p-2 mb-3" style={{ background: slaveMsg.includes('successo') ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${slaveMsg.includes('successo') ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`, color: slaveMsg.includes('successo') ? '#22c55e' : '#ef4444', fontSize: '0.78rem' }}>
+                        {slaveMsg}
+                      </div>
+                    )}
+                    <button
+                      className="btn-amber w-full"
+                      style={{ fontSize: '0.82rem', padding: '0.55rem' }}
+                      disabled={slaveLoading}
+                      onClick={createSlave}
+                    >
+                      <UserPlus size={13} /> {slaveLoading ? 'Creazione...' : 'Crea account'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Modifica recensione */}
           {myReview && (
             <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
@@ -681,6 +815,102 @@ function ProfileSidebar({
   )
 }
 
+// ── Support Card ────────────────────────────────────────────────────────────
+function SupportCard() {
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function send() {
+    if (!subject.trim() || !message.trim()) return
+    setSending(true)
+    setResult(null)
+    try {
+      const res = await apiFetch('/auth/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: subject.trim(), message: message.trim() }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setResult({ ok: true, text: d.message || 'Richiesta inviata con successo.' })
+        setSubject('')
+        setMessage('')
+      } else {
+        setResult({ ok: false, text: d.detail || 'Errore durante l\'invio.' })
+      }
+    } catch {
+      setResult({ ok: false, text: 'Errore di rete.' })
+    }
+    setSending(false)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="card mb-8"
+    >
+      <div className="flex items-center gap-3 mb-5">
+        <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+          <Mail size={17} />
+        </div>
+        <div>
+          <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Richiesta di assistenza</h2>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>Il nostro team risponde entro 24h via email</div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-3">
+        <div>
+          <label className="form-label">Oggetto</label>
+          <input
+            className="form-input"
+            placeholder="Es: problema con il download dei risultati"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            maxLength={120}
+          />
+        </div>
+        <div>
+          <label className="form-label">Messaggio</label>
+          <textarea
+            className="form-input"
+            rows={4}
+            placeholder="Descrivi il problema o la richiesta nel dettaglio..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={5000}
+            style={{ resize: 'vertical' }}
+          />
+        </div>
+        {result && (
+          <div
+            className="rounded-xl p-3"
+            style={{
+              background: result.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${result.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
+              color: result.ok ? '#22c55e' : '#ef4444',
+              fontSize: '0.85rem',
+            }}
+          >
+            {result.text}
+          </div>
+        )}
+        <button
+          className="btn-amber"
+          style={{ alignSelf: 'flex-start' }}
+          disabled={sending || !subject.trim() || !message.trim()}
+          onClick={send}
+        >
+          <Mail size={15} /> {sending ? 'Invio...' : 'Invia richiesta'}
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -691,6 +921,7 @@ export default function DashboardPage() {
   const [credits, setCredits] = useState(parseInt(localStorage.getItem('credits') || '0'))
   const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
+  const [isManager, setIsManager] = useState(false)
   const [trialAlreadyRequested, setTrialAlreadyRequested] = useState(true) // default true per nascondere fino a verifica
   const [trialMessage, setTrialMessage] = useState('')
   const [trialLoading, setTrialLoading] = useState(false)
@@ -784,16 +1015,18 @@ export default function DashboardPage() {
   const [fhSyncing, setFhSyncing] = useState(false)
 
   // ── Load user data ─────────────────────────────────────────────────────
-  useEffect(() => {
+  function loadData() {
     apiFetch('/auth/me')
-      .then((r) => r.json())
+      .then((r) => r.ok ? r.json() : null)
       .then((d) => {
+        if (!d) return
         setUserName(d.name || d.user?.name || userName)
         setUserEmail(d.email || d.user?.email || userEmail)
         const c = d.credits ?? d.user?.credits ?? credits
         setCredits(c)
         if (d.ragione_sociale) { setRagioneSociale(d.ragione_sociale); localStorage.setItem('ragione_sociale', d.ragione_sociale) }
         if (d.vat_number) { setVatNumber(d.vat_number); localStorage.setItem('vat_number', d.vat_number) }
+        if (d.is_manager !== undefined) setIsManager(!!d.is_manager)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
         localStorage.setItem('credits', String(c))
@@ -801,29 +1034,35 @@ export default function DashboardPage() {
       .catch(() => {})
 
     apiFetch('/missions/history')
-      .then((r) => r.json())
-      .then((d) => setHistory(Array.isArray(d) ? d : d.missions || []))
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setHistory(Array.isArray(d) ? d : d.missions || []) })
       .catch(() => {})
 
     apiFetch('/payments/packages')
-      .then((r) => r.json())
-      .then((d) => setPackages(Array.isArray(d) ? d : d.packages || []))
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setPackages(Array.isArray(d) ? d : d.packages || []) })
       .catch(() => {})
 
     apiFetch('/reviews/mine')
-      .then((r) => r.json())
+      .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d && d.id) setMyReview(d) })
       .catch(() => {})
 
     apiFetch('/flighthub/status')
-      .then((r) => r.json())
-      .then((d) => setFhStatus(d))
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setFhStatus(d) })
       .catch(() => {})
 
     apiFetch('/missions/trial-status')
-      .then((r) => r.json())
-      .then((d) => setTrialAlreadyRequested(d.already_requested === true))
-      .catch(() => setTrialAlreadyRequested(false))
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setTrialAlreadyRequested(d.already_requested === true) })
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadData()
+    const interval = setInterval(loadData, 30_000)
+    return () => clearInterval(interval)
   }, [])
 
   async function sendTrialRequest() {
@@ -1516,7 +1755,12 @@ export default function DashboardPage() {
                     { key: 'pack5', label: 'Pack 5', credits: 5, price_eur: 219.99, popular: true },
                     { key: 'pack10', label: 'Pack 10', credits: 10, price_eur: 399.99, popular: false },
                   ]
-              ).map((pkg) => (
+              ).map((pkg) => {
+                // prezzi originali (senza sconto) calcolati a prezzo pieno (49.99/cred)
+                const fullPrice = pkg.credits * 49.99
+                const hasDiscount = pkg.credits > 1
+                const discountPct = hasDiscount ? Math.round((1 - pkg.price_eur / fullPrice) * 100) : 0
+                return (
                 <div
                   key={pkg.key}
                   className="rounded-xl p-4 flex flex-col gap-2"
@@ -1538,17 +1782,31 @@ export default function DashboardPage() {
                       Più popolare
                     </div>
                   )}
-                  <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    {pkg.label}
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      {pkg.label}
+                    </span>
+                    {hasDiscount && (
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>
+                        -{discountPct}%
+                      </span>
+                    )}
+                  </div>
                   <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
                     {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni</span>
                   </div>
                   <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', flex: 1 }}>
                     €{(pkg.price_eur / pkg.credits).toFixed(2)} per elaborazione
                   </div>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem', marginBottom: 2 }}>
-                    €{pkg.price_eur.toFixed(2)}
+                  <div className="flex items-baseline gap-2">
+                    {hasDiscount && (
+                      <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                        €{fullPrice.toFixed(2)}
+                      </span>
+                    )}
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>
+                      €{pkg.price_eur.toFixed(2)}
+                    </span>
                   </div>
                   <button
                     className="btn-amber w-full"
@@ -1558,7 +1816,8 @@ export default function DashboardPage() {
                     Acquista
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -1641,29 +1900,8 @@ export default function DashboardPage() {
         )}
 
 
-        {/* Support footer */}
-        <motion.div variants={cardAnim} className="mb-8">
-          <div
-            className="rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4"
-            style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.2)' }}
-          >
-            <div>
-              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.925rem', marginBottom: 4 }}>
-                Hai bisogno di aiuto?
-              </div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Il nostro team è disponibile per supporto tecnico e commerciale.
-              </div>
-            </div>
-            <a
-              href="mailto:agervasini1@gmail.com"
-              className="btn-ghost flex items-center gap-2"
-              style={{ borderColor: 'rgba(245,158,11,0.3)', color: '#f59e0b', whiteSpace: 'nowrap' }}
-            >
-              <Mail size={15} /> agervasini1@gmail.com
-            </a>
-          </div>
-        </motion.div>
+        {/* Richiesta assistenza */}
+        <SupportCard />
       </motion.div>
 
       {/* ── Modals ───────────────────────────────────────────────────── */}
@@ -1846,6 +2084,7 @@ export default function DashboardPage() {
             onClose={() => setShowProfile(false)}
             isDark={isDark}
             onToggleTheme={toggleTheme}
+            isManager={isManager}
           />
         )}
       </AnimatePresence>

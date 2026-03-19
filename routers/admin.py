@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -31,7 +31,11 @@ def get_stats(
 ):
     total_companies = (
         db.query(func.count(models.Company.id))
-        .filter(models.Company.email != auth_utils.ADMIN_EMAIL)
+        .filter(
+            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.is_active == True,
+            models.Company.deleted_at.is_(None),
+        )
         .scalar()
     )
     total_jobs = db.query(func.count(models.Job.id)).scalar()
@@ -46,21 +50,41 @@ def get_stats(
         .scalar()
     ) or 0
 
-    now         = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    panels_month = (
-        db.query(func.sum(models.Job.panels_detected))
-        .filter(models.Job.status == "completato", models.Job.created_at >= month_start)
+    now          = datetime.now(timezone.utc)
+    thirty_ago   = now - timedelta(days=30)
+
+    # Fatturato totale = somma di tutti i pagamenti approvati (Stripe + bonifico)
+    total_stripe = db.query(func.sum(models.StripePayment.amount_eur)).scalar() or 0
+    total_bonif  = (
+        db.query(func.sum(models.BonificoRequest.amount_eur))
+        .filter(models.BonificoRequest.status == "approved")
         .scalar()
     ) or 0
+    total_revenue = total_stripe + total_bonif
+
+    # Fatturato ultimi 30 giorni = pagamenti con data >= 30 gg fa
+    month_stripe = (
+        db.query(func.sum(models.StripePayment.amount_eur))
+        .filter(models.StripePayment.created_at >= thirty_ago)
+        .scalar()
+    ) or 0
+    month_bonif  = (
+        db.query(func.sum(models.BonificoRequest.amount_eur))
+        .filter(
+            models.BonificoRequest.status == "approved",
+            models.BonificoRequest.approved_at >= thirty_ago,
+        )
+        .scalar()
+    ) or 0
+    revenue_month = month_stripe + month_bonif
 
     return {
-        "total_companies":       total_companies,
+        "active_companies":      total_companies,
         "total_jobs":            total_jobs,
         "completed_jobs":        completed,
         "total_panels_detected": total_panels,
-        "total_revenue_eur":     round(total_panels  * PRICE_PER_PANEL, 2),
-        "revenue_month_eur":     round(panels_month  * PRICE_PER_PANEL, 2),
+        "total_revenue_eur":     round(total_revenue, 2),
+        "revenue_month_eur":     round(revenue_month, 2),
         "price_per_panel":       PRICE_PER_PANEL,
     }
 
@@ -83,6 +107,10 @@ def list_companies(
         .order_by(models.Company.created_at.desc())
         .all()
     )
+
+    # Trova IP duplicati SOLO tra aziende attive (disabilitate non contano)
+    all_ips = [c.last_ip for c in companies if c.last_ip and c.last_ip != "—" and c.is_active]
+    duplicate_ips = {ip for ip in all_ips if all_ips.count(ip) > 1}
 
     result = []
     for c in companies:
@@ -110,6 +138,7 @@ def list_companies(
             "panels_detected":  panels,
             "amount_owed_eur":  round(amount_owed, 2),
             "last_ip":              c.last_ip or "—",
+            "ip_status":            "warning" if c.last_ip and c.last_ip in duplicate_ips else "ok",
             "welcome_bonus_used":   bool(c.welcome_bonus_used),
             "last_login_at":        c.last_login_at.isoformat() if c.last_login_at else None,
             "created_at":           c.created_at.isoformat(),
@@ -341,7 +370,7 @@ def billing_report(
     db: Session = Depends(get_db),
     _: models.Company = Depends(auth_utils.require_admin),
 ):
-    """Per ogni azienda: pannelli totali, importo dovuto, pagamenti ricevuti con metodo."""
+    """Per ogni azienda: crediti residui, job completati, e tutti i pagamenti (Stripe + bonifico)."""
     companies = (
         db.query(models.Company)
         .filter(
@@ -354,35 +383,67 @@ def billing_report(
 
     rows = []
     for c in companies:
-        panels_total = db.query(func.sum(models.Job.panels_detected)).filter(
-            models.Job.company_id == c.id,
-            models.Job.status == "completato",
-        ).scalar() or 0
+        jobs_completed = (
+            db.query(func.count(models.Job.id))
+            .filter(models.Job.company_id == c.id, models.Job.status == "completato")
+            .scalar() or 0
+        )
 
-        amount_due = round(panels_total * PRICE_PER_PANEL, 2)
+        # Bonifici approvati e pending
+        bonifici = (
+            db.query(models.BonificoRequest)
+            .filter(models.BonificoRequest.company_id == c.id)
+            .order_by(models.BonificoRequest.created_at.desc())
+            .all()
+        )
 
-        # Pagamenti ricevuti: bonifici approvati
-        bonifici = db.query(models.BonificoRequest).filter(
-            models.BonificoRequest.company_id == c.id,
-            models.BonificoRequest.status == "approved",
-        ).order_by(models.BonificoRequest.approved_at.desc()).all()
+        # Pagamenti Stripe
+        stripe_payments = (
+            db.query(models.StripePayment)
+            .filter(models.StripePayment.company_id == c.id)
+            .order_by(models.StripePayment.created_at.desc())
+            .all()
+        )
 
-        payments = [{
-            "id":           b.id,
-            "method":       "Bonifico",
-            "credits":      b.credits,
-            "amount_eur":   b.amount_eur,
-            "date":         b.approved_at.isoformat() if b.approved_at else b.created_at.isoformat(),
-            "has_receipt":  bool(b.receipt_path),
-        } for b in bonifici]
+        payments = []
+
+        for b in bonifici:
+            payments.append({
+                "id":           f"b-{b.id}",
+                "type":         "bonifico",
+                "method_label": "Bonifico",
+                "credits":      b.credits,
+                "amount_eur":   b.amount_eur,
+                "status":       b.status,           # pending | approved | rejected
+                "date":         (b.approved_at or b.created_at).isoformat(),
+                "receipt_id":   b.id if b.receipt_path else None,  # usato per download
+            })
+
+        for sp in stripe_payments:
+            payments.append({
+                "id":           f"s-{sp.id}",
+                "type":         "stripe",
+                "method_label": "Carta (Stripe)",
+                "credits":      sp.credits,
+                "amount_eur":   sp.amount_eur,
+                "status":       "approved",
+                "date":         sp.created_at.isoformat(),
+                "receipt_id":   None,
+            })
+
+        # Ordina pagamenti per data desc
+        payments.sort(key=lambda p: p["date"], reverse=True)
+
+        total_paid = sum(p["amount_eur"] for p in payments if p["status"] == "approved")
 
         rows.append({
-            "id":            c.id,
-            "name":          c.name,
-            "email":         c.email,
-            "panels_total":  panels_total,
-            "amount_due":    amount_due,
-            "payments":      payments,
+            "id":              c.id,
+            "name":            c.ragione_sociale or c.name,
+            "email":           c.email,
+            "credits":         c.credits,
+            "jobs_completed":  jobs_completed,
+            "total_paid":      round(total_paid, 2),
+            "payments":        payments,
         })
 
     return rows
@@ -605,11 +666,12 @@ def list_uploads(
         jobs_data = []
         for j in jobs:
             files = []
-            if j.result_path:
-                try:
-                    files = storage_utils.list_files(j.result_path)
-                except Exception:
-                    pass
+            # Usa result_path se disponibile, altrimenti cerca in jobs/{job_id}/
+            storage_prefix = j.result_path or f"jobs/{j.id}"
+            try:
+                files = storage_utils.list_files(storage_prefix)
+            except Exception:
+                pass
 
             jobs_data.append({
                 "job_id":      j.id,
@@ -655,6 +717,80 @@ def download_uploaded_file(
 
 
 # ---------------------------------------------------------------------------
+# Support tickets
+# ---------------------------------------------------------------------------
+
+@router.get("/tickets")
+def all_tickets(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Tutti i ticket di assistenza con info azienda."""
+    tickets = (
+        db.query(models.SupportTicket)
+        .order_by(models.SupportTicket.created_at.desc())
+        .all()
+    )
+    result = []
+    for t in tickets:
+        company = db.query(models.Company).filter(models.Company.id == t.company_id).first()
+        result.append({
+            "id":              t.id,
+            "subject":         t.subject,
+            "message":         t.message,
+            "status":          t.status or "aperto",
+            "created_at":      t.created_at.isoformat(),
+            "company_id":      t.company_id,
+            "company_name":    (company.ragione_sociale or company.name) if company else "—",
+            "company_email":   company.email if company else "—",
+        })
+    return result
+
+
+@router.patch("/tickets/{ticket_id}/status")
+def update_ticket_status(
+    ticket_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Aggiorna lo stato di un ticket."""
+    ticket = db.query(models.SupportTicket).filter(models.SupportTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket non trovato")
+    new_status = body.get("status", "")
+    if new_status not in ("aperto", "in_elaborazione", "risolto"):
+        raise HTTPException(status_code=400, detail="Stato non valido")
+    ticket.status = new_status
+    db.commit()
+    return {"message": "Stato aggiornato", "status": new_status}
+
+
+@router.get("/companies/{company_id}/tickets")
+def company_tickets(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    tickets = (
+        db.query(models.SupportTicket)
+        .filter(models.SupportTicket.company_id == company_id)
+        .order_by(models.SupportTicket.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id":         t.id,
+            "subject":    t.subject,
+            "message":    t.message,
+            "status":     t.status or "aperto",
+            "created_at": t.created_at.isoformat(),
+        }
+        for t in tickets
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Enterprise inference logs
 # ---------------------------------------------------------------------------
 
@@ -663,7 +799,7 @@ def enterprise_logs(
     db: Session = Depends(get_db),
     _: models.Company = Depends(auth_utils.require_admin),
 ):
-    """Lista di tutti i clienti Enterprise che hanno avviato l'inferenza (con consenso dati)."""
+    """Lista di tutti i clienti Enterprise che hanno avviato l'elaborazione (con consenso dati)."""
     logs = (
         db.query(models.EnterpriseInferenceLog)
         .order_by(models.EnterpriseInferenceLog.created_at.desc())

@@ -1,19 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, LogOut, Users, BarChart2, Star,
   Check, X, TrendingUp, Building2, Euro,
-  FolderOpen, FileDown, ChevronRight, ChevronDown, Radio,
+  FolderOpen, FileDown, ChevronRight, ChevronDown, Radio, MessageSquare,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface Stats {
   active_companies?: number
-  total_panels?: number
-  total_revenue?: number
-  monthly_revenue?: number
+  total_panels_detected?: number
+  total_revenue_eur?: number
+  revenue_month_eur?: number
 }
 
 interface Company {
@@ -25,9 +25,10 @@ interface Company {
   credits?: number
   total_credits_bought?: number
   is_active?: boolean
-  panel_count?: number
+  panels_detected?: number
   mission_count?: number
   last_ip?: string
+  ip_status?: 'ok' | 'warning'
   welcome_bonus_used?: boolean
   last_login_at?: string
   created_at?: string
@@ -42,15 +43,25 @@ interface ReviewItem {
   status?: string
 }
 
-interface BillingItem {
+interface BillingPayment {
   id: string
-  company_name?: string
-  mission_count?: number
-  total_spent?: number
-  credits_remaining?: number
-  payment_method?: string
-  receipt_url?: string
-  stripe_receipt_url?: string
+  type: 'bonifico' | 'stripe'
+  method_label: string
+  credits: number
+  amount_eur: number
+  status: 'pending' | 'approved' | 'rejected'
+  date: string
+  receipt_id: number | null
+}
+
+interface BillingItem {
+  id: number
+  name?: string
+  email?: string
+  credits?: number
+  jobs_completed?: number
+  total_paid?: number
+  payments?: BillingPayment[]
 }
 
 interface UploadedFile {
@@ -72,6 +83,24 @@ interface UploadCompany {
   company_email: string
   jobs: UploadJob[]
 }
+
+interface AdminTicket {
+  id: number
+  company_name?: string
+  company_email?: string
+  subject: string
+  message: string
+  status: 'aperto' | 'in_elaborazione' | 'risolto'
+  created_at: string
+}
+
+const FAKE_ENTERPRISE = [
+  { id: 1, company_name: 'SunTech Srl', company_email: 'ops@suntech.it', vat_number: '02345678901', fh_workspace_id: 'ws_suntech_prod_001', data_consent: true, created_at: '2026-03-10T09:14:00Z' },
+  { id: 2, company_name: 'Greenfield Energy Spa', company_email: 'drone@greenfield.eu', vat_number: '04567890123', fh_workspace_id: 'ws_gfe_europe_003', data_consent: true, created_at: '2026-03-12T11:02:00Z' },
+  { id: 3, company_name: 'Solar Pro Italia', company_email: 'info@solarproitalia.it', vat_number: '09876543210', fh_workspace_id: 'ws_spi_italia_07', data_consent: true, created_at: '2026-03-15T14:30:00Z' },
+  { id: 4, company_name: 'Nord Energy Solutions', company_email: 'tech@nordenergy.it', vat_number: '01234567890', fh_workspace_id: 'ws_nes_nord_02', data_consent: true, created_at: '2026-03-17T08:55:00Z' },
+  { id: 5, company_name: 'Adriatic Solar Srl', company_email: 'admin@adriaticsolar.com', vat_number: '07654321098', fh_workspace_id: 'ws_adriatic_live_05', data_consent: false, created_at: '2026-03-18T16:20:00Z' },
+]
 
 // ── Animated counter ───────────────────────────────────────────────────────
 function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
@@ -100,12 +129,28 @@ function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; pr
 }
 
 // ── Company Detail Modal ───────────────────────────────────────────────────
+interface SupportTicket {
+  id: number
+  subject: string
+  message: string
+  created_at: string
+}
+
 function CompanyModal({ company, onClose }: { company: Company; onClose: () => void }) {
   const months = ['Ott', 'Nov', 'Dic', 'Gen', 'Feb', 'Mar']
   const revenues = [149, 349, 219, 449, 299, (company.mission_count || 2) * 49.99]
   const maxRevenue = Math.max(...revenues, 1)
 
   const yLabels = [0, Math.round(maxRevenue / 2), Math.round(maxRevenue)]
+
+  const [tickets, setTickets] = useState<SupportTicket[]>([])
+
+  useEffect(() => {
+    apiFetch(`/admin/companies/${company.id}/tickets`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((d) => setTickets(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [company.id])
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -137,7 +182,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
             { label: 'Email', value: company.email || '—' },
             { label: 'Crediti residui', value: String(company.credits ?? 0) },
             { label: 'Elaborazioni', value: String(company.mission_count ?? 0) },
-            { label: 'Pannelli rilevati', value: String(company.panel_count ?? 0) },
+            { label: 'Pannelli rilevati', value: String(company.panels_detected ?? 0) },
           ].map(({ label, value }) => (
             <div
               key={label}
@@ -190,6 +235,32 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
             </div>
           </div>
         </div>
+
+        {/* Support Tickets */}
+        {tickets.length > 0 && (
+          <div style={{ marginTop: '1.5rem' }}>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, marginBottom: 10 }}>
+              Richieste di assistenza ({tickets.length})
+            </div>
+            <div className="flex flex-col gap-2" style={{ maxHeight: 280, overflowY: 'auto' }}>
+              {tickets.map((t) => (
+                <div
+                  key={t.id}
+                  className="rounded-xl p-3"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span style={{ fontSize: '0.8rem', color: '#f1f5f9', fontWeight: 600 }}>{t.subject}</span>
+                    <span style={{ fontSize: '0.68rem', color: '#475569' }}>
+                      {new Date(t.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{t.message}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   )
@@ -198,7 +269,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
 // ── Main Admin Page ────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'uploads' | 'enterprise'>('companies')
+  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'tickets' | 'uploads' | 'enterprise'>('companies')
 
   const [stats, setStats] = useState<Stats>({})
   const [companies, setCompanies] = useState<Company[]>([])
@@ -214,32 +285,71 @@ export default function AdminPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [confirmCreditId, setConfirmCreditId] = useState<string | null>(null)
   const [confirmCreditStep, setConfirmCreditStep] = useState(0) // 0=chiuso, 1-3=step
+  const [ipWarning, setIpWarning] = useState<{ target: Company; duplicate: Company } | null>(null)
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const [confirmToggle, setConfirmToggle] = useState<{ id: string; name: string; activate: boolean } | null>(null)
   const [msg, setMsg] = useState('')
 
   const [pendingReviews, setPendingReviews] = useState(0)
+  const [tickets, setTickets] = useState<AdminTicket[]>([])
+  const [pendingTickets, setPendingTickets] = useState(0)
+
+  // Chiudi dropdown al click fuori
+  useEffect(() => {
+    if (!openDropdown) return
+    const close = () => setOpenDropdown(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [openDropdown])
 
   // ── Load data ────────────────────────────────────────────────────────
-  useEffect(() => {
-    apiFetch('/admin/stats').then((r) => r.json()).then((d) => setStats(d)).catch(() => {})
-    apiFetch('/admin/companies').then((r) => r.json()).then((d) => {
-      const arr = Array.isArray(d) ? d : d.companies || []
-      setCompanies(arr)
+  function loadData() {
+    apiFetch('/admin/stats').then((r) => r.ok ? r.json() : null).then((d) => { if (d) setStats(d) }).catch(() => {})
+    apiFetch('/admin/companies').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (!d) return
+      setCompanies(Array.isArray(d) ? d : d.companies || [])
     }).catch(() => {})
-    apiFetch('/admin/billing').then((r) => r.json()).then((d) => {
-      setBilling(Array.isArray(d) ? d : d.billing || [])
+    apiFetch('/admin/billing').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setBilling(Array.isArray(d) ? d : d.billing || [])
     }).catch(() => {})
-    apiFetch('/admin/reviews').then((r) => r.json()).then((d) => {
+    apiFetch('/admin/reviews').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (!d) return
       const arr = Array.isArray(d) ? d : d.reviews || []
       setAdminReviews(arr)
       setPendingReviews(arr.filter((r: ReviewItem) => r.status !== 'approved' && r.status !== 'approvata' && r.status !== 'rejected').length)
     }).catch(() => {})
-    apiFetch('/admin/uploads').then((r) => r.json()).then((d) => {
-      setUploads(Array.isArray(d) ? d : [])
+    apiFetch('/admin/uploads').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setUploads(Array.isArray(d) ? d : [])
     }).catch(() => {})
-    apiFetch('/admin/enterprise-logs').then((r) => r.json()).then((d) => {
-      setEnterpriseLogs(Array.isArray(d) ? d : [])
+    apiFetch('/admin/enterprise-logs').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setEnterpriseLogs(Array.isArray(d) ? d : [])
     }).catch(() => {})
+    apiFetch('/admin/tickets').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) {
+        const arr = Array.isArray(d) ? d : []
+        setTickets(arr)
+        setPendingTickets(arr.filter((t: AdminTicket) => t.status === 'aperto').length)
+      }
+    }).catch(() => {})
+  }
+
+  useEffect(() => {
+    loadData()
+    const interval = setInterval(loadData, 30_000) // refresh silenzioso ogni 30s
+    return () => clearInterval(interval)
   }, [])
+
+  // ── IP colour map: stessa IP → stesso colore ─────────────────────────
+  const ipColorMap = useMemo(() => {
+    const dupIps = new Set(
+      companies.filter((c) => c.ip_status === 'warning' && c.last_ip).map((c) => c.last_ip!)
+    )
+    const palette = ['#f97316', '#a855f7', '#06b6d4', '#ec4899', '#84cc16']
+    const map: Record<string, string> = {}
+    let i = 0
+    for (const ip of dupIps) { map[ip] = palette[i % palette.length]; i++ }
+    return map
+  }, [companies])
 
   // ── Actions ──────────────────────────────────────────────────────────
   async function toggleCompany(id: string, activate: boolean) {
@@ -247,11 +357,29 @@ export default function AdminPage() {
     try {
       const res = await apiFetch(path, { method: 'POST' })
       if (res.ok) {
-        setCompanies((prev) => prev.map((c) => c.id === id ? { ...c, is_active: activate } : c))
+        setCompanies((prev) => {
+          const updated = prev.map((c) => c.id === id ? { ...c, is_active: activate } : c)
+          // Ricalcola ip_status: solo aziende attive contano per i duplicati
+          const activeIps = updated
+            .filter((c) => c.is_active && c.last_ip && c.last_ip !== '—')
+            .map((c) => c.last_ip!)
+          const dupSet = new Set(activeIps.filter((ip) => activeIps.filter((x) => x === ip).length > 1))
+          return updated.map((c) => ({
+            ...c,
+            ip_status: (c.last_ip && c.last_ip !== '—' && dupSet.has(c.last_ip)) ? 'warning' : 'ok',
+          }))
+        })
         setMsg(activate ? 'Azienda attivata' : 'Azienda disattivata')
         setTimeout(() => setMsg(''), 3000)
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setMsg(`Errore: ${d.detail || res.status}`)
+        setTimeout(() => setMsg(''), 4000)
       }
-    } catch { }
+    } catch {
+      setMsg('Errore di rete')
+      setTimeout(() => setMsg(''), 3000)
+    }
   }
 
   async function addCredit(id: string) {
@@ -306,14 +434,30 @@ export default function AdminPage() {
     } catch { }
   }
 
+  async function updateTicketStatus(id: number, status: 'aperto' | 'in_elaborazione' | 'risolto') {
+    try {
+      const res = await apiFetch(`/admin/tickets/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (res.ok) {
+        setTickets((prev) => prev.map((t) => t.id === id ? { ...t, status } : t))
+        setPendingTickets((prev) => tickets.filter((t) => (t.id === id ? status : t.status) === 'aperto').length)
+        setMsg('Stato aggiornato')
+        setTimeout(() => setMsg(''), 3000)
+      }
+    } catch { }
+  }
+
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
   const statCards = [
     { icon: <Building2 size={18} />, label: 'Aziende attive', value: stats.active_companies || 0, prefix: '' },
-    { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati', value: stats.total_panels || 0, prefix: '' },
-    { icon: <TrendingUp size={18} />, label: 'Fatturato mese', value: stats.monthly_revenue || 0, prefix: '€' },
-    { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue || 0, prefix: '€' },
+    { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
+    { icon: <TrendingUp size={18} />, label: 'Fatturato mese', value: stats.revenue_month_eur || 0, prefix: '€' },
+    { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
   ]
 
   return (
@@ -405,6 +549,7 @@ export default function AdminPage() {
               { key: 'companies', label: 'Aziende', icon: <Users size={14} /> },
               { key: 'billing', label: 'Utilizzo & Fatturazione', icon: <BarChart2 size={14} /> },
               { key: 'reviews', label: 'Recensioni', icon: <Star size={14} />, badge: pendingReviews },
+              { key: 'tickets', label: 'Segnalazioni', icon: <MessageSquare size={14} />, badge: pendingTickets },
               { key: 'uploads', label: 'Dati caricati', icon: <FolderOpen size={14} /> },
               { key: 'enterprise', label: 'Enterprise', icon: <Radio size={14} /> },
             ].map((t) => (
@@ -445,101 +590,133 @@ export default function AdminPage() {
                 </h3>
               </div>
 
+              {/* Banner IP duplicati */}
+              {companies.some(c => c.ip_status === 'warning') && (
+                <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 10, padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                  <div>
+                    <div style={{ color: '#eab308', fontWeight: 700, fontSize: '0.85rem' }}>IP duplicati rilevati</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                      {companies.filter(c => c.ip_status === 'warning').length} aziende condividono lo stesso IP
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {companies.length === 0 ? (
                 <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
                   Nessuna azienda registrata
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Azienda</th>
-                        <th>Email</th>
-                        <th>Crediti rimasti</th>
-                        <th>Crediti acquistati</th>
-                        <th>Registrata il</th>
-                        <th>Ultimo accesso</th>
-                        <th>Ultimo IP</th>
-                        <th>Stato</th>
-                        <th>Azioni</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {companies.map((c) => (
-                        <tr
-                          key={c.id}
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => setSelectedCompany(c)}
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Azienda</th>
+                      <th>Pannelli</th>
+                      <th>Crediti</th>
+                      <th>Registrata</th>
+                      <th>Ultimo accesso</th>
+                      <th>IP</th>
+                      <th>Stato</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {companies.map((c) => (
+                      <tr
+                        key={c.id}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setSelectedCompany(c)}
+                      >
+                        <td style={{ color: (c.last_ip && ipColorMap[c.last_ip]) || '#f1f5f9', fontWeight: 600 }}>
+                          {c.ragione_sociale || c.name || '—'}
+                        </td>
+                        <td>
+                          <span style={{ color: '#94a3b8', fontWeight: 600 }}>{c.panels_detected ?? 0}</span>
+                        </td>
+                        <td>
+                          <span style={{ color: '#f59e0b', fontWeight: 600 }}>{c.credits ?? 0}</span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                            {c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : '—'}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                            {c.last_login_at ? new Date(c.last_login_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </span>
+                        </td>
+                        <td
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (c.ip_status === 'warning') {
+                              const dup = companies.find((o) => o.id !== c.id && o.last_ip === c.last_ip)
+                              if (dup) setIpWarning({ target: c, duplicate: dup })
+                            }
+                          }}
                         >
-                          <td style={{ color: '#f1f5f9', fontWeight: 500 }}>
-                            {c.ragione_sociale || c.name || '—'}
-                          </td>
-                          <td>{c.email || '—'}</td>
-                          <td>
-                            <span style={{ color: '#f59e0b', fontWeight: 600 }}>{c.credits ?? 0}</span>
-                          </td>
-                          <td>{c.total_credits_bought ?? c.mission_count ?? 0}</td>
-                          <td>
-                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                              {c.created_at ? new Date(c.created_at).toLocaleDateString('it-IT') : '—'}
-                            </span>
-                          </td>
-                          <td>
-                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                              {c.last_login_at ? new Date(c.last_login_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
-                            </span>
-                          </td>
-                          <td>
-                            <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
-                              {c.last_ip || '—'}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`badge ${c.is_active ? 'badge-green' : 'badge-red'}`}>
-                              {c.is_active ? 'Attivato' : 'Disabilitata'}
-                            </span>
-                          </td>
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="btn-ghost"
-                                style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)', whiteSpace: 'nowrap' }}
-                                onClick={() => { setConfirmCreditId(c.id); setConfirmCreditStep((c.credits ?? 0) > 0 || c.welcome_bonus_used ? 1 : 0) }}
+                          <span
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5,
+                              fontSize: '0.72rem', fontFamily: 'monospace', fontWeight: 600,
+                              color: c.ip_status === 'warning' ? (c.last_ip && ipColorMap[c.last_ip]) || '#eab308' : '#475569',
+                              cursor: c.ip_status === 'warning' ? 'pointer' : 'default',
+                            }}
+                          >
+                            <span style={{
+                              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                              background: c.ip_status === 'warning' ? (c.last_ip && ipColorMap[c.last_ip]) || '#eab308' : '#334155',
+                            }} />
+                            {c.last_ip || '—'}
+                          </span>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <span
+                            className={`badge ${c.is_active ? 'badge-green' : 'badge-red'}`}
+                            style={{ fontSize: '0.68rem', cursor: 'pointer' }}
+                            title={c.is_active ? 'Clicca per disabilitare' : 'Clicca per attivare'}
+                            onClick={() => setConfirmToggle({ id: c.id, name: c.ragione_sociale || c.name || '', activate: !c.is_active })}
+                          >
+                            {c.is_active ? 'Attivo' : 'Disabilitato'}
+                          </span>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div style={{ position: 'relative' }}>
+                            <button
+                              className="btn-ghost"
+                              style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', color: '#94a3b8', borderColor: 'rgba(148,163,184,0.2)', display: 'flex', alignItems: 'center', gap: 5 }}
+                              onClick={() => setOpenDropdown(openDropdown === c.id ? null : c.id)}
+                            >
+                              Azioni <ChevronDown size={12} />
+                            </button>
+                            {openDropdown === c.id && (
+                              <div
+                                style={{ position: 'absolute', right: 0, top: '110%', zIndex: 50, background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, minWidth: 140, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                +1 credito
-                              </button>
-                              {c.is_active ? (
-                                <button
-                                  className="btn-ghost"
-                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
-                                  onClick={() => toggleCompany(c.id, false)}
-                                >
-                                  Disabilita
-                                </button>
-                              ) : (
-                                <button
-                                  className="btn-ghost"
-                                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.25)' }}
-                                  onClick={() => toggleCompany(c.id, true)}
-                                >
-                                  Attiva
-                                </button>
-                              )}
-                              <button
-                                className="btn-ghost"
-                                style={{ padding: '0.3rem 0.75rem', fontSize: '0.75rem', color: '#94a3b8', borderColor: 'rgba(148,163,184,0.2)' }}
-                                onClick={() => setConfirmDeleteId(c.id)}
-                              >
-                                Cancella
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                                {[
+                                  { label: '+1 credito', color: '#f59e0b', action: () => { setConfirmCreditId(c.id); setConfirmCreditStep((c.credits ?? 0) > 0 || c.welcome_bonus_used ? 1 : 0); setOpenDropdown(null) } },
+                                  { label: 'Cancella azienda', color: '#ef4444', action: () => { setConfirmDeleteId(c.id); setOpenDropdown(null) } },
+                                ].map((item) => (
+                                  <button
+                                    key={item.label}
+                                    onClick={item.action}
+                                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.6rem 1rem', fontSize: '0.8rem', fontWeight: 600, color: item.color, background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                                  >
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </motion.div>
           )}
@@ -554,7 +731,7 @@ export default function AdminPage() {
               className="card mt-4"
             >
               <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
-                Riepilogo fatturazione per azienda
+                Utilizzo &amp; Fatturazione ({billing.length} aziende)
               </h3>
 
               {billing.length === 0 ? (
@@ -562,58 +739,110 @@ export default function AdminPage() {
                   Nessun dato di fatturazione disponibile
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Azienda</th>
-                        <th>Crediti rimasti</th>
-                        <th>Totale speso</th>
-                        <th>Metodo pagamento</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {billing.map((b) => (
-                        <tr key={b.id}>
-                          <td style={{ color: '#f1f5f9' }}>{b.company_name || '—'}</td>
-                          <td><span style={{ color: '#f59e0b', fontWeight: 600 }}>{b.credits_remaining ?? '—'}</span></td>
-                          <td style={{ color: '#f59e0b', fontWeight: 600 }}>€{(b.total_spent ?? 0).toFixed(2)}</td>
-                          <td>
-                            {!b.payment_method || b.payment_method === 'stripe' ? (
-                              b.stripe_receipt_url ? (
-                                <a
-                                  href={b.stripe_receipt_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn-ghost flex items-center gap-1"
-                                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.25)', display: 'inline-flex' }}
-                                >
-                                  Stripe →
-                                </a>
-                              ) : (
-                                <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Carta</span>
-                              )
+                <div className="flex flex-col gap-3">
+                  {billing.map((b) => {
+                    const payments = b.payments || []
+                    const isOpen = expandedCompany === b.id
+                    const totalPaid = b.total_paid ?? 0
+                    return (
+                      <div key={b.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                        {/* Company header row */}
+                        <button
+                          className="w-full flex items-center justify-between p-4"
+                          style={{ background: 'rgba(255,255,255,0.03)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                          onClick={() => setExpandedCompany(isOpen ? null : b.id)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div style={{ textAlign: 'left' }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f1f5f9' }}>{b.name || '—'}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{b.email}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                                <span style={{ color: '#f59e0b', fontWeight: 600 }}>{b.credits ?? 0}</span> crediti · <span style={{ color: '#22c55e', fontWeight: 600 }}>€{totalPaid.toFixed(2)}</span> totale · {b.jobs_completed ?? 0} job
+                              </div>
+                            </div>
+                            <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>{payments.length} pagamenti</span>
+                            {isOpen
+                              ? <ChevronDown size={15} style={{ color: '#64748b' }} />
+                              : <ChevronRight size={15} style={{ color: '#64748b' }} />}
+                          </div>
+                        </button>
+
+                        {/* Payments list */}
+                        {isOpen && (
+                          <div style={{ padding: '0.5rem 1rem 1rem' }}>
+                            {payments.length === 0 ? (
+                              <div style={{ fontSize: '0.82rem', color: '#475569', padding: '0.75rem 0' }}>Nessun pagamento registrato</div>
                             ) : (
-                              b.receipt_url ? (
-                                <a
-                                  href={b.receipt_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  download
-                                  className="btn-ghost flex items-center gap-1"
-                                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', display: 'inline-flex' }}
-                                >
-                                  Ricevuta ↓
-                                </a>
-                              ) : (
-                                <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Bonifico</span>
-                              )
+                              <div className="flex flex-col gap-2">
+                                {payments.map((p) => {
+                                  const statusColor = p.status === 'approved' ? '#22c55e' : p.status === 'rejected' ? '#ef4444' : '#f59e0b'
+                                  const statusLabel = p.status === 'approved' ? 'Approvato' : p.status === 'rejected' ? 'Rifiutato' : 'In attesa'
+                                  return (
+                                    <div
+                                      key={p.id}
+                                      className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                                      style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div
+                                          style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem',
+                                            background: p.type === 'stripe' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.1)',
+                                          }}
+                                        >
+                                          {p.type === 'stripe' ? '💳' : '🏦'}
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
+                                            {p.method_label} · +{p.credits} crediti
+                                          </div>
+                                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                            {new Date(p.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f59e0b' }}>€{p.amount_eur.toFixed(2)}</span>
+                                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
+                                          {statusLabel}
+                                        </span>
+                                        {p.type === 'bonifico' && p.receipt_id && (
+                                          <button
+                                            className="btn-ghost flex items-center gap-1"
+                                            style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
+                                            onClick={async () => {
+                                              const token = localStorage.getItem('token')
+                                              const res = await fetch(`/admin/bonifico-requests/${p.receipt_id}/receipt`, {
+                                                headers: { Authorization: `Bearer ${token}` },
+                                              })
+                                              if (!res.ok) return
+                                              const blob = await res.blob()
+                                              const url = URL.createObjectURL(blob)
+                                              const a = document.createElement('a')
+                                              a.href = url; a.download = `ricevuta-${p.receipt_id}.pdf`; a.click()
+                                              URL.revokeObjectURL(url)
+                                            }}
+                                          >
+                                            <FileDown size={12} /> Ricevuta
+                                          </button>
+                                        )}
+                                        {p.type === 'bonifico' && !p.receipt_id && (
+                                          <span style={{ fontSize: '0.7rem', color: '#475569' }}>no allegato</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </motion.div>
@@ -697,6 +926,88 @@ export default function AdminPage() {
                                 onClick={() => deleteReview(r.id)}
                               >
                                 <X size={13} /> Elimina
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+          {tab === 'tickets' && (
+            <motion.div
+              key="tickets"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="card mt-4"
+            >
+              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
+                Segnalazioni / Ticket ({tickets.length})
+              </h3>
+
+              {tickets.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
+                  Nessuna segnalazione
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {tickets.map((t) => {
+                    const statusColor = t.status === 'risolto' ? '#22c55e' : t.status === 'in_elaborazione' ? '#eab308' : '#94a3b8'
+                    const statusLabel = t.status === 'risolto' ? 'Risolto' : t.status === 'in_elaborazione' ? 'In elaborazione' : 'Aperto'
+                    return (
+                      <div
+                        key={t.id}
+                        className="rounded-xl p-4"
+                        style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${t.status === 'risolto' ? 'rgba(34,197,94,0.15)' : t.status === 'in_elaborazione' ? 'rgba(234,179,8,0.2)' : 'rgba(255,255,255,0.07)'}` }}
+                      >
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div style={{ flex: 1 }}>
+                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span style={{ fontSize: '0.8rem', color: '#f1f5f9', fontWeight: 700 }}>{t.subject}</span>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
+                                {statusLabel}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                              <span style={{ fontSize: '0.78rem', color: '#64748b' }}>{t.company_name || '—'}</span>
+                              <span style={{ fontSize: '0.72rem', color: '#475569' }}>{t.company_email}</span>
+                              <span style={{ fontSize: '0.72rem', color: '#475569' }}>
+                                {new Date(t.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                            <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{t.message}</p>
+                          </div>
+                          <div className="flex flex-col gap-1.5 flex-shrink-0">
+                            {t.status !== 'in_elaborazione' && (
+                              <button
+                                className="btn-ghost"
+                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#eab308', borderColor: 'rgba(234,179,8,0.3)', whiteSpace: 'nowrap' }}
+                                onClick={() => updateTicketStatus(t.id, 'in_elaborazione')}
+                              >
+                                In elaborazione
+                              </button>
+                            )}
+                            {t.status !== 'risolto' && (
+                              <button
+                                className="btn-ghost"
+                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.3)', whiteSpace: 'nowrap' }}
+                                onClick={() => updateTicketStatus(t.id, 'risolto')}
+                              >
+                                <Check size={12} /> Risolto
+                              </button>
+                            )}
+                            {t.status !== 'aperto' && (
+                              <button
+                                className="btn-ghost"
+                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#94a3b8', borderColor: 'rgba(148,163,184,0.2)', whiteSpace: 'nowrap' }}
+                                onClick={() => updateTicketStatus(t.id, 'aperto')}
+                              >
+                                Riapri
                               </button>
                             )}
                           </div>
@@ -867,7 +1178,7 @@ export default function AdminPage() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
-                  Clienti Enterprise — Log Inferenze
+                  Clienti Enterprise
                 </h3>
                 <a
                   href="/admin/enterprise-logs/csv"
@@ -891,34 +1202,41 @@ export default function AdminPage() {
                 </a>
               </div>
 
-              {enterpriseLogs.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-                  Nessun cliente Enterprise ha ancora avviato l'inferenza
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {enterpriseLogs.map((l) => (
-                    <div key={l.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                      <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div>
-                          <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.875rem' }}>{l.company_name || l.company_email}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{l.company_email}</div>
-                          {l.vat_number && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>P.IVA: {l.vat_number}</div>}
-                          {l.fh_workspace_id && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Workspace: {l.fh_workspace_id}</div>}
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>
-                            <Check size={9} /> Consenso dati
-                          </span>
-                          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                            {new Date(l.created_at).toLocaleString('it-IT')}
-                          </span>
-                        </div>
+              {(() => {
+                const logs = enterpriseLogs.length > 0 ? enterpriseLogs : FAKE_ENTERPRISE
+                const isFake = enterpriseLogs.length === 0
+                return (
+                  <>
+                    {isFake && (
+                      <div className="rounded-xl px-4 py-2 mb-4" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', fontSize: '0.78rem', color: '#f59e0b' }}>
+                        Dati di esempio — nessun cliente Enterprise reale ancora registrato
                       </div>
+                    )}
+                    <div className="flex flex-col gap-2">
+                      {logs.map((l) => (
+                        <div key={l.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.875rem' }}>{l.company_name || l.company_email}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{l.company_email}</div>
+                              {l.vat_number && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>P.IVA: {l.vat_number}</div>}
+                              {l.fh_workspace_id && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Workspace: {l.fh_workspace_id}</div>}
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>
+                                <Check size={9} /> Consenso dati
+                              </span>
+                              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                {new Date(l.created_at).toLocaleString('it-IT')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </>
+                )
+              })()}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1088,6 +1406,114 @@ export default function AdminPage() {
                     {confirmCreditStep < 3 ? 'Sì' : 'Sì, aggiungi'}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* IP Warning modal */}
+      <AnimatePresence>
+        {ipWarning && (
+          <div className="modal-overlay" onClick={() => setIpWarning(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: '#0d1117', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 20, padding: '2rem', maxWidth: 420, width: '90%' }}
+            >
+              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚠️</div>
+                <div style={{ color: '#eab308', fontWeight: 800, fontSize: '1.05rem', marginBottom: 6 }}>Sospetto doppia azienda — stesso IP</div>
+                <div style={{ color: '#64748b', fontSize: '0.82rem' }}>Queste due aziende si sono registrate dallo stesso indirizzo IP</div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: '1.5rem' }}>
+                {[ipWarning.target, ipWarning.duplicate].map((c) => (
+                  <div key={c.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <div>
+                      <div style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.9rem' }}>{c.ragione_sociale || c.name}</div>
+                      <div style={{ color: '#64748b', fontSize: '0.78rem' }}>{c.email} · IP: <span style={{ fontFamily: 'monospace', color: '#eab308' }}>{c.last_ip}</span></div>
+                    </div>
+                    <button
+                      style={{ flexShrink: 0, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '0.45rem 0.9rem', color: '#ef4444', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      onClick={async () => {
+                        await apiFetch(`/admin/companies/${c.id}/deactivate`, { method: 'POST' })
+                        setCompanies(prev => prev.map(co => co.id === c.id ? { ...co, is_active: false } : co))
+                        setMsg(`Azienda "${c.ragione_sociale || c.name}" bloccata`)
+                        setTimeout(() => setMsg(''), 3000)
+                        setIpWarning(null)
+                      }}
+                    >
+                      🚫 Blocca
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                style={{ width: '100%', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, padding: '0.75rem', color: '#22c55e', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer' }}
+                onClick={() => setIpWarning(null)}
+              >
+                ✓ Accetta entrambe
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm toggle (enable/disable) modal */}
+      <AnimatePresence>
+        {confirmToggle && (
+          <div className="modal-overlay" onClick={() => setConfirmToggle(null)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#0d1117',
+                border: `1px solid ${confirmToggle.activate ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                borderRadius: 20,
+                padding: '2rem',
+                maxWidth: 380,
+                width: '90%',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: 36, marginBottom: 12 }}>{confirmToggle.activate ? '✅' : '🔒'}</div>
+              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1.05rem', marginBottom: 8 }}>
+                {confirmToggle.activate ? 'Attivare l\'azienda?' : 'Disabilitare l\'azienda?'}
+              </h3>
+              <p style={{ color: '#64748b', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: 24 }}>
+                {confirmToggle.activate
+                  ? `Vuoi veramente attivare "${confirmToggle.name}"? Potrà di nuovo accedere e usare il servizio.`
+                  : `Vuoi veramente disabilitare "${confirmToggle.name}"? Non potrà più accedere fino a riattivazione.`}
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  className="btn-ghost"
+                  style={{ padding: '0.6rem 1.4rem', color: '#94a3b8' }}
+                  onClick={() => setConfirmToggle(null)}
+                >
+                  Annulla
+                </button>
+                <button
+                  className="btn-ghost"
+                  style={{
+                    padding: '0.6rem 1.4rem',
+                    color: confirmToggle.activate ? '#22c55e' : '#ef4444',
+                    borderColor: confirmToggle.activate ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)',
+                    fontWeight: 700,
+                  }}
+                  onClick={() => {
+                    toggleCompany(confirmToggle.id, confirmToggle.activate)
+                    setConfirmToggle(null)
+                  }}
+                >
+                  {confirmToggle.activate ? 'Sì, attiva' : 'Sì, disabilita'}
+                </button>
               </div>
             </motion.div>
           </div>

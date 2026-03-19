@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Zap, MapPin, FileDown, Eye, EyeOff, Star, Moon,
-  Upload, Radio, Check, X, Shield, Clock, BarChart2, Rocket,
+  Upload, Radio, Check, X, Shield, Clock, BarChart2, Users, KeyRound,
 } from 'lucide-react'
 
 interface Review { id: string; company?: string; stars: number; comment?: string }
@@ -74,20 +74,9 @@ export default function LoginPage() {
   const [isDark, setIsDark] = useState(true)
   const [showLogin, setShowLogin] = useState(false)
   const [showRegister, setShowRegister] = useState(false)
-  const [showFastReg, setShowFastReg] = useState(false)
-
-  // Fast registration state
-  const [fastStep, setFastStep] = useState<1 | 2>(1)
-  const [fastVat, setFastVat] = useState('')
-  const [fastCompany, setFastCompany] = useState('')
-  const [fastForm, setFastForm] = useState({ name: '', email: '', password: '' })
-  const [fastLoading, setFastLoading] = useState(false)
-  const [fastError, setFastError] = useState('')
-  const [showVatNotFound, setShowVatNotFound] = useState(false)
 
   // Consent state
-const [regConsent, setRegConsent] = useState(false)
-  const [fastConsent, setFastConsent] = useState(false)
+  const [regConsent, setRegConsent] = useState(false)
 
   // Register form state
   const [regForm, setRegForm] = useState({ ragione_sociale: '', name: '', vat_number: '', pec: '', email: '', password: '' })
@@ -120,65 +109,6 @@ const [regConsent, setRegConsent] = useState(false)
     else if (!/[0-9]/.test(regForm.password)) e.password = 'Serve almeno un numero'
     else if (!/[^A-Za-z0-9]/.test(regForm.password)) e.password = 'Serve almeno un simbolo (!@#$...)'
     return e
-  }
-
-  async function checkVat() {
-    const vat = fastVat.trim().replace(/\s/g, '')
-    if (!vat) { setFastError('Inserisci la Partita IVA'); return }
-    if (!/^\d{11}$/.test(vat)) { setFastError('La P.IVA deve essere di 11 cifre numeriche'); return }
-    setFastLoading(true)
-    setFastError('')
-    console.log('[checkVat] Chiamo /auth/check-vat/' + vat)
-    try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => { controller.abort(); console.log('[checkVat] TIMEOUT dopo 8s') }, 8000)
-      const res = await fetch(`/auth/check-vat/${vat}`, { signal: controller.signal })
-      clearTimeout(timeout)
-      console.log('[checkVat] Status risposta:', res.status)
-      const data = await res.json().catch((e) => { console.log('[checkVat] Errore parse JSON:', e); return {} })
-      console.log('[checkVat] Body risposta:', data)
-      if (!res.ok) {
-        setFastLoading(false)
-        setShowVatNotFound(true)
-        return
-      }
-      setFastCompany(data.ragione_sociale || '')
-      setFastStep(2)
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
-      console.log('[checkVat] CATCH errore:', msg)
-      if (msg.includes('aborted') || msg.includes('abort')) {
-        setFastError('Timeout: il server non risponde. Riprova.')
-      } else {
-        setFastError('Errore di connessione al server')
-      }
-    }
-    setFastLoading(false)
-  }
-
-  async function handleFastRegister() {
-    if (!fastForm.name.trim()) { setFastError('Inserisci il tuo nome'); return }
-    if (!fastForm.email.trim() || !fastForm.email.includes('@')) { setFastError('Email non valida'); return }
-    if (fastForm.password.length < 8) { setFastError('Password di almeno 8 caratteri'); return }
-    setFastLoading(true)
-    setFastError('')
-    try {
-      const res = await fetch('/auth/register-fast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vat_number: fastVat.trim(), ...fastForm }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) { setFastError(data.detail || 'Errore durante la registrazione'); setFastLoading(false); return }
-      localStorage.setItem('token', data.access_token || '')
-      localStorage.setItem('name', data.name || fastForm.name)
-      localStorage.setItem('email', data.email || fastForm.email)
-      localStorage.setItem('credits', String(data.credits ?? 0))
-      localStorage.setItem('is_admin', 'false')
-      window.scrollTo(0, 0)
-      navigate('/dashboard')
-    } catch { setFastError('Errore di connessione') }
-    setFastLoading(false)
   }
 
   async function handleRegister(e: React.FormEvent) {
@@ -286,15 +216,9 @@ const [regConsent, setRegConsent] = useState(false)
 
           <button
             onClick={() => setShowRegister(true)}
-            style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)', borderRadius: 10, padding: '0.45rem 1rem', color: '#000', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 0 14px rgba(245,158,11,0.3)', border: 'none' }}
+            style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, padding: '0.45rem 1rem', color: '#f59e0b', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}
           >
             Registra Azienda
-          </button>
-          <button
-            onClick={() => { setShowFastReg(true); setFastStep(1); setFastVat(''); setFastError(''); setFastCompany(''); setFastForm({ name: '', email: '', password: '' }) }}
-            style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, padding: '0.45rem 1rem', color: '#f59e0b', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-          >
-          Registra Dipendente
           </button>
           <button
             onClick={() => setShowLogin(true)}
@@ -423,7 +347,7 @@ const [regConsent, setRegConsent] = useState(false)
 
             <p style={{ fontSize: '0.9rem', color: t.textSec, lineHeight: 1.75, margin: 0 }}>
               Elabora il volo con <strong style={{ color: t.text }}>Pix4D</strong>, <strong style={{ color: t.text }}>DJI Terra</strong> o qualsiasi software di fotogrammetria,
-              esporta il TIF termico e caricalo su SolarDino. L'AI analizza l'immagine e genera i report.
+              esporta sia i TIF RGB e termico sia i file tfw e caricali su SolarDino. L'AI analizza l'immagine e genera i report.
             </p>
 
             <div className="flex flex-col gap-2.5">
@@ -500,7 +424,7 @@ const [regConsent, setRegConsent] = useState(false)
         </div>
       </section>
 
-      {/* ── Registrazione spiegazione ───────────────────────────── */}
+      {/* ── Come funziona la registrazione ─────────────────────── */}
       <section className="relative z-10 px-6 lg:px-12 pb-20" style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>
         <motion.div
           initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
@@ -508,83 +432,80 @@ const [regConsent, setRegConsent] = useState(false)
         >
           <div style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Inizia gratis</div>
           <h2 style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', fontWeight: 800, color: t.text, letterSpacing: '-0.03em' }}>
-            Come registrarsi su SolarDino
+            Un account aziendale, tutto il tuo team
           </h2>
-          <p style={{ color: t.textMuted, fontSize: '0.95rem', marginTop: 10, maxWidth: 540, margin: '10px auto 0' }}>
-            Due percorsi distinti: uno per la prima registrazione aziendale, uno per i dipendenti.
+          <p style={{ color: t.textMuted, fontSize: '0.95rem', marginTop: 10, maxWidth: 600, margin: '10px auto 0' }}>
+            Registra la tua azienda una sola volta. L'account che si iscrive diventa <strong style={{ color: t.text }}>Manager</strong> e può aggiungere tutti i collaboratori dal proprio profilo — nessuna registrazione separata.
           </p>
         </motion.div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-20">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
-            className="rounded-3xl p-8 flex flex-col gap-5"
-            style={{ background: t.cardBg, border: `1.5px solid rgba(245,158,11,0.25)` }}
-          >
-            <div className="flex items-center gap-4">
-              <div style={{ width: 52, height: 52, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>🏢</div>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Prima registrazione</div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: t.text, margin: 0, letterSpacing: '-0.02em' }}>Registra la tua azienda</h3>
-              </div>
-            </div>
-            <p style={{ fontSize: '0.9rem', color: t.textSec, lineHeight: 1.75, margin: 0 }}>
-              Se la tua azienda non è ancora su SolarDino, compila la registrazione completa.
-              Vengono verificati automaticamente la <strong style={{ color: t.text }}>Partita IVA</strong> tramite il registro europeo VIES
-              e la <strong style={{ color: t.text }}>PEC aziendale</strong> certificata.
-            </p>
-            <div className="flex flex-col gap-2.5">
-              {['Ragione sociale + Partita IVA', 'PEC aziendale certificata', 'Verifica automatica P.IVA sul registro europeo VIES', 'Richiedi 1 credito gratuito dalla dashboard', 'Accesso immediato alla dashboard'].map((f) => (
-                <div key={f} className="flex items-start gap-2.5">
-                  <div style={{ width: 18, height: 18, background: 'rgba(245,158,11,0.12)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                    <Check size={10} color="#f59e0b" strokeWidth={3} />
-                  </div>
-                  <span style={{ fontSize: '0.85rem', color: t.textSec }}>{f}</span>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowRegister(true)}
-              style={{ marginTop: 'auto', background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.8rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}
-            >
-              Registra azienda →
-            </button>
-          </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}
-            className="rounded-3xl p-8 flex flex-col gap-5"
-            style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}` }}
-          >
-            <div className="flex items-center gap-4">
-              <div style={{ width: 52, height: 52, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>👤</div>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Azienda già registrata</div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: t.text, margin: 0, letterSpacing: '-0.02em' }}>Registrazione dipendente</h3>
-              </div>
-            </div>
-            <p style={{ fontSize: '0.9rem', color: t.textSec, lineHeight: 1.75, margin: 0 }}>
-              Se la tua azienda è già su SolarDino, crea il tuo account personale in pochi secondi.
-              Basta inserire la <strong style={{ color: t.text }}>Partita IVA aziendale</strong> — il sistema riconosce automaticamente
-              la tua azienda e condividi il pool di crediti con i colleghi.
-            </p>
-            <div className="flex flex-col gap-2.5">
-              {["Inserisci solo la P.IVA della tua azienda", "Il sistema verifica che l'azienda sia già registrata", 'Crea il tuo account con nome, email e password', 'Crediti condivisi con tutti i colleghi della stessa azienda', 'Accesso immediato, zero attese'].map((f) => (
-                <div key={f} className="flex items-start gap-2.5">
-                  <div style={{ width: 18, height: 18, background: 'rgba(245,158,11,0.08)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                    <Check size={10} color="#f59e0b" strokeWidth={3} />
-                  </div>
-                  <span style={{ fontSize: '0.85rem', color: t.textSec }}>{f}</span>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => { setShowFastReg(true); setFastStep(1); setFastVat(''); setFastError(''); setFastCompany(''); setFastForm({ name: '', email: '', password: '' }) }}
-              style={{ marginTop: 'auto', background: t.cardBg, border: `1px solid rgba(245,158,11,0.35)`, borderRadius: 12, padding: '0.8rem 1.5rem', color: '#f59e0b', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}
+        {/* Passi numerati */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-12">
+          {[
+            {
+              step: '1',
+              icon: <span style={{ fontSize: 24 }}>🏢</span>,
+              title: 'Registra la tua azienda',
+              desc: "Compila il form con ragione sociale, P.IVA e PEC. L'email usata diventa l'account Manager principale.",
+              highlight: true,
+            },
+            {
+              step: '2',
+              icon: <Users size={22} color="#f59e0b" />,
+              title: 'Aggiungi il tuo team',
+              desc: "Dal profilo Manager trovi il Gestionale Team: inserisci email e password per ogni collaboratore. Gli account vengono creati istantaneamente.",
+              highlight: false,
+            },
+            {
+              step: '3',
+              icon: <KeyRound size={22} color="#f59e0b" />,
+              title: 'Crediti condivisi',
+              desc: "Tutti gli account sotto la stessa Partita IVA condividono lo stesso pool di crediti. Un acquisto vale per tutto il team.",
+              highlight: false,
+            },
+          ].map((item) => (
+            <motion.div
+              key={item.step}
+              initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
+              className="rounded-3xl p-7 flex flex-col gap-4"
+              style={{ background: item.highlight ? 'rgba(245,158,11,0.05)' : t.cardBg, border: item.highlight ? '1.5px solid rgba(245,158,11,0.3)' : `1px solid ${t.cardBorder}` }}
             >
-              Registra dipendente →
-            </button>
-          </motion.div>
+              <div className="flex items-center gap-3">
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#f59e0b,#f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>
+                  {item.step}
+                </div>
+                <div style={{ width: 44, height: 44, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {item.icon}
+                </div>
+              </div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: t.text, margin: 0, letterSpacing: '-0.02em' }}>{item.title}</h3>
+              <p style={{ fontSize: '0.875rem', color: t.textSec, lineHeight: 1.7, margin: 0 }}>{item.desc}</p>
+            </motion.div>
+          ))}
         </div>
+
+        {/* CTA unico */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
+          className="rounded-3xl p-8 flex flex-col sm:flex-row items-center justify-between gap-6 mb-20"
+          style={{ background: 'linear-gradient(135deg,rgba(245,158,11,0.08),rgba(249,115,22,0.04))', border: '1.5px solid rgba(245,158,11,0.25)' }}
+        >
+          <div>
+            <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Niente registrazioni multiple</div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: t.text, margin: 0, letterSpacing: '-0.02em' }}>
+              Registra l'azienda e gestisci tutto dal tuo profilo
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: t.textMuted, margin: '6px 0 0', lineHeight: 1.6 }}>
+              Un solo form, validazione automatica VIES + PEC, accesso immediato alla dashboard.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowRegister(true)}
+            style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 14, padding: '0.85rem 2rem', color: '#000', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 20px rgba(245,158,11,0.3)' }}
+          >
+            Registra la tua azienda →
+          </button>
+        </motion.div>
       </section>
 
       {/* ── Features grid ───────────────────────────────────────── */}
@@ -594,7 +515,7 @@ const [regConsent, setRegConsent] = useState(false)
           className="text-center mb-10"
         >
           <h2 style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)', fontWeight: 800, color: t.text, letterSpacing: '-0.03em' }}>
-            Tutto quello che ti serve per ispezioni solari professionali
+            Tutto quello che ti serve per ispezioni solari professionali !
           </h2>
         </motion.div>
 
@@ -858,183 +779,12 @@ const [regConsent, setRegConsent] = useState(false)
               </form>
 
               <div className="text-center mt-4" style={{ paddingTop: '1rem', borderTop: `1px solid ${t.cardBorder}` }}>
-                <span style={{ fontSize: '0.79rem', color: t.textMuted }}>Sei un dipendente di un'azienda già iscritta? </span>
-                <button
-                  style={{ fontSize: '0.79rem', color: '#f59e0b', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                  onClick={() => { setShowRegister(false); setShowFastReg(true); setFastStep(1); setFastVat(''); setFastError(''); setFastCompany(''); setFastForm({ name: '', email: '', password: '' }) }}
-                >
-                  Registra dipendente
-                </button>
                 <div style={{ marginTop: 8, fontSize: '0.75rem', color: t.textFaint }}>
                   Problemi con la registrazione? Scrivi a{' '}
                   <a href="mailto:agervasini1@gmail.com" style={{ color: '#f59e0b', textDecoration: 'none', fontWeight: 600 }}>
                     agervasini1@gmail.com
                   </a>
                 </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Fast Registration modal ──────────────────────────────── */}
-      <AnimatePresence>
-        {showFastReg && (
-          <div className="modal-overlay" style={{ zIndex: 200 }} onClick={() => setShowFastReg(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              transition={{ duration: 0.22 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 420, background: t.formBg, border: `1px solid ${t.formBorder}`, borderRadius: 24, padding: '2.5rem', boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div style={{ width: 32, height: 32, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Rocket size={16} color="#f59e0b" />
-                  </div>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: t.text, margin: 0 }}>Registrazione rapida</h2>
-                </div>
-                <button onClick={() => setShowFastReg(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.textMuted, display: 'flex' }}>
-                  <X size={20} />
-                </button>
-              </div>
-              <p style={{ fontSize: '0.82rem', color: t.textMuted, marginBottom: '1.5rem' }}>
-                Inserisci la P.IVA della tua azienda per registrarti in 30 secondi. Se l'azienda non è ancora registrata verrai indirizzato alla registrazione completa.
-              </p>
-
-              {fastError && (
-                <div className="rounded-xl p-3 mb-4" style={{ background: t.errorBg, border: `1px solid ${t.errorBorder}`, color: t.errorColor, fontSize: '0.85rem' }}>
-                  {fastError}
-                </div>
-              )}
-
-              {fastStep === 1 && (
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <label className="form-label" style={{ color: t.textMuted }}>Partita IVA aziendale</label>
-                    <input
-                      className="form-input"
-                      type="text"
-                      placeholder="12345678901"
-                      value={fastVat}
-                      onChange={(e) => setFastVat(e.target.value.replace(/\D/g, '').slice(0, 11))}
-                      onKeyDown={(e) => e.key === 'Enter' && checkVat()}
-                      style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text, letterSpacing: '0.05em', fontSize: '1.1rem' }}
-                    />
-                    <p style={{ fontSize: '0.72rem', color: t.textMuted, marginTop: 4 }}>Inserisci le 11 cifre della P.IVA della tua azienda</p>
-                  </div>
-                  <button className="btn-amber w-full" onClick={checkVat} disabled={fastLoading} style={{ padding: '0.85rem', fontSize: '0.975rem' }}>
-                    {fastLoading ? (
-                      <span className="flex items-center gap-2">
-                        <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid rgba(0,0,0,0.3)', borderTopColor: '#000', borderRadius: '50%' }} />
-                        Verifica in corso...
-                      </span>
-                    ) : 'Verifica azienda →'}
-                  </button>
-                  <p style={{ fontSize: '0.78rem', color: t.textMuted, textAlign: 'center' }}>
-                    Azienda nuova?{' '}
-                    <button style={{ color: '#f59e0b', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '0.78rem' }}
-                      onClick={() => { setShowFastReg(false); setShowRegister(true) }}>
-                      Registrazione completa →
-                    </button>
-                  </p>
-                </div>
-              )}
-
-              {fastStep === 2 && (
-                <div className="flex flex-col gap-4">
-                  <div className="rounded-xl p-4" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>✓ Azienda trovata</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: t.text }}>{fastCompany}</div>
-                    <div style={{ fontSize: '0.75rem', color: t.textMuted, marginTop: 2 }}>P.IVA: {fastVat}</div>
-                  </div>
-                  <div>
-                    <label className="form-label" style={{ color: t.textMuted }}>Il tuo nome</label>
-                    <input className="form-input" type="text" placeholder="Mario Rossi"
-                      value={fastForm.name} onChange={(e) => setFastForm(f => ({ ...f, name: e.target.value }))}
-                      style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text }} />
-                  </div>
-                  <div>
-                    <label className="form-label" style={{ color: t.textMuted }}>La tua email</label>
-                    <input className="form-input" type="email" placeholder="mario@azienda.it"
-                      value={fastForm.email} onChange={(e) => setFastForm(f => ({ ...f, email: e.target.value }))}
-                      style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text }} />
-                  </div>
-                  <div>
-                    <label className="form-label" style={{ color: t.textMuted }}>Scegli una password</label>
-                    <input className="form-input" type="password" placeholder="Min 8 caratteri"
-                      value={fastForm.password} onChange={(e) => setFastForm(f => ({ ...f, password: e.target.value }))}
-                      style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text }} />
-                  </div>
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={fastConsent}
-                      onChange={(e) => setFastConsent(e.target.checked)}
-                      style={{ marginTop: 3, flexShrink: 0, accentColor: '#f59e0b' }}
-                    />
-                    <span style={{ fontSize: '0.78rem', color: t.textMuted, lineHeight: 1.5 }}>
-                      Acconsento al trattamento dei miei dati personali ai sensi del Regolamento UE 2016/679 (GDPR) e accetto i Termini di Servizio e la Privacy Policy di SolarDino.
-                    </span>
-                  </label>
-
-                  <button className="btn-amber w-full" onClick={handleFastRegister} disabled={fastLoading || !fastConsent} style={{ padding: '0.85rem', fontSize: '0.975rem', opacity: !fastConsent ? 0.5 : 1 }}>
-                    {fastLoading ? (
-                      <span className="flex items-center gap-2">
-                        <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid rgba(0,0,0,0.3)', borderTopColor: '#000', borderRadius: '50%' }} />
-                        Creazione account...
-                      </span>
-                    ) : 'Crea il mio account'}
-                  </button>
-                  <button style={{ fontSize: '0.8rem', color: t.textMuted, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'center' }}
-                    onClick={() => { setFastStep(1); setFastError('') }}>
-                    ← Cambia P.IVA
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* P.IVA non trovata modal */}
-      <AnimatePresence>
-        {showVatNotFound && (
-          <div className="modal-overlay" style={{ zIndex: 300 }} onClick={() => setShowVatNotFound(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.92 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: t.formBg, border: '1.5px solid rgba(239,68,68,0.4)', borderRadius: 20, padding: '2rem', maxWidth: 380, width: '90%', textAlign: 'center' }}
-            >
-              <div style={{ fontSize: 44, marginBottom: 12 }}>🔍</div>
-              <h3 style={{ color: '#ef4444', fontWeight: 800, fontSize: '1.15rem', marginBottom: 8 }}>
-                P.IVA mai registrata
-              </h3>
-              <p style={{ color: t.textMuted, fontSize: '0.875rem', lineHeight: 1.6, marginBottom: 24 }}>
-                La Partita IVA <strong style={{ color: t.text }}>{fastVat}</strong> non risulta registrata su SolarDino.<br /><br />
-                Se sei il primo della tua azienda, devi registrarla prima tu.
-              </p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => {
-                    setShowVatNotFound(false)
-                    setShowFastReg(false)
-                    setShowRegister(true)
-                  }}
-                  style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.75rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}
-                >
-                  Registra la mia azienda →
-                </button>
-                <button
-                  onClick={() => setShowVatNotFound(false)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.textMuted, fontSize: '0.85rem', padding: '0.5rem' }}
-                >
-                  Riprova con un'altra P.IVA
-                </button>
               </div>
             </motion.div>
           </div>

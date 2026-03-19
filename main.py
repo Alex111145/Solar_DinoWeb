@@ -41,6 +41,9 @@ async def lifespan(app: FastAPI):
             # Permetti email duplicate tra aziende diverse: rimuovi unique su email, aggiungi composite su (email, vat_number)
             "ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_email_key",
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_email_vat ON companies (email, vat_number) WHERE deleted_at IS NULL",
+            # Nuove colonne manager/slave e ticket status
+            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'aperto'",
         ]:
             try:
                 conn.execute(text(col_sql))

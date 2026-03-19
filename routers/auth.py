@@ -164,6 +164,63 @@ def _is_valid_pec(pec: str) -> bool:
     return False
 
 
+ADMIN_EMAIL_NOTIFY = os.getenv("ADMIN_EMAIL", "agervasini1@gmail.com")
+
+def _notify_admin_new_company(company: "models.Company", tipo: str) -> None:
+    """Invia email all'admin quando si registra una nuova azienda o dipendente."""
+    html = f"""<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.13);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:32px 40px;text-align:center;">
+            <h1 style="margin:0;color:#f59e0b;font-size:20px;font-weight:700;">☀️ SolarDino</h1>
+            <p style="margin:8px 0 0;color:#94a3b8;font-size:12px;text-transform:uppercase;letter-spacing:1px;">{tipo}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#fff;padding:36px 40px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Ragione sociale</span><br>
+                <strong style="color:#0f172a;font-size:15px;">{company.ragione_sociale or "—"}</strong>
+              </td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Referente</span><br>
+                <strong style="color:#0f172a;">{company.name}</strong>
+              </td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Email</span><br>
+                <strong style="color:#0f172a;">{company.email}</strong>
+              </td></tr>
+              <tr><td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+                <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">Partita IVA</span><br>
+                <strong style="color:#0f172a;">{company.vat_number or "—"}</strong>
+              </td></tr>
+              <tr><td style="padding:10px 0;">
+                <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.5px;">PEC</span><br>
+                <strong style="color:#0f172a;">{company.pec or "—"}</strong>
+              </td></tr>
+            </table>
+            <div style="margin-top:28px;text-align:center;">
+              <a href="https://solar-dinoweb.onrender.com/admin"
+                 style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;font-weight:700;padding:13px 28px;border-radius:12px;text-decoration:none;font-size:14px;">
+                Vai all'admin
+              </a>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    send_email(ADMIN_EMAIL_NOTIFY, f"SolarDino — {tipo}: {company.ragione_sociale or company.name}", html)
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -294,10 +351,17 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         password_hash   = auth_utils.hash_password(req.password),
         credits         = inherited_credits,
         is_active       = True,
+        is_manager      = True,   # primo account = manager dell'azienda
     )
     db.add(company)
     db.commit()
     db.refresh(company)
+
+    # Notifica admin nuova registrazione
+    try:
+        _notify_admin_new_company(company, tipo="Nuova azienda")
+    except Exception:
+        pass
 
     token = auth_utils.create_token({"sub": str(company.id)})
     return {
@@ -309,6 +373,109 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         "is_admin":     False,
     }
 
+
+# ── Slave account management (solo manager) ──────────────────────────────────
+
+class CreateSlaveRequest(BaseModel):
+    name:     str
+    email:    str
+    password: str
+
+
+@router.get("/slaves")
+def list_slaves(
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Restituisce gli account slave sotto la stessa P.IVA (solo per manager)."""
+    if not current.is_manager:
+        raise HTTPException(status_code=403, detail="Solo il manager può gestire gli account del team.")
+    slaves = (
+        db.query(models.Company)
+        .filter(
+            models.Company.vat_number == current.vat_number,
+            models.Company.is_manager == False,
+            models.Company.deleted_at.is_(None),
+        )
+        .order_by(models.Company.created_at)
+        .all()
+    )
+    return [
+        {
+            "id":         s.id,
+            "name":       s.name,
+            "email":      s.email,
+            "is_active":  s.is_active,
+            "created_at": s.created_at.isoformat(),
+        }
+        for s in slaves
+    ]
+
+
+@router.post("/create-slave", status_code=201)
+def create_slave(
+    req: CreateSlaveRequest,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Crea un account slave sotto la stessa azienda (solo manager)."""
+    if not current.is_manager:
+        raise HTTPException(status_code=403, detail="Solo il manager può creare account per il team.")
+
+    email = req.email.lower().strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Email non valida")
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Nome obbligatorio")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password di almeno 8 caratteri")
+
+    if db.query(models.Company).filter(
+        models.Company.email == email,
+        models.Company.deleted_at.is_(None),
+    ).first():
+        raise HTTPException(status_code=400, detail="Email già in uso")
+
+    slave = models.Company(
+        email           = email,
+        name            = req.name.strip(),
+        ragione_sociale = current.ragione_sociale,
+        vat_number      = current.vat_number,
+        pec             = current.pec,
+        password_hash   = auth_utils.hash_password(req.password),
+        credits         = current.credits,
+        is_active       = True,
+        is_manager      = False,
+    )
+    db.add(slave)
+    db.commit()
+    db.refresh(slave)
+    return {"message": f"Account '{slave.name}' creato con successo.", "id": slave.id}
+
+
+@router.delete("/slaves/{slave_id}")
+def delete_slave(
+    slave_id: int,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Elimina (soft delete) un account slave (solo manager)."""
+    if not current.is_manager:
+        raise HTTPException(status_code=403, detail="Solo il manager può rimuovere account del team.")
+
+    slave = db.query(models.Company).filter(
+        models.Company.id == slave_id,
+        models.Company.vat_number == current.vat_number,
+        models.Company.is_manager == False,
+        models.Company.deleted_at.is_(None),
+    ).first()
+    if not slave:
+        raise HTTPException(status_code=404, detail="Account non trovato")
+
+    slave.deleted_at = datetime.now(timezone.utc)
+    slave.is_active  = False
+    db.commit()
+    return {"message": "Account rimosso"}
 
 @router.get("/verify-pec/{token}", response_class=HTMLResponse)
 def verify_pec(token: str, db: Session = Depends(get_db)):
@@ -385,8 +552,45 @@ def me(current: models.Company = Depends(auth_utils.get_current_company)):
         "vat_number":      current.vat_number or "",
         "credits":         current.credits,
         "is_admin":        current.email == auth_utils.ADMIN_EMAIL,
+        "is_manager":      bool(current.is_manager),
         "created_at":      current.created_at.isoformat(),
     }
+
+
+@router.post("/support", status_code=201)
+def send_support_ticket(
+    body: dict,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Invia una richiesta di assistenza all'admin."""
+    subject = (body.get("subject") or "").strip()
+    message = (body.get("message") or "").strip()
+    if not subject or not message:
+        raise HTTPException(status_code=400, detail="Oggetto e messaggio obbligatori")
+    if len(message) > 5000:
+        raise HTTPException(status_code=400, detail="Messaggio troppo lungo (max 5000 caratteri)")
+
+    ticket = models.SupportTicket(
+        company_id = current.id,
+        subject    = subject,
+        message    = message,
+    )
+    db.add(ticket)
+    db.commit()
+
+    try:
+        import email_utils
+        email_utils.notify_support_ticket(
+            company_name  = current.ragione_sociale or current.name,
+            company_email = current.email,
+            subject       = subject,
+            message       = message,
+        )
+    except Exception:
+        pass
+
+    return {"message": "Richiesta inviata. Ti risponderemo via email il prima possibile."}
 
 
 @router.delete("/me")
@@ -724,6 +928,12 @@ def register_fast(body: dict, db: Session = Depends(get_db)):
     db.add(company)
     db.commit()
     db.refresh(company)
+
+    # Notifica admin nuovo dipendente registrato
+    try:
+        _notify_admin_new_company(company, tipo="Nuovo dipendente registrato")
+    except Exception:
+        pass
 
     token = auth_utils.create_token({"sub": str(company.id)})
     return {

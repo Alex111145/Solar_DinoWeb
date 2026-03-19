@@ -208,7 +208,7 @@ def filtra_punti_unici(detections, soglia_metri):
     return unique
 
 # ==============================================================================
-# 💾 ESPORTAZIONI
+#  ESPORTAZIONI
 # ==============================================================================
 
 def esporta_csv(panels, path):

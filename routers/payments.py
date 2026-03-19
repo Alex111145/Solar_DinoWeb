@@ -134,8 +134,21 @@ async def stripe_webhook(
             if company:
                 company.credits += credits
                 sync_credits_by_vat(db, company.vat_number, company.credits)
-                db.commit()
                 amount_eur = (sess.get("amount_total") or 0) / 100
+                # Salva il pagamento Stripe nel DB
+                existing = db.query(models.StripePayment).filter(
+                    models.StripePayment.stripe_session == sess.get("id")
+                ).first()
+                if not existing:
+                    sp = models.StripePayment(
+                        company_id     = company_id,
+                        stripe_session = sess.get("id"),
+                        package        = package,
+                        credits        = credits,
+                        amount_eur     = amount_eur,
+                    )
+                    db.add(sp)
+                db.commit()
                 email_utils.notify_stripe_payment(
                     company_name=company.ragione_sociale or company.name,
                     company_email=company.email,
