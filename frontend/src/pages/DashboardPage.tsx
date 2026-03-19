@@ -5,7 +5,7 @@ import {
   Sun, Upload, CreditCard, History, Star, LogOut,
   X, FileDown, Check, AlertTriangle, Trash2,
   Mail, Lock, Building2, ChevronRight, Zap, Moon,
-  Wifi, WifiOff, RefreshCw, Radio, Users, UserPlus,
+  Wifi, WifiOff, RefreshCw, Radio, Users, UserPlus, Bell,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -33,6 +33,7 @@ interface Review {
   stars: number
   comment?: string
   created_at?: string
+  status?: string
 }
 
 interface FhMission {
@@ -243,7 +244,7 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
 interface SlaveAccount { id: number; name: string; email: string; is_active: boolean }
 
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, isManager,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete,
 }: {
   name: string
   email: string
@@ -256,7 +257,7 @@ function ProfileSidebar({
   onClose: () => void
   isDark: boolean
   onToggleTheme: () => void
-  isManager: boolean
+  onRequestDelete: () => void
 }) {
   const navigate = useNavigate()
   const [openSection, setOpenSection] = useState<string | null>(null)
@@ -266,17 +267,9 @@ function ProfileSidebar({
   const [newPwd, setNewPwd] = useState('')
   const [pwdConfirm, setPwdConfirm] = useState(false)
   const [msg, setMsg] = useState('')
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editStars, setEditStars] = useState(myReview?.stars ?? 0)
   const [editComment, setEditComment] = useState(myReview?.comment ?? '')
   const [reviewMsg, setReviewMsg] = useState('')
-
-  // Slave management state
-  const [slaves, setSlaves] = useState<SlaveAccount[]>([])
-  const [slavesLoaded, setSlavesLoaded] = useState(false)
-  const [slaveForm, setSlaveForm] = useState({ name: '', email: '', password: '' })
-  const [slaveMsg, setSlaveMsg] = useState('')
-  const [slaveLoading, setSlaveLoading] = useState(false)
 
   useEffect(() => {
     if (myReview) {
@@ -287,45 +280,6 @@ function ProfileSidebar({
 
   function toggle(s: string) {
     setOpenSection((prev) => (prev === s ? null : s))
-    if (s === 'team' && !slavesLoaded) loadSlaves()
-  }
-
-  async function loadSlaves() {
-    try {
-      const res = await apiFetch('/auth/slaves')
-      if (res.ok) { setSlaves(await res.json()); setSlavesLoaded(true) }
-    } catch { /* noop */ }
-  }
-
-  async function createSlave() {
-    if (!slaveForm.name || !slaveForm.email || !slaveForm.password) {
-      setSlaveMsg('Compila tutti i campi'); return
-    }
-    setSlaveLoading(true)
-    setSlaveMsg('')
-    try {
-      const res = await apiFetch('/auth/create-slave', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(slaveForm),
-      })
-      if (res.ok) {
-        setSlaveForm({ name: '', email: '', password: '' })
-        setSlaveMsg('Account creato con successo!')
-        await loadSlaves()
-      } else {
-        const err = await res.json().catch(() => ({}))
-        setSlaveMsg(err.detail || 'Errore creazione account')
-      }
-    } catch { setSlaveMsg('Errore di rete') }
-    setSlaveLoading(false)
-  }
-
-  async function deleteSlave(id: number) {
-    try {
-      const res = await apiFetch(`/auth/slaves/${id}`, { method: 'DELETE' })
-      if (res.ok) setSlaves((prev) => prev.filter((s) => s.id !== id))
-    } catch { /* noop */ }
   }
 
   async function updateReview() {
@@ -377,14 +331,6 @@ function ProfileSidebar({
       if (res.ok) { setMsg('Password aggiornata con successo'); setPwdConfirm(false) }
       else setMsg('Errore: password attuale errata')
     } catch { setMsg('Errore') }
-  }
-
-  async function deleteAccount() {
-    try {
-      await apiFetch('/auth/delete-account', { method: 'DELETE' })
-      localStorage.clear()
-      navigate('/login')
-    } catch { setMsg('Errore eliminazione account') }
   }
 
   async function logout() {
@@ -495,28 +441,13 @@ function ProfileSidebar({
                 <p style={{ fontSize: '0.75rem', color: st.textMuted, marginBottom: '0.75rem' }}>
                   Per modificare email o password usa le sezioni dedicate. Per altri dati contatta il supporto.
                 </p>
-                {!deleteConfirm ? (
-                  <button
-                    className="flex items-center gap-2"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}
-                    onClick={() => setDeleteConfirm(true)}
-                  >
-                    <Trash2 size={13} /> Elimina account
-                  </button>
-                ) : (
-                  <div>
-                    <p style={{ fontSize: '0.8rem', color: '#ef4444', marginBottom: 8 }}>Sei sicuro? Questa azione è irreversibile.</p>
-                    <div className="flex gap-2">
-                      <button className="btn-ghost" style={{ fontSize: '0.75rem', padding: '0.4rem 0.75rem' }} onClick={() => setDeleteConfirm(false)}>Annulla</button>
-                      <button
-                        style={{ background: '#ef4444', border: 'none', borderRadius: 8, padding: '0.4rem 0.75rem', color: '#fff', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                        onClick={deleteAccount}
-                      >
-                        Elimina definitivamente
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <button
+                  className="flex items-center gap-2"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}
+                  onClick={() => { onClose(); onRequestDelete() }}
+                >
+                  <Trash2 size={13} /> Elimina account
+                </button>
               </div>
             )}
           </div>
@@ -677,90 +608,7 @@ function ProfileSidebar({
               </div>
             )}
           </div>
-          {/* Gestione Team — solo manager */}
-          {isManager && (
-            <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
-              <button
-                className="w-full flex items-center justify-between p-4"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
-                onClick={() => toggle('team')}
-              >
-                <span className="flex items-center gap-2 text-sm font-medium"><Users size={15} /> Gestione Team</span>
-                <ChevronRight size={15} style={{ transform: openSection === 'team' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
-              </button>
-              {openSection === 'team' && (
-                <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
-                  {/* Existing slaves */}
-                  {slaves.length > 0 && (
-                    <div className="flex flex-col gap-2 mt-3 mb-4">
-                      {slaves.map((s) => (
-                        <div key={s.id} className="flex items-center justify-between" style={{ padding: '0.55rem 0.75rem', background: st.rowBg, borderRadius: 10, border: `1px solid ${st.rowBorder}` }}>
-                          <div>
-                            <div style={{ fontSize: '0.82rem', color: st.text, fontWeight: 600 }}>{s.name}</div>
-                            <div style={{ fontSize: '0.72rem', color: st.textMuted }}>{s.email}</div>
-                          </div>
-                          <button
-                            onClick={() => deleteSlave(s.id)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '0.2rem', display: 'flex' }}
-                            title="Rimuovi"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {slavesLoaded && slaves.length === 0 && (
-                    <p style={{ fontSize: '0.8rem', color: st.textMuted, textAlign: 'center', padding: '0.75rem 0' }}>Nessun account secondario.</p>
-                  )}
-
-                  {/* Add slave form */}
-                  <div style={{ borderTop: slaves.length > 0 ? `1px solid ${st.borderSub}` : 'none', paddingTop: slaves.length > 0 ? '0.75rem' : '0.75rem' }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <UserPlus size={13} style={{ color: '#f59e0b' }} />
-                      <span style={{ fontSize: '0.78rem', color: st.textSec, fontWeight: 600 }}>Nuovo account dipendente</span>
-                    </div>
-                    <input
-                      className="form-input mb-2"
-                      placeholder="Nome dipendente"
-                      value={slaveForm.name}
-                      onChange={(e) => setSlaveForm((f) => ({ ...f, name: e.target.value }))}
-                      style={{ fontSize: '0.82rem' }}
-                    />
-                    <input
-                      className="form-input mb-2"
-                      type="email"
-                      placeholder="Email dipendente"
-                      value={slaveForm.email}
-                      onChange={(e) => setSlaveForm((f) => ({ ...f, email: e.target.value }))}
-                      style={{ fontSize: '0.82rem' }}
-                    />
-                    <input
-                      className="form-input mb-3"
-                      type="password"
-                      placeholder="Password temporanea"
-                      value={slaveForm.password}
-                      onChange={(e) => setSlaveForm((f) => ({ ...f, password: e.target.value }))}
-                      style={{ fontSize: '0.82rem' }}
-                    />
-                    {slaveMsg && (
-                      <div className="rounded-xl p-2 mb-3" style={{ background: slaveMsg.includes('successo') ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${slaveMsg.includes('successo') ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`, color: slaveMsg.includes('successo') ? '#22c55e' : '#ef4444', fontSize: '0.78rem' }}>
-                        {slaveMsg}
-                      </div>
-                    )}
-                    <button
-                      className="btn-amber w-full"
-                      style={{ fontSize: '0.82rem', padding: '0.55rem' }}
-                      disabled={slaveLoading}
-                      onClick={createSlave}
-                    >
-                      <UserPlus size={13} /> {slaveLoading ? 'Creazione...' : 'Crea account'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Gestione Team — rimossa dalla sidebar, ora nella navbar (icona Users) */}
 
           {/* Modifica recensione */}
           {myReview && (
@@ -770,7 +618,14 @@ function ProfileSidebar({
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
                 onClick={() => toggle('recensione')}
               >
-                <span className="flex items-center gap-2 text-sm font-medium"><Star size={15} /> Modifica recensione</span>
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Star size={15} /> Modifica recensione
+                  {myReview.status === 'approved' || myReview.status === 'approvata' ? (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 7px' }}>Approvata</span>
+                  ) : (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#eab308', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 20, padding: '1px 7px' }}>In attesa di approvazione</span>
+                  )}
+                </span>
                 <ChevronRight size={15} style={{ transform: openSection === 'recensione' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
               </button>
               {openSection === 'recensione' && (
@@ -835,7 +690,11 @@ function SupportCard() {
       })
       const d = await res.json().catch(() => ({}))
       if (res.ok) {
-        setResult({ ok: true, text: d.message || 'Richiesta inviata con successo.' })
+        const ticketId = d.ticket_id || d.id
+        const successText = ticketId
+          ? `Richiesta #${ticketId} inviata con successo.`
+          : (d.message || 'Richiesta inviata con successo.')
+        setResult({ ok: true, text: successText })
         setSubject('')
         setMessage('')
       } else {
@@ -923,11 +782,31 @@ export default function DashboardPage() {
   const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
   const [isManager, setIsManager] = useState(false)
+  const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(true) // default true until verified
   const [trialAlreadyRequested, setTrialAlreadyRequested] = useState(true) // default true per nascondere fino a verifica
   const [trialMessage, setTrialMessage] = useState('')
   const [trialLoading, setTrialLoading] = useState(false)
   const [trialSent, setTrialSent] = useState(false)
   const [showTrialModal, setShowTrialModal] = useState(false)
+
+  // Team modal (B)
+  const [showTeamModal, setShowTeamModal] = useState(false)
+  const [teamSlaves, setTeamSlaves] = useState<SlaveAccount[]>([])
+  const [teamSlavesLoaded, setTeamSlavesLoaded] = useState(false)
+  const [teamSlaveForm, setTeamSlaveForm] = useState({ nome: '', cognome: '', email: '', password: '' })
+  const [teamSlaveMsg, setTeamSlaveMsg] = useState('')
+  const [teamSlaveLoading, setTeamSlaveLoading] = useState(false)
+
+  // Bell notifications (C)
+  const [openTickets, setOpenTickets] = useState<{id: number; subject: string; created_at: string}[]>([])
+  const [showBellDropdown, setShowBellDropdown] = useState(false)
+  const bellRef = useRef<HTMLDivElement>(null)
+
+  // Delete account confirm modal (E)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  // Subscription modal (A)
+  const [showSubModal, setShowSubModal] = useState(false)
 
   // Theme state
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
@@ -998,6 +877,7 @@ export default function DashboardPage() {
   const [bonificoReceipt, setBonificoReceipt] = useState<File | null>(null)
   const bonificoRef = useRef<HTMLInputElement>(null)
   const [bonificoMsg, setBonificoMsg] = useState('')
+  const [bonificoPackage, setBonificoPackage] = useState('')
 
   // Reviews
   const [myReview, setMyReview] = useState<Review | null>(null)
@@ -1028,9 +908,21 @@ export default function DashboardPage() {
         if (d.ragione_sociale) { setRagioneSociale(d.ragione_sociale); localStorage.setItem('ragione_sociale', d.ragione_sociale) }
         if (d.vat_number) { setVatNumber(d.vat_number); localStorage.setItem('vat_number', d.vat_number) }
         if (d.is_manager !== undefined) setIsManager(!!d.is_manager)
+        if (d.welcome_bonus_used !== undefined) setWelcomeBonusUsed(!!d.welcome_bonus_used)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
         localStorage.setItem('credits', String(c))
+      })
+      .catch(() => {})
+
+    // Load open support tickets for bell (C)
+    apiFetch('/auth/support')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d) {
+          const arr = Array.isArray(d) ? d : []
+          setOpenTickets(arr.filter((t: {status?: string}) => t.status === 'aperto' || t.status === 'open'))
+        }
       })
       .catch(() => {})
 
@@ -1065,6 +957,18 @@ export default function DashboardPage() {
     const interval = setInterval(loadData, 30_000)
     return () => clearInterval(interval)
   }, [])
+
+  // Close bell dropdown on outside click (C)
+  useEffect(() => {
+    if (!showBellDropdown) return
+    function handleClick(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setShowBellDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showBellDropdown])
 
   async function sendTrialRequest() {
     setTrialLoading(true)
@@ -1164,12 +1068,14 @@ export default function DashboardPage() {
   }
 
   async function sendBonifico() {
+    if (!bonificoPackage) { setBonificoMsg('Seleziona un pacchetto'); return }
     if (!bonificoReceipt) { setBonificoMsg('Allega la ricevuta'); return }
     try {
       const fd = new FormData()
       fd.append('receipt', bonificoReceipt)
+      fd.append('package', bonificoPackage)
       const res = await apiFetch('/payments/bonifico-request', { method: 'POST', body: fd })
-      if (res.ok) setBonificoMsg('Richiesta inviata! Riceverai conferma via email.')
+      if (res.ok) { setBonificoMsg('Richiesta inviata! Riceverai conferma via email.'); setBonificoPackage(''); setBonificoReceipt(null) }
       else setBonificoMsg('Errore invio')
     } catch { setBonificoMsg('Errore') }
   }
@@ -1252,6 +1158,58 @@ export default function DashboardPage() {
     } catch { }
   }
 
+  // ── Team modal helpers (B) ─────────────────────────────────────────────
+  async function loadTeamSlaves() {
+    try {
+      const res = await apiFetch('/auth/slaves')
+      if (res.ok) { setTeamSlaves(await res.json()); setTeamSlavesLoaded(true) }
+    } catch { /* noop */ }
+  }
+
+  async function createTeamSlave() {
+    if (!teamSlaveForm.nome || !teamSlaveForm.cognome || !teamSlaveForm.email || !teamSlaveForm.password) {
+      setTeamSlaveMsg('Compila tutti i campi'); return
+    }
+    setTeamSlaveLoading(true)
+    setTeamSlaveMsg('')
+    try {
+      const res = await apiFetch('/auth/create-slave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${teamSlaveForm.nome} ${teamSlaveForm.cognome}`.trim(),
+          email: teamSlaveForm.email,
+          password: teamSlaveForm.password,
+        }),
+      })
+      if (res.ok) {
+        setTeamSlaveForm({ nome: '', cognome: '', email: '', password: '' })
+        setTeamSlaveMsg('Account creato con successo!')
+        await loadTeamSlaves()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setTeamSlaveMsg(err.detail || 'Errore creazione account')
+      }
+    } catch { setTeamSlaveMsg('Errore di rete') }
+    setTeamSlaveLoading(false)
+  }
+
+  async function deleteTeamSlave(id: number) {
+    try {
+      const res = await apiFetch(`/auth/slaves/${id}`, { method: 'DELETE' })
+      if (res.ok) setTeamSlaves((prev) => prev.filter((s) => s.id !== id))
+    } catch { /* noop */ }
+  }
+
+  // ── Delete account (E) ─────────────────────────────────────────────────
+  async function deleteAccountFromMain() {
+    try {
+      await apiFetch('/auth/delete-account', { method: 'DELETE' })
+      localStorage.clear()
+      navigate('/login')
+    } catch { /* noop */ }
+  }
+
   // ── Download ───────────────────────────────────────────────────────────
   async function downloadFile(jobId: string, format: string) {
     try {
@@ -1295,6 +1253,84 @@ export default function DashboardPage() {
             >
               <Zap size={12} /> {credits} elaborazioni
             </div>
+
+            {/* Bell icon (C) */}
+            <div ref={bellRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowBellDropdown((v) => !v)}
+                className="btn-ghost flex items-center justify-center"
+                style={{ width: 36, height: 36, padding: 0, position: 'relative' }}
+                title="Notifiche"
+              >
+                <Bell size={17} />
+                {openTickets.length > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: '#ef4444', color: '#fff',
+                    fontSize: '0.6rem', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '2px solid var(--navbar-bg)',
+                  }}>
+                    {openTickets.length}
+                  </span>
+                )}
+              </button>
+              <AnimatePresence>
+                {showBellDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    style={{
+                      position: 'absolute', top: '110%', right: 0, zIndex: 100,
+                      background: isDark ? '#0d1117' : '#fff',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 14, minWidth: 280, maxWidth: 340,
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Ticket aperti
+                      </span>
+                    </div>
+                    {openTickets.length === 0 ? (
+                      <div style={{ padding: '1rem', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        Nessun ticket aperto
+                      </div>
+                    ) : (
+                      <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                        {openTickets.map((t) => (
+                          <div key={t.id} style={{ padding: '0.65rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                              #{t.id} — {t.subject}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                              {new Date(t.created_at).toLocaleDateString('it-IT')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Team icon (B) — only for manager */}
+            {isManager && (
+              <button
+                onClick={() => { setShowTeamModal(true); if (!teamSlavesLoaded) loadTeamSlaves() }}
+                className="btn-ghost flex items-center justify-center"
+                style={{ width: 36, height: 36, padding: 0 }}
+                title="Gestione Team"
+              >
+                <Users size={17} />
+              </button>
+            )}
 
             <button
               onClick={() => setShowProfile(true)}
@@ -1368,12 +1404,24 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => setShowTrialModal(true)}
-                style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.65rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
-              >
-                Richiedi credito gratuito
-              </button>
+              {welcomeBonusUsed ? (
+                <div style={{ flexShrink: 0, textAlign: 'center' }}>
+                  <button
+                    disabled
+                    style={{ flexShrink: 0, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '0.65rem 1.5rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.875rem', cursor: 'not-allowed', whiteSpace: 'nowrap', opacity: 0.6 }}
+                  >
+                    Richiedi credito gratuito
+                  </button>
+                  <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginTop: 4 }}>Già utilizzato dalla tua azienda</div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowTrialModal(true)}
+                  style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.65rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Richiedi credito gratuito
+                </button>
+              )}
             </div>
           </motion.div>
         )}
@@ -1822,7 +1870,109 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* Abbonamenti Mensili (A) */}
+          {payTab === 'carta' && (
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="flex items-center gap-2 mb-4">
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Abbonamenti Mensili
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { key: 'starter', label: 'Starter', elab: '10 elaborazioni/mese', price: 100, originalPrice: 120, discount: 17, popular: false },
+                  { key: 'medium', label: 'Medium', elab: '20 elaborazioni/mese', price: 150, originalPrice: 180, discount: 17, popular: true },
+                  { key: 'unlimited', label: 'Unlimited', elab: 'Elaborazioni illimitate', price: 200, originalPrice: 250, discount: 20, popular: false },
+                ].map((plan) => (
+                  <div
+                    key={plan.key}
+                    className="rounded-xl p-4 flex flex-col gap-2"
+                    style={{
+                      background: plan.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
+                      border: plan.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
+                      position: 'relative',
+                    }}
+                  >
+                    {plan.popular && (
+                      <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20, padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000', whiteSpace: 'nowrap' }}>
+                        Più popolare
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{plan.label}</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>
+                        -{plan.discount}%
+                      </span>
+                    </div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.9rem' }}>{plan.elab}</div>
+                    <div className="flex items-baseline gap-2">
+                      <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}/mese</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>€{plan.price}<span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--text-muted)' }}>/mese</span></span>
+                    </div>
+                    <button
+                      className="btn-amber w-full"
+                      style={{ fontSize: '0.85rem', padding: '0.6rem', marginTop: 4 }}
+                      onClick={() => setShowSubModal(true)}
+                    >
+                      Attiva abbonamento
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {payTab === 'bonifico' && (
+            <div>
+              {/* Selezione pacchetto — stessa grafica carta */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+                {(packages.length > 0
+                  ? packages.map((p, i) => ({ ...p, popular: i === 1 }))
+                  : [
+                      { key: 'single', label: 'Singola', credits: 1, price_eur: 49.99, popular: false },
+                      { key: 'pack5', label: 'Pack 5', credits: 5, price_eur: 219.99, popular: true },
+                      { key: 'pack10', label: 'Pack 10', credits: 10, price_eur: 399.99, popular: false },
+                    ]
+                ).map((pkg) => {
+                  const fullPrice = pkg.credits * 49.99
+                  const hasDiscount = pkg.credits > 1
+                  const discountPct = hasDiscount ? Math.round((1 - pkg.price_eur / fullPrice) * 100) : 0
+                  const selected = bonificoPackage === pkg.key
+                  return (
+                    <div
+                      key={pkg.key}
+                      className="rounded-xl p-4 flex flex-col gap-2"
+                      style={{
+                        background: selected ? 'rgba(245,158,11,0.1)' : pkg.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
+                        border: selected ? '2px solid rgba(245,158,11,0.6)' : pkg.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
+                        position: 'relative', cursor: 'pointer',
+                      }}
+                      onClick={() => setBonificoPackage(pkg.key)}
+                    >
+                      {pkg.popular && (
+                        <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20, padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000', whiteSpace: 'nowrap' }}>
+                          Più popolare
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{pkg.label}</span>
+                        {hasDiscount && (
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>-{discountPct}%</span>
+                        )}
+                      </div>
+                      <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
+                        {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni</span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        {hasDiscount && <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{fullPrice.toFixed(2)}</span>}
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>€{pkg.price_eur.toFixed(2)}</span>
+                      </div>
+                      {selected && <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700 }}>✓ Selezionato</div>}
+                    </div>
+                  )
+                })}
+              </div>
+
             <div className="rounded-xl p-5" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
               <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.925rem', marginBottom: 12 }}>Dati per il bonifico</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
@@ -1859,6 +2009,7 @@ export default function DashboardPage() {
               <button className="btn-amber" onClick={sendBonifico}>
                 <FileDown size={15} /> Invia richiesta
               </button>
+            </div>
             </div>
           )}
         </motion.div>
@@ -2234,6 +2385,133 @@ export default function DashboardPage() {
               </button>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Team Modal (B) ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showTeamModal && (
+          <div className="modal-overlay" onClick={() => setShowTeamModal(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card"
+              style={{ maxWidth: 500, width: '100%', padding: '2rem', borderRadius: 20, maxHeight: '85vh', overflowY: 'auto' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <Users size={18} style={{ color: '#f59e0b' }} />
+                  <h3 style={{ color: 'var(--text-primary)', fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Gestione Team</h3>
+                </div>
+                <button onClick={() => setShowTeamModal(false)} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+              </div>
+
+              {/* Existing slaves */}
+              {teamSlavesLoaded && teamSlaves.length === 0 && (
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.5rem 0 1rem' }}>Nessun account secondario.</p>
+              )}
+              {teamSlaves.length > 0 && (
+                <div className="flex flex-col gap-2 mb-5">
+                  {teamSlaves.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between rounded-xl px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>{s.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.email}</div>
+                      </div>
+                      <button
+                        onClick={() => deleteTeamSlave(s.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex' }}
+                        title="Rimuovi"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add slave form */}
+              <div style={{ borderTop: teamSlaves.length > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none', paddingTop: teamSlaves.length > 0 ? '1rem' : 0 }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <UserPlus size={14} style={{ color: '#f59e0b' }} />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Nuovo account dipendente</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <input className="form-input" placeholder="Nome *" value={teamSlaveForm.nome} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, nome: e.target.value }))} style={{ fontSize: '0.85rem' }} />
+                  <input className="form-input" placeholder="Cognome *" value={teamSlaveForm.cognome} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, cognome: e.target.value }))} style={{ fontSize: '0.85rem' }} />
+                </div>
+                <input className="form-input mb-2" type="email" placeholder="Email dipendente" value={teamSlaveForm.email} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, email: e.target.value }))} style={{ fontSize: '0.85rem' }} />
+                <input className="form-input mb-3" type="password" placeholder="Password temporanea" value={teamSlaveForm.password} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, password: e.target.value }))} style={{ fontSize: '0.85rem' }} />
+                {teamSlaveMsg && (
+                  <div className="rounded-xl p-2 mb-3" style={{ background: teamSlaveMsg.includes('successo') ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${teamSlaveMsg.includes('successo') ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`, color: teamSlaveMsg.includes('successo') ? '#22c55e' : '#ef4444', fontSize: '0.8rem' }}>
+                    {teamSlaveMsg}
+                  </div>
+                )}
+                <button className="btn-amber w-full" style={{ fontSize: '0.85rem', padding: '0.6rem' }} disabled={teamSlaveLoading} onClick={createTeamSlave}>
+                  <UserPlus size={14} /> {teamSlaveLoading ? 'Creazione...' : 'Crea account'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Delete Account Confirm Modal (E) ────────────────────────────── */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card"
+              style={{ maxWidth: 420, width: '100%', padding: '2rem', borderRadius: 20, border: '1px solid rgba(239,68,68,0.3)', textAlign: 'center' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+              <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Eliminare l'account?</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: 24 }}>
+                Sei sicuro di voler eliminare l'account? Questa operazione è irreversibile.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button className="btn-ghost" style={{ padding: '0.6rem 1.4rem' }} onClick={() => setShowDeleteModal(false)}>Annulla</button>
+                <button
+                  style={{ padding: '0.6rem 1.4rem', background: '#ef4444', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+                  onClick={deleteAccountFromMain}
+                >
+                  Elimina definitivamente
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Subscription "Coming Soon" Modal (A) ─────────────────────────── */}
+      <AnimatePresence>
+        {showSubModal && (
+          <div className="modal-overlay" onClick={() => setShowSubModal(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card"
+              style={{ maxWidth: 400, width: '100%', padding: '2rem', borderRadius: 20, textAlign: 'center' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 42, marginBottom: 12 }}>🚀</div>
+              <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Funzionalità in arrivo</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: 20 }}>
+                Gli abbonamenti mensili saranno disponibili a breve. Sarai avvisato via email non appena attivi.
+              </p>
+              <button className="btn-amber w-full" onClick={() => setShowSubModal(false)}>Chiudi</button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

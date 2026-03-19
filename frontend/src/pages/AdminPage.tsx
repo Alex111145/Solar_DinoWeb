@@ -26,6 +26,7 @@ interface Company {
   total_credits_bought?: number
   is_active?: boolean
   panels_detected?: number
+  hotspot_count?: number
   mission_count?: number
   last_ip?: string
   ip_status?: 'ok' | 'warning'
@@ -183,6 +184,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
             { label: 'Crediti residui', value: String(company.credits ?? 0) },
             { label: 'Elaborazioni', value: String(company.mission_count ?? 0) },
             { label: 'Pannelli rilevati', value: String(company.panels_detected ?? 0) },
+            { label: 'Hotspot rilevati', value: company.hotspot_count != null ? String(company.hotspot_count) : '—' },
           ].map(({ label, value }) => (
             <div
               key={label}
@@ -293,6 +295,11 @@ export default function AdminPage() {
   const [pendingReviews, setPendingReviews] = useState(0)
   const [tickets, setTickets] = useState<AdminTicket[]>([])
   const [pendingTickets, setPendingTickets] = useState(0)
+
+  // Billing filters
+  const [billingFilterCompany, setBillingFilterCompany] = useState('')
+  const [billingFilterMonth, setBillingFilterMonth] = useState('')
+  const [billingFilterYear, setBillingFilterYear] = useState('')
 
   // Chiudi dropdown al click fuori
   useEffect(() => {
@@ -453,10 +460,18 @@ export default function AdminPage() {
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
+  // Media fatturato mensile: calcola i mesi da Gennaio 2025 a oggi
+  const monthsSinceOnline = (() => {
+    const start = new Date(2025, 0, 1) // Gennaio 2025
+    const now = new Date()
+    return Math.max(1, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1)
+  })()
+  const avgRevenuePerMonth = (stats.total_revenue_eur || 0) / monthsSinceOnline
+
   const statCards = [
     { icon: <Building2 size={18} />, label: 'Aziende attive', value: stats.active_companies || 0, prefix: '' },
     { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
-    { icon: <TrendingUp size={18} />, label: 'Fatturato mese', value: stats.revenue_month_eur || 0, prefix: '€' },
+    { icon: <TrendingUp size={18} />, label: 'Fatturato medio mese', value: stats.revenue_month_eur || 0, prefix: '€' },
     { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
   ]
 
@@ -518,7 +533,7 @@ export default function AdminPage() {
         </AnimatePresence>
 
         {/* Stats row */}
-        <motion.div variants={cardAnim} className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <motion.div variants={cardAnim} className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {statCards.map((s, i) => (
             <motion.div
               key={s.label}
@@ -540,6 +555,26 @@ export default function AdminPage() {
               </div>
             </motion.div>
           ))}
+        </motion.div>
+
+        {/* Media fatturato mensile banner */}
+        <motion.div
+          variants={cardAnim}
+          className="card mb-8"
+          style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', padding: '1rem 1.5rem' }}
+        >
+          <div className="flex items-center gap-3 flex-wrap">
+            <div style={{ width: 32, height: 32, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
+              <TrendingUp size={15} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 2 }}>Media fatturato mensile (da Gennaio 2025)</div>
+              <div style={{ fontSize: '0.875rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                €{(stats.total_revenue_eur || 0).toFixed(2)} ÷ {monthsSinceOnline} mesi ={' '}
+                <span style={{ color: '#f59e0b', fontWeight: 700 }}>€{avgRevenuePerMonth.toFixed(2)}/mese</span>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* Tabs */}
@@ -730,121 +765,208 @@ export default function AdminPage() {
               transition={{ duration: 0.25 }}
               className="card mt-4"
             >
-              <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', marginBottom: '1rem' }}>
-                Utilizzo &amp; Fatturazione ({billing.length} aziende)
-              </h3>
-
-              {billing.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-                  Nessun dato di fatturazione disponibile
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
+                  Utilizzo &amp; Fatturazione ({billing.length} aziende)
+                </h3>
+                {/* Filters */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="text"
+                    placeholder="Filtra per azienda..."
+                    value={billingFilterCompany}
+                    onChange={(e) => setBillingFilterCompany(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: '#f1f5f9', fontSize: '0.8rem', minWidth: 160 }}
+                  />
+                  <select
+                    value={billingFilterMonth}
+                    onChange={(e) => setBillingFilterMonth(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: billingFilterMonth ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}
+                  >
+                    <option value="">Tutti i mesi</option>
+                    {['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'].map((m, i) => (
+                      <option key={m} value={String(i + 1)}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={billingFilterYear}
+                    onChange={(e) => setBillingFilterYear(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '0.4rem 0.75rem', color: billingFilterYear ? '#f1f5f9' : '#64748b', fontSize: '0.8rem' }}
+                  >
+                    <option value="">Tutti gli anni</option>
+                    {[2025, 2026, 2027].map((y) => (
+                      <option key={y} value={String(y)}>{y}</option>
+                    ))}
+                  </select>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {billing.map((b) => {
+              </div>
+
+              {(() => {
+                const filteredBilling = billing.filter((b) => {
+                  if (billingFilterCompany && !(b.name || '').toLowerCase().includes(billingFilterCompany.toLowerCase())) return false
+                  if (billingFilterMonth || billingFilterYear) {
                     const payments = b.payments || []
-                    const isOpen = expandedCompany === b.id
-                    const totalPaid = b.total_paid ?? 0
-                    return (
-                      <div key={b.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
-                        {/* Company header row */}
-                        <button
-                          className="w-full flex items-center justify-between p-4"
-                          style={{ background: 'rgba(255,255,255,0.03)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
-                          onClick={() => setExpandedCompany(isOpen ? null : b.id)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div style={{ textAlign: 'left' }}>
-                              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f1f5f9' }}>{b.name || '—'}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{b.email}</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 flex-shrink-0">
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                                <span style={{ color: '#f59e0b', fontWeight: 600 }}>{b.credits ?? 0}</span> crediti · <span style={{ color: '#22c55e', fontWeight: 600 }}>€{totalPaid.toFixed(2)}</span> totale · {b.jobs_completed ?? 0} job
-                              </div>
-                            </div>
-                            <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>{payments.length} pagamenti</span>
-                            {isOpen
-                              ? <ChevronDown size={15} style={{ color: '#64748b' }} />
-                              : <ChevronRight size={15} style={{ color: '#64748b' }} />}
-                          </div>
-                        </button>
+                    const hasMatch = payments.some((p) => {
+                      const d = new Date(p.date)
+                      if (billingFilterMonth && String(d.getMonth() + 1) !== billingFilterMonth) return false
+                      if (billingFilterYear && String(d.getFullYear()) !== billingFilterYear) return false
+                      return true
+                    })
+                    if (!hasMatch) return false
+                  }
+                  return true
+                })
 
-                        {/* Payments list */}
-                        {isOpen && (
-                          <div style={{ padding: '0.5rem 1rem 1rem' }}>
-                            {payments.length === 0 ? (
-                              <div style={{ fontSize: '0.82rem', color: '#475569', padding: '0.75rem 0' }}>Nessun pagamento registrato</div>
-                            ) : (
-                              <div className="flex flex-col gap-2">
-                                {payments.map((p) => {
-                                  const statusColor = p.status === 'approved' ? '#22c55e' : p.status === 'rejected' ? '#ef4444' : '#f59e0b'
-                                  const statusLabel = p.status === 'approved' ? 'Approvato' : p.status === 'rejected' ? 'Rifiutato' : 'In attesa'
-                                  return (
-                                    <div
-                                      key={p.id}
-                                      className="flex items-center justify-between rounded-lg px-3 py-2.5"
-                                      style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <div
-                                          style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem',
-                                            background: p.type === 'stripe' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.1)',
-                                          }}
-                                        >
-                                          {p.type === 'stripe' ? '💳' : '🏦'}
-                                        </div>
-                                        <div>
-                                          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
-                                            {p.method_label} · +{p.credits} crediti
-                                          </div>
-                                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                            {new Date(p.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f59e0b' }}>€{p.amount_eur.toFixed(2)}</span>
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
-                                          {statusLabel}
-                                        </span>
-                                        {p.type === 'bonifico' && p.receipt_id && (
-                                          <button
-                                            className="btn-ghost flex items-center gap-1"
-                                            style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
-                                            onClick={async () => {
-                                              const token = localStorage.getItem('token')
-                                              const res = await fetch(`/admin/bonifico-requests/${p.receipt_id}/receipt`, {
-                                                headers: { Authorization: `Bearer ${token}` },
-                                              })
-                                              if (!res.ok) return
-                                              const blob = await res.blob()
-                                              const url = URL.createObjectURL(blob)
-                                              const a = document.createElement('a')
-                                              a.href = url; a.download = `ricevuta-${p.receipt_id}.pdf`; a.click()
-                                              URL.revokeObjectURL(url)
-                                            }}
-                                          >
-                                            <FileDown size={12} /> Ricevuta
-                                          </button>
-                                        )}
-                                        {p.type === 'bonifico' && !p.receipt_id && (
-                                          <span style={{ fontSize: '0.7rem', color: '#475569' }}>no allegato</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )
-                                })}
+                if (filteredBilling.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
+                      Nessun dato di fatturazione disponibile
+                    </div>
+                  )
+                }
+
+                // Group all payments by month/year for display
+                return (
+                  <div className="flex flex-col gap-3">
+                    {filteredBilling.map((b) => {
+                      let payments = b.payments || []
+                      // Apply month/year filter to payments
+                      if (billingFilterMonth || billingFilterYear) {
+                        payments = payments.filter((p) => {
+                          const d = new Date(p.date)
+                          if (billingFilterMonth && String(d.getMonth() + 1) !== billingFilterMonth) return false
+                          if (billingFilterYear && String(d.getFullYear()) !== billingFilterYear) return false
+                          return true
+                        })
+                      }
+
+                      // Group payments by month
+                      const byMonth: Record<string, typeof payments> = {}
+                      payments.forEach((p) => {
+                        const d = new Date(p.date)
+                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                        if (!byMonth[key]) byMonth[key] = []
+                        byMonth[key].push(p)
+                      })
+                      const monthKeys = Object.keys(byMonth).sort().reverse()
+
+                      const isOpen = expandedCompany === b.id
+                      const totalPaid = b.total_paid ?? 0
+                      return (
+                        <div key={b.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                          {/* Company header row */}
+                          <button
+                            className="w-full flex items-center justify-between p-4"
+                            style={{ background: 'rgba(255,255,255,0.03)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                            onClick={() => setExpandedCompany(isOpen ? null : b.id)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div style={{ textAlign: 'left' }}>
+                                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f1f5f9' }}>{b.name || '—'}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{b.email}</div>
                               </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                                  <span style={{ color: '#f59e0b', fontWeight: 600 }}>{b.credits ?? 0}</span> crediti · <span style={{ color: '#22c55e', fontWeight: 600 }}>€{totalPaid.toFixed(2)}</span> totale
+                                </div>
+                              </div>
+                              <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>{payments.length} pagamenti</span>
+                              {isOpen
+                                ? <ChevronDown size={15} style={{ color: '#64748b' }} />
+                                : <ChevronRight size={15} style={{ color: '#64748b' }} />}
+                            </div>
+                          </button>
+
+                          {/* Payments list grouped by month */}
+                          {isOpen && (
+                            <div style={{ padding: '0.5rem 1rem 1rem' }}>
+                              {payments.length === 0 ? (
+                                <div style={{ fontSize: '0.82rem', color: '#475569', padding: '0.75rem 0' }}>Nessun pagamento registrato</div>
+                              ) : (
+                                <div className="flex flex-col gap-4">
+                                  {monthKeys.map((mk) => {
+                                    const [y, m] = mk.split('-')
+                                    const monthName = new Date(Number(y), Number(m) - 1, 1).toLocaleString('it-IT', { month: 'long', year: 'numeric' })
+                                    return (
+                                      <div key={mk}>
+                                        <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid rgba(245,158,11,0.15)' }}>
+                                          {monthName}
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                          {byMonth[mk].map((p) => {
+                                            const statusColor = p.status === 'approved' ? '#22c55e' : p.status === 'rejected' ? '#ef4444' : '#f59e0b'
+                                            const statusLabel = p.status === 'approved' ? 'Approvato' : p.status === 'rejected' ? 'Rifiutato' : 'In attesa'
+                                            return (
+                                              <div
+                                                key={p.id}
+                                                className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                                                style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
+                                              >
+                                                <div className="flex items-center gap-3">
+                                                  <div
+                                                    style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem',
+                                                      background: p.type === 'stripe' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.1)',
+                                                    }}
+                                                  >
+                                                    {p.type === 'stripe' ? '💳' : '🏦'}
+                                                  </div>
+                                                  <div>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
+                                                      {p.method_label} · +{p.credits} crediti
+                                                    </div>
+                                                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                                      {new Date(p.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f59e0b' }}>€{p.amount_eur.toFixed(2)}</span>
+                                                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
+                                                    {statusLabel}
+                                                  </span>
+                                                  {p.type === 'bonifico' && p.receipt_id && (
+                                                    <button
+                                                      className="btn-ghost flex items-center gap-1"
+                                                      style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
+                                                      onClick={async () => {
+                                                        const token = localStorage.getItem('token')
+                                                        const res = await fetch(`/admin/bonifico-requests/${p.receipt_id}/receipt`, {
+                                                          headers: { Authorization: `Bearer ${token}` },
+                                                        })
+                                                        if (!res.ok) return
+                                                        const blob = await res.blob()
+                                                        const url = URL.createObjectURL(blob)
+                                                        const a = document.createElement('a')
+                                                        a.href = url; a.download = `ricevuta-${p.receipt_id}.pdf`; a.click()
+                                                        URL.revokeObjectURL(url)
+                                                      }}
+                                                    >
+                                                      <FileDown size={12} /> Ricevuta
+                                                    </button>
+                                                  )}
+                                                  {p.type === 'bonifico' && !p.receipt_id && (
+                                                    <span style={{ fontSize: '0.7rem', color: '#475569' }}>no allegato</span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </motion.div>
           )}
 
@@ -968,6 +1090,7 @@ export default function AdminPage() {
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                           <div style={{ flex: 1 }}>
                             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                              <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>#{t.id}</span>
                               <span style={{ fontSize: '0.8rem', color: '#f1f5f9', fontWeight: 700 }}>{t.subject}</span>
                               <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
                                 {statusLabel}
@@ -981,13 +1104,20 @@ export default function AdminPage() {
                               </span>
                             </div>
                             <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{t.message}</p>
+                            <a
+                              href={`mailto:${t.company_email}?subject=Re:%20%23${t.id}%20${encodeURIComponent(t.subject)}&body=Gentile%20${encodeURIComponent(t.company_name || '')}%2C%0A%0A`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textDecoration: 'none', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 6, padding: '0.25rem 0.6rem' }}
+                            >
+                              ✉ Rispondi via email
+                            </a>
                           </div>
                           <div className="flex flex-col gap-1.5 flex-shrink-0">
                             {t.status !== 'in_elaborazione' && (
                               <button
                                 className="btn-ghost"
-                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#eab308', borderColor: 'rgba(234,179,8,0.3)', whiteSpace: 'nowrap' }}
-                                onClick={() => updateTicketStatus(t.id, 'in_elaborazione')}
+                                disabled={t.status === 'risolto'}
+                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: t.status === 'risolto' ? '#475569' : '#eab308', borderColor: t.status === 'risolto' ? 'rgba(71,85,105,0.3)' : 'rgba(234,179,8,0.3)', whiteSpace: 'nowrap', opacity: t.status === 'risolto' ? 0.45 : 1, cursor: t.status === 'risolto' ? 'not-allowed' : 'pointer' }}
+                                onClick={() => t.status !== 'risolto' && updateTicketStatus(t.id, 'in_elaborazione')}
                               >
                                 In elaborazione
                               </button>
