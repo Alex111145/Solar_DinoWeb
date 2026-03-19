@@ -120,12 +120,12 @@ export default function LoginPage() {
       const res = await fetch('/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(regForm),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setRegError(d.detail || 'Errore durante la registrazione'); setRegLoading(false); return }
       const data = await res.json()
 
-      localStorage.setItem('token', data.access_token || data.token || '')
       localStorage.setItem('name', data.name || regForm.name)
       localStorage.setItem('email', data.email || regForm.email)
       localStorage.setItem('credits', String(data.credits ?? 0))
@@ -151,34 +151,32 @@ export default function LoginPage() {
     setDisabled(false)
     try {
       console.log('[LOGIN] Invio richiesta...')
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 15000)
       const res = await fetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
-      })
-      console.log('[LOGIN] Risposta ricevuta, status:', res.status)
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer))
       if (res.status === 403) { setBlockedModal(true); setLoading(false); return }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        console.log('[LOGIN] Errore risposta:', data)
         setError(data.detail || 'Credenziali non valide')
         setLoading(false)
         return
       }
       const data = await res.json()
-      console.log('[LOGIN] Dati ricevuti:', data)
-      localStorage.setItem('token', data.access_token || data.token || '')
       localStorage.setItem('name', data.name || data.user?.name || '')
       localStorage.setItem('email', data.email || data.user?.email || email)
       localStorage.setItem('credits', String(data.credits ?? data.user?.credits ?? 0))
       localStorage.setItem('is_admin', String(data.is_admin ?? data.user?.is_admin ?? false))
       setLoading(false)
-      console.log('[LOGIN] Navigo verso', data.is_admin ? '/admin' : '/dashboard')
       window.scrollTo(0, 0)
       if (data.is_admin || data.user?.is_admin) navigate('/admin')
       else navigate('/dashboard')
     } catch (err) {
-      console.error('[LOGIN] Errore catch:', err)
       setError('Errore di connessione al server')
       setLoading(false)
     }

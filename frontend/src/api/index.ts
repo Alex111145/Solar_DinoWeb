@@ -1,26 +1,27 @@
 const BASE = ''
 
+// Mantenuto per retrocompatibilità con eventuali chiamate dirette
 export function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+  return {}
 }
 
 export async function apiFetch(path: string, opts: RequestInit = {}): Promise<Response> {
   try {
     const res = await fetch(BASE + path, {
       ...opts,
+      credentials: 'include',   // invia il cookie HttpOnly automaticamente
       headers: {
-        ...authHeaders(),
         ...(opts.headers || {}),
       },
     })
 
     if (res.status === 401) {
-      // Token scaduto o non valido — pulisci e vai al login senza crashare
+      // Token scaduto o non valido — cancella cookie + localStorage e vai al login
+      await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
       localStorage.clear()
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login'
       }
-      // Ritorna la risposta invece di throw, così i componenti non crashano
       return res
     }
 

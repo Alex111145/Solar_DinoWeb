@@ -387,7 +387,8 @@ function ProfileSidebar({
     } catch { setMsg('Errore eliminazione account') }
   }
 
-  function logout() {
+  async function logout() {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
     localStorage.clear()
     navigate('/login')
   }

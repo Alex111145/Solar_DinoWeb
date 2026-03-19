@@ -11,9 +11,9 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Supabase Transaction Pooler: porta 6543 invece di 5432
-# Riduce drasticamente il tempo di apertura connessione
-if "pooler.supabase.com:5432" in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace(":5432/", ":6543/")
+# Decommentare in produzione se il Transaction Pooler è abilitato su Supabase
+# if "pooler.supabase.com:5432" in DATABASE_URL:
+#     DATABASE_URL = DATABASE_URL.replace(":5432/", ":6543/")
 
 engine = create_engine(
     DATABASE_URL,

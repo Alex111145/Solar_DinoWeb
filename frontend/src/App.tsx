@@ -3,23 +3,27 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import AdminPage from './pages/AdminPage'
+import CookieBanner from './components/CookieBanner'
 
+// Auth check: il token è nel cookie HttpOnly, usiamo 'email' come indicatore di sessione attiva
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('token')
-  if (!token) return <Navigate to="/login" replace />
+  const loggedIn = !!localStorage.getItem('email')
+  if (!loggedIn) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('token')
+  const loggedIn = !!localStorage.getItem('email')
   const isAdmin = localStorage.getItem('is_admin') === 'true'
-  if (!token) return <Navigate to="/login" replace />
+  if (!loggedIn) return <Navigate to="/login" replace />
   if (!isAdmin) return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 
 export default function App() {
   return (
+    <>
+    <CookieBanner />
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
@@ -41,5 +45,6 @@ export default function App() {
         }
       />
     </Routes>
+    </>
   )
 }

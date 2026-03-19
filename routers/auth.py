@@ -2,7 +2,7 @@ import os
 import secrets
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -236,7 +236,7 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/register")
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     email  = req.email.lower().strip()
     domain = _domain(email)
 
@@ -318,8 +318,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         db.refresh(deleted_company)
 
         token = auth_utils.create_token({"sub": str(deleted_company.id)})
+        _set_auth_cookie(response, token)
         return {
-            "access_token": token,
             "token_type":   "bearer",
             "name":         deleted_company.name,
             "email":        deleted_company.email,
@@ -364,8 +364,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         pass
 
     token = auth_utils.create_token({"sub": str(company.id)})
+    _set_auth_cookie(response, token)
     return {
-        "access_token": token,
         "token_type":   "bearer",
         "name":         company.name,
         "email":        company.email,
@@ -513,8 +513,22 @@ def verify_pec(token: str, db: Session = Depends(get_db)):
     ))
 
 
+def _set_auth_cookie(response: Response, token: str) -> None:
+    """Imposta il cookie HttpOnly con il token JWT."""
+    is_prod = os.getenv("ENV", "development") == "production"
+    response.set_cookie(
+        key="token",
+        value=token,
+        httponly=True,               # JS non può leggerlo → immune a XSS
+        secure=is_prod,              # True in prod (HTTPS), False in locale (HTTP)
+        samesite="lax",              # protezione CSRF per navigazione normale
+        max_age=60 * 60 * 24 * 7,   # 7 giorni
+        path="/",
+    )
+
+
 @router.post("/login")
-def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     company = db.query(models.Company).filter(
         models.Company.email == req.email.lower().strip()
     ).first()
@@ -532,14 +546,20 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     db.commit()
 
     token = auth_utils.create_token({"sub": str(company.id)})
+    _set_auth_cookie(response, token)
     return {
-        "access_token": token,
         "token_type": "bearer",
         "name": company.name,
         "email": company.email,
         "credits": company.credits,
         "is_admin": company.email == auth_utils.ADMIN_EMAIL,
     }
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie("token", path="/")
+    return {"message": "Logout effettuato"}
 
 
 @router.get("/me")
@@ -879,7 +899,7 @@ def check_vat(vat: str, db: Session = Depends(get_db)):
 
 
 @router.post("/register-fast")
-def register_fast(body: dict, db: Session = Depends(get_db)):
+def register_fast(body: dict, response: Response, db: Session = Depends(get_db)):
     """Registrazione semplificata per chi appartiene a un'azienda già registrata."""
     vat      = (body.get("vat_number") or "").strip().upper().replace(" ", "")
     name     = (body.get("name") or "").strip()
@@ -936,8 +956,8 @@ def register_fast(body: dict, db: Session = Depends(get_db)):
         pass
 
     token = auth_utils.create_token({"sub": str(company.id)})
+    _set_auth_cookie(response, token)
     return {
-        "access_token": token,
         "token_type":   "bearer",
         "name":         company.name,
         "email":        company.email,

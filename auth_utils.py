@@ -1,8 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -11,10 +10,9 @@ from database import get_db
 import models
 
 ALGORITHM   = "HS256"
-TOKEN_HOURS = 24
+TOKEN_HOURS = 24 * 7   # 7 giorni (durata cookie)
 
-pwd_context   = CryptContext(schemes=["bcrypt"], deprecated="auto")
-bearer_scheme = HTTPBearer()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Letti dinamicamente ad ogni chiamata — robusti a reload uvicorn e dotenv tardivo
 def _secret_key() -> str:
@@ -48,11 +46,26 @@ def _decode_token(token: str):
         return None
 
 
+def _extract_token(request: Request) -> str | None:
+    """Legge il token prima dal cookie HttpOnly, poi dall'header Authorization."""
+    token = request.cookies.get("token")
+    if token:
+        return token
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    return None
+
+
 def get_current_company(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> models.Company:
-    payload = _decode_token(credentials.credentials)
+    token = _extract_token(request)
+    if not token:
+        raise HTTPException(status_code=401, detail="Non autenticato")
+
+    payload = _decode_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Token non valido o scaduto")
 

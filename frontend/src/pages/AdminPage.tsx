@@ -480,7 +480,7 @@ export default function AdminPage() {
           <button
             className="btn-ghost flex items-center gap-2"
             style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
-            onClick={() => { localStorage.clear(); navigate('/login') }}
+            onClick={async () => { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {}); localStorage.clear(); navigate('/login') }}
           >
             <LogOut size={15} /> Esci
           </button>
@@ -1037,120 +1037,120 @@ export default function AdminPage() {
                   Nessun file caricato
                 </div>
               ) : (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
                   {uploads.map((company) => {
                     const isCompanyOpen = expandedCompany === company.company_id
+                    const totalElab = company.jobs.length
                     const totalFiles = company.jobs.reduce((s, j) => s + j.files.length, 0)
                     return (
-                      <div
-                        key={company.company_id}
-                        className="rounded-xl overflow-hidden"
-                        style={{ border: '1px solid rgba(255,255,255,0.08)' }}
-                      >
-                        {/* Company header */}
+                      <div key={company.company_id} style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+
+                        {/* ── Livello 1: Cartella azienda ── */}
                         <button
-                          className="w-full flex items-center justify-between p-4"
-                          style={{ background: 'rgba(255,255,255,0.03)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                          className="w-full flex items-center justify-between px-4 py-3"
+                          style={{ background: 'rgba(245,158,11,0.06)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
                           onClick={() => setExpandedCompany(isCompanyOpen ? null : company.company_id)}
                         >
                           <div className="flex items-center gap-3">
-                            <FolderOpen size={16} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                            <span style={{ fontSize: '1.1rem' }}>{isCompanyOpen ? '📂' : '📁'}</span>
                             <div style={{ textAlign: 'left' }}>
-                              <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{company.company_name}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{company.company_email}</div>
+                              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#f59e0b' }}>{company.company_name}</div>
+                              <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{company.company_email}</div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>
-                              {company.jobs.length} job · {totalFiles} file
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontSize: '0.7rem', color: '#64748b', background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 8px' }}>
+                              {totalElab} elabor. · {totalFiles} file
                             </span>
                             {isCompanyOpen
-                              ? <ChevronDown size={15} style={{ color: '#64748b' }} />
-                              : <ChevronRight size={15} style={{ color: '#64748b' }} />
+                              ? <ChevronDown size={14} style={{ color: '#64748b' }} />
+                              : <ChevronRight size={14} style={{ color: '#64748b' }} />
                             }
                           </div>
                         </button>
 
-                        {/* Jobs list */}
+                        {/* ── Livello 2: Cartelle elaborazioni ── */}
                         {isCompanyOpen && (
-                          <div style={{ padding: '0.5rem 1rem 1rem' }}>
+                          <div style={{ padding: '6px 12px 12px 28px', background: 'rgba(0,0,0,0.15)' }}>
+                            {company.jobs.length === 0 && (
+                              <div style={{ fontSize: '0.8rem', color: '#475569', padding: '0.5rem 0' }}>Nessuna elaborazione</div>
+                            )}
                             {company.jobs.map((job) => {
                               const isJobOpen = expandedJob === job.job_id
+                              const jobLabel = job.tif_filename
+                                ? job.tif_filename.replace(/\.[^.]+$/, '')
+                                : `Elaborazione ${new Date(job.created_at).toLocaleDateString('it-IT')}`
                               return (
-                                <div
-                                  key={job.job_id}
-                                  className="rounded-xl overflow-hidden mb-2"
-                                  style={{ border: '1px solid rgba(255,255,255,0.06)' }}
-                                >
-                                  {/* Job header */}
+                                <div key={job.job_id} style={{ marginBottom: 6 }}>
+
+                                  {/* ── Livello 2 header: cartella elaborazione ── */}
                                   <button
-                                    className="w-full flex items-center justify-between p-3"
-                                    style={{ background: 'rgba(255,255,255,0.02)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg"
+                                    style={{ background: isJobOpen ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', color: '#f1f5f9' }}
                                     onClick={() => setExpandedJob(isJobOpen ? null : job.job_id)}
                                   >
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                      <span style={{ fontSize: '1rem' }}>{isJobOpen ? '📂' : '📁'}</span>
                                       <div style={{ textAlign: 'left' }}>
-                                        <div style={{ fontSize: '0.82rem', fontWeight: 500, color: '#f1f5f9' }}>
-                                          {job.tif_filename || `Job ${job.job_id.slice(0, 8)}`}
-                                        </div>
-                                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                          {new Date(job.created_at).toLocaleDateString('it-IT')} · {job.files.length} file
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0' }}>{jobLabel}</div>
+                                        <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                          {new Date(job.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                          {' · '}{job.files.length} file
                                         </div>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <span className={`badge ${job.status === 'completato' ? 'badge-green' : job.status === 'errore' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: '0.65rem' }}>
+                                      <span className={`badge ${job.status === 'completato' ? 'badge-green' : job.status === 'errore' ? 'badge-red' : 'badge-amber'}`} style={{ fontSize: '0.62rem' }}>
                                         {job.status}
                                       </span>
                                       {isJobOpen
-                                        ? <ChevronDown size={14} style={{ color: '#64748b' }} />
-                                        : <ChevronRight size={14} style={{ color: '#64748b' }} />
+                                        ? <ChevronDown size={13} style={{ color: '#64748b' }} />
+                                        : <ChevronRight size={13} style={{ color: '#64748b' }} />
                                       }
                                     </div>
                                   </button>
 
-                                  {/* File list */}
+                                  {/* ── Livello 3: file dentro la cartella elaborazione ── */}
                                   {isJobOpen && (
-                                    <div style={{ padding: '0.5rem 0.75rem 0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <div style={{ paddingLeft: 28, paddingTop: 4 }}>
                                       {job.files.length === 0 ? (
-                                        <div style={{ fontSize: '0.8rem', color: '#475569', padding: '0.5rem 0' }}>Nessun file trovato su disco</div>
+                                        <div style={{ fontSize: '0.78rem', color: '#475569', padding: '6px 0' }}>Nessun file trovato</div>
                                       ) : (
-                                        <div className="flex flex-col gap-1.5">
-                                          {job.files.map((file) => (
-                                            <div
-                                              key={file.name}
-                                              className="flex items-center justify-between rounded-lg px-3 py-2"
-                                              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
-                                            >
-                                              <div>
-                                                <span style={{ fontSize: '0.8rem', color: '#f1f5f9', fontWeight: 500 }}>{file.name}</span>
-                                                <span style={{ fontSize: '0.7rem', color: '#475569', marginLeft: 8 }}>{file.size_mb} MB</span>
-                                              </div>
-                                              <a
-                                                href={`/api/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`}
-                                                download={file.name}
-                                                onClick={async (e) => {
-                                                  e.preventDefault()
-                                                  const token = localStorage.getItem('token')
-                                                  const res = await fetch(`/api/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`, {
-                                                    headers: { Authorization: `Bearer ${token}` },
-                                                  })
-                                                  if (!res.ok) return
-                                                  const blob = await res.blob()
-                                                  const url = URL.createObjectURL(blob)
-                                                  const a = document.createElement('a')
-                                                  a.href = url
-                                                  a.download = file.name
-                                                  a.click()
-                                                  URL.revokeObjectURL(url)
-                                                }}
-                                                className="btn-ghost flex items-center gap-1.5"
-                                                style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem' }}
+                                        <div className="flex flex-col gap-1">
+                                          {job.files.map((file) => {
+                                            const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+                                            const icon = ext === 'pdf' ? '📄' : ext === 'tif' || ext === 'tiff' ? '🗺️' : ext === 'jpg' || ext === 'png' ? '🖼️' : '📋'
+                                            return (
+                                              <div
+                                                key={file.name}
+                                                className="flex items-center justify-between rounded-lg px-3 py-1.5"
+                                                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
                                               >
-                                                <FileDown size={13} /> Scarica
-                                              </a>
-                                            </div>
-                                          ))}
+                                                <div className="flex items-center gap-2">
+                                                  <span style={{ fontSize: '0.9rem' }}>{icon}</span>
+                                                  <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 500 }}>{file.name}</span>
+                                                  <span style={{ fontSize: '0.68rem', color: '#475569' }}>{file.size_mb} MB</span>
+                                                </div>
+                                                <button
+                                                  onClick={async () => {
+                                                    const res = await fetch(`/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`, {
+                                                      credentials: 'include',
+                                                    })
+                                                    if (!res.ok) return
+                                                    const blob = await res.blob()
+                                                    const url = URL.createObjectURL(blob)
+                                                    const a = document.createElement('a')
+                                                    a.href = url; a.download = file.name; a.click()
+                                                    URL.revokeObjectURL(url)
+                                                  }}
+                                                  className="btn-ghost flex items-center gap-1"
+                                                  style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
+                                                >
+                                                  <FileDown size={12} /> Scarica
+                                                </button>
+                                              </div>
+                                            )
+                                          })}
                                         </div>
                                       )}
                                     </div>
