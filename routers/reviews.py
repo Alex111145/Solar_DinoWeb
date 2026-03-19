@@ -5,6 +5,7 @@ from typing import Optional
 
 import auth_utils
 import models
+import cache
 from database import get_db
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
@@ -30,6 +31,7 @@ def submit_review(
     db.add(review)
     db.commit()
     db.refresh(review)
+    cache.invalidate("approved_reviews")
     return {
         "id":         review.id,
         "stars":      review.stars,
@@ -80,6 +82,7 @@ def update_review(
     review.status  = "pending"
     db.commit()
     db.refresh(review)
+    cache.invalidate("approved_reviews")
     return {
         "id":         review.id,
         "stars":      review.stars,
@@ -91,13 +94,17 @@ def update_review(
 
 @router.get("")
 def get_approved_reviews(db: Session = Depends(get_db)):
+    cached = cache.get("approved_reviews")
+    if cached is not None:
+        return cached
+
     reviews = (
         db.query(models.Review)
         .filter(models.Review.status == "approved")
         .order_by(models.Review.created_at.desc())
         .all()
     )
-    return [
+    result = [
         {
             "id":         r.id,
             "stars":      r.stars,
@@ -107,3 +114,5 @@ def get_approved_reviews(db: Session = Depends(get_db)):
         }
         for r in reviews
     ]
+    cache.set("approved_reviews", result, ttl=300)  # 5 minuti
+    return result

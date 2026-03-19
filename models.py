@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
+    Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, Index
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -20,14 +20,19 @@ class Company(Base):
     password_hash      = Column(String, nullable=False)
     stripe_customer_id = Column(String, nullable=True)
     credits            = Column(Integer, default=1)
-    is_active          = Column(Boolean, default=True)
-    is_manager         = Column(Boolean, default=False)              # True = account principale/manager dell'azienda
-    deleted_at         = Column(DateTime, nullable=True)             # Soft delete
+    is_active          = Column(Boolean, default=True, index=True)
+    is_manager         = Column(Boolean, default=False, index=True)
+    deleted_at         = Column(DateTime, nullable=True, index=True) # Soft delete — usato in quasi ogni query
     last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
     pec                  = Column(String, nullable=True)
-    welcome_bonus_used   = Column(Boolean, default=False)   # True dopo il primo credito regalato dall'admin
-    last_login_at        = Column(DateTime, nullable=True)   # Ultimo accesso
+    welcome_bonus_used   = Column(Boolean, default=False)
+    last_login_at        = Column(DateTime, nullable=True)
     created_at           = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        # Indice composito per la query più frequente: aziende attive per P.IVA
+        Index("ix_companies_vat_deleted", "vat_number", "deleted_at"),
+    )
 
     jobs               = relationship("Job", back_populates="company", cascade="all, delete")
     usage_logs         = relationship("UsageLog", back_populates="company", cascade="all, delete")
@@ -38,8 +43,8 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id              = Column(String, primary_key=True)   # UUID
-    company_id      = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    status          = Column(String, default="in_coda")  # in_coda | taglio_tile | inferenza | completato | errore
+    company_id      = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    status          = Column(String, default="in_coda", index=True)  # in_coda | taglio_tile | inferenza | completato | errore
     tif_filename    = Column(String, nullable=True)
     result_path     = Column(String, nullable=True)
     panels_detected = Column(Integer, nullable=True)
@@ -62,11 +67,11 @@ class BonificoRequest(Base):
     __tablename__ = "bonifico_requests"
 
     id          = Column(Integer, primary_key=True, index=True)
-    company_id  = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id  = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     package     = Column(String, nullable=False)   # single | pack5 | pack10 | pack20 | pack100 | ...
     credits     = Column(Integer, nullable=False)
     amount_eur  = Column(Float, nullable=False)
-    status       = Column(String, default="pending")  # pending | approved | rejected
+    status       = Column(String, default="pending", index=True)  # pending | approved | rejected
     receipt_path = Column(String, nullable=True)       # path della ricevuta caricata
     created_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     approved_at  = Column(DateTime, nullable=True)
@@ -78,10 +83,10 @@ class Review(Base):
     __tablename__ = "reviews"
 
     id         = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    stars      = Column(Integer, nullable=False)          # 1–5
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    stars      = Column(Integer, nullable=False)
     comment    = Column(Text, nullable=True)
-    status     = Column(String, default="pending")        # pending | approved | rejected
+    status     = Column(String, default="pending", index=True)  # pending | approved | rejected
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     company = relationship("Company")
