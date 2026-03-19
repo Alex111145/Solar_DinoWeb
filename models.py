@@ -20,9 +20,11 @@ class Company(Base):
     password_hash      = Column(String, nullable=False)
     stripe_customer_id = Column(String, nullable=True)
     credits            = Column(Integer, default=1)
-    is_active          = Column(Boolean, default=True, index=True)
-    is_manager         = Column(Boolean, default=False, index=True)
-    deleted_at         = Column(DateTime, nullable=True, index=True) # Soft delete — usato in quasi ogni query
+    is_active              = Column(Boolean, default=True, index=True)
+    is_manager             = Column(Boolean, default=False, index=True)
+    must_change_password   = Column(Boolean, default=False)           # True per nuovi slave account
+    subscription_active    = Column(Boolean, default=False)           # True se abbonamento Stripe attivo
+    deleted_at             = Column(DateTime, nullable=True, index=True) # Soft delete — usato in quasi ogni query
     last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
     pec                  = Column(String, nullable=True)
     welcome_bonus_used   = Column(Boolean, default=False)
@@ -192,11 +194,42 @@ class SupportTicket(Base):
     """Richiesta di assistenza inviata da un'azienda."""
     __tablename__ = "support_tickets"
 
+    id          = Column(Integer, primary_key=True, index=True)
+    company_id  = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    subject     = Column(String, nullable=False)
+    message     = Column(Text, nullable=False)
+    status      = Column(String, default="aperto")   # aperto | in_elaborazione | risolto
+    reply       = Column(Text, nullable=True)
+    replied_at  = Column(DateTime, nullable=True)
+    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    company  = relationship("Company")
+    messages = relationship("TicketMessage", back_populates="ticket", order_by="TicketMessage.created_at")
+
+
+class TicketMessage(Base):
+    """Singolo messaggio di una conversazione su un ticket."""
+    __tablename__ = "ticket_messages"
+
     id         = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    subject    = Column(String, nullable=False)
+    ticket_id  = Column(Integer, ForeignKey("support_tickets.id"), nullable=False, index=True)
+    sender     = Column(String, nullable=False)   # 'client' | 'admin'
+    text       = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    ticket = relationship("SupportTicket", back_populates="messages")
+
+
+class Notification(Base):
+    """Notifica per il cliente (es. risposta ticket)."""
+    __tablename__ = "notifications"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    title      = Column(String, nullable=False)
     message    = Column(Text, nullable=False)
-    status     = Column(String, default="aperto")   # aperto | in_elaborazione | risolto
+    ticket_id  = Column(Integer, ForeignKey("support_tickets.id"), nullable=True)
+    is_read    = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     company = relationship("Company")

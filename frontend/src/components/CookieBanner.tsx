@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Cookie, X, ChevronDown, ChevronUp, Shield } from 'lucide-react'
+import { Cookie, ChevronDown, ChevronUp, Shield } from 'lucide-react'
 
 const STORAGE_KEY = 'cookie_consent'
 

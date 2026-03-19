@@ -377,9 +377,9 @@ def register(req: RegisterRequest, response: Response, db: Session = Depends(get
 # ── Slave account management (solo manager) ──────────────────────────────────
 
 class CreateSlaveRequest(BaseModel):
-    name:     str
     email:    str
     password: str
+    name:     str = ""
 
 
 @router.get("/slaves")
@@ -425,8 +425,6 @@ def create_slave(
     email = req.email.lower().strip()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Email non valida")
-    if not req.name.strip():
-        raise HTTPException(status_code=400, detail="Nome obbligatorio")
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password di almeno 8 caratteri")
 
@@ -437,15 +435,16 @@ def create_slave(
         raise HTTPException(status_code=400, detail="Email già in uso")
 
     slave = models.Company(
-        email           = email,
-        name            = req.name.strip(),
-        ragione_sociale = current.ragione_sociale,
-        vat_number      = current.vat_number,
-        pec             = current.pec,
-        password_hash   = auth_utils.hash_password(req.password),
-        credits         = current.credits,
-        is_active       = True,
-        is_manager      = False,
+        email                = email,
+        name                 = req.name.strip() or email.split('@')[0],
+        ragione_sociale      = current.ragione_sociale,
+        vat_number           = current.vat_number,
+        pec                  = current.pec,
+        password_hash        = auth_utils.hash_password(req.password),
+        credits              = current.credits,
+        is_active            = True,
+        is_manager           = False,
+        must_change_password = True,
     )
     db.add(slave)
     db.commit()
@@ -459,7 +458,7 @@ def delete_slave(
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
-    """Elimina (soft delete) un account slave (solo manager)."""
+    """Hard-delete di un account slave (solo manager). Rimozione completa dal DB."""
     if not current.is_manager:
         raise HTTPException(status_code=403, detail="Solo il manager può rimuovere account del team.")
 
@@ -467,13 +466,11 @@ def delete_slave(
         models.Company.id == slave_id,
         models.Company.vat_number == current.vat_number,
         models.Company.is_manager == False,
-        models.Company.deleted_at.is_(None),
     ).first()
     if not slave:
         raise HTTPException(status_code=404, detail="Account non trovato")
 
-    slave.deleted_at = datetime.now(timezone.utc)
-    slave.is_active  = False
+    db.delete(slave)
     db.commit()
     return {"message": "Account rimosso"}
 
@@ -553,6 +550,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
         "email": company.email,
         "credits": company.credits,
         "is_admin": company.email == auth_utils.ADMIN_EMAIL,
+        "must_change_password": bool(company.must_change_password),
     }
 
 
@@ -565,15 +563,16 @@ def logout(response: Response):
 @router.get("/me")
 def me(current: models.Company = Depends(auth_utils.get_current_company)):
     return {
-        "id":              current.id,
-        "email":           current.email,
-        "name":            current.name,
-        "ragione_sociale": current.ragione_sociale or "",
-        "vat_number":      current.vat_number or "",
-        "credits":         current.credits,
-        "is_admin":        current.email == auth_utils.ADMIN_EMAIL,
-        "is_manager":      bool(current.is_manager),
-        "created_at":      current.created_at.isoformat(),
+        "id":                  current.id,
+        "email":               current.email,
+        "name":                current.name,
+        "ragione_sociale":     current.ragione_sociale or "",
+        "vat_number":          current.vat_number or "",
+        "credits":             current.credits,
+        "is_admin":            current.email == auth_utils.ADMIN_EMAIL,
+        "is_manager":          bool(current.is_manager),
+        "subscription_active": bool(current.subscription_active),
+        "created_at":          current.created_at.isoformat(),
     }
 
 
@@ -597,6 +596,15 @@ def send_support_ticket(
         message    = message,
     )
     db.add(ticket)
+    db.flush()  # ottieni ticket.id prima del commit
+
+    # Crea il primo messaggio nella conversazione
+    first_msg = models.TicketMessage(
+        ticket_id = ticket.id,
+        sender    = "client",
+        text      = message,
+    )
+    db.add(first_msg)
     db.commit()
 
     try:
@@ -613,15 +621,136 @@ def send_support_ticket(
     return {"message": "Richiesta inviata. Ti risponderemo via email il prima possibile."}
 
 
+@router.get("/tickets")
+def list_tickets(
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Elenco dei ticket del cliente."""
+    tickets = (
+        db.query(models.SupportTicket)
+        .filter(models.SupportTicket.company_id == current.id)
+        .order_by(models.SupportTicket.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id":         t.id,
+            "subject":    t.subject,
+            "status":     t.status,
+            "created_at": t.created_at.isoformat(),
+            "last_msg":   t.messages[-1].text[:80] if t.messages else t.message[:80],
+        }
+        for t in tickets
+    ]
+
+
+@router.get("/tickets/{ticket_id}")
+def get_ticket(
+    ticket_id: int,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Dettaglio ticket con storia messaggi."""
+    ticket = db.query(models.SupportTicket).filter(
+        models.SupportTicket.id == ticket_id,
+        models.SupportTicket.company_id == current.id,
+    ).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket non trovato")
+    return {
+        "id":         ticket.id,
+        "subject":    ticket.subject,
+        "status":     ticket.status,
+        "created_at": ticket.created_at.isoformat(),
+        "messages":   [
+            {"id": m.id, "sender": m.sender, "text": m.text, "created_at": m.created_at.isoformat()}
+            for m in ticket.messages
+        ],
+    }
+
+
+@router.post("/tickets/{ticket_id}/message", status_code=201)
+def reply_ticket(
+    ticket_id: int,
+    body: dict,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Il cliente invia un follow-up su un ticket esistente."""
+    ticket = db.query(models.SupportTicket).filter(
+        models.SupportTicket.id == ticket_id,
+        models.SupportTicket.company_id == current.id,
+        models.SupportTicket.status != "risolto",
+    ).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket non trovato o già chiuso")
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Messaggio vuoto")
+
+    msg = models.TicketMessage(ticket_id=ticket.id, sender="client", text=text)
+    ticket.status = "aperto"
+    db.add(msg)
+    db.commit()
+    return {"message": "Messaggio inviato"}
+
+
+@router.post("/tickets/{ticket_id}/close", status_code=200)
+def close_ticket(
+    ticket_id: int,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Il cliente chiude il ticket."""
+    ticket = db.query(models.SupportTicket).filter(
+        models.SupportTicket.id == ticket_id,
+        models.SupportTicket.company_id == current.id,
+    ).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket non trovato")
+    ticket.status = "risolto"
+    db.commit()
+    return {"message": "Ticket chiuso"}
+
+
 @router.delete("/me")
 def delete_account(
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
+    """Soft-delete dell'account aziendale (solo manager). Tutti i dati vengono conservati."""
+    if not current.is_manager:
+        raise HTTPException(status_code=403, detail="Solo il manager può eliminare l'account aziendale.")
+    # Soft-delete di tutti gli account slave della stessa P.IVA
+    db.query(models.Company).filter(
+        models.Company.vat_number == current.vat_number,
+        models.Company.is_manager == False,
+        models.Company.deleted_at.is_(None),
+    ).update({"deleted_at": datetime.now(timezone.utc), "is_active": False})
+    # Soft-delete del manager
     current.deleted_at = datetime.now(timezone.utc)
     current.is_active  = False
     db.commit()
     return {"message": "Account eliminato"}
+
+
+@router.delete("/team/hard")
+def hard_delete_team(
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Hard-delete di tutti gli account slave (solo manager). Rimozione completa dal DB."""
+    if not current.is_manager:
+        raise HTTPException(status_code=403, detail="Solo il manager può eliminare il team.")
+    slaves = db.query(models.Company).filter(
+        models.Company.vat_number == current.vat_number,
+        models.Company.is_manager == False,
+    ).all()
+    for slave in slaves:
+        db.delete(slave)
+    db.commit()
+    return {"message": f"{len(slaves)} account eliminati dal database"}
 
 
 @router.post("/change-email")
@@ -862,7 +991,55 @@ def change_password(
 </html>"""
     send_email(current.email, "SolarDino — Password modificata", html)
 
+    current.must_change_password = False
+    db.commit()
+
     return {"message": "Password aggiornata con successo"}
+
+
+# ---------------------------------------------------------------------------
+# Notifiche cliente
+# ---------------------------------------------------------------------------
+
+@router.get("/notifications")
+def get_notifications(
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    notifs = (
+        db.query(models.Notification)
+        .filter(models.Notification.company_id == current.id)
+        .order_by(models.Notification.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        {
+            "id": n.id,
+            "title": n.title,
+            "message": n.message,
+            "ticket_id": n.ticket_id,
+            "is_read": n.is_read,
+            "created_at": n.created_at.isoformat(),
+        }
+        for n in notifs
+    ]
+
+
+@router.post("/notifications/{notif_id}/read")
+def mark_notification_read(
+    notif_id: int,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    n = db.query(models.Notification).filter(
+        models.Notification.id == notif_id,
+        models.Notification.company_id == current.id,
+    ).first()
+    if n:
+        n.is_read = True
+        db.commit()
+    return {"ok": True}
 
 
 @router.get("/check-vat/{vat}")

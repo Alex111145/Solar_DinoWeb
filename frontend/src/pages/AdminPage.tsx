@@ -279,6 +279,8 @@ export default function AdminPage() {
   const [adminReviews, setAdminReviews] = useState<ReviewItem[]>([])
 
   const [uploads, setUploads] = useState<UploadCompany[]>([])
+  const [replyTexts, setReplyTexts] = useState<Record<number, string>>({})
+  const [replyLoading, setReplyLoading] = useState<Record<number, boolean>>({})
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
   const [enterpriseLogs, setEnterpriseLogs] = useState<{id:number,company_name:string,company_email:string,vat_number:string,fh_workspace_id:string,data_consent:boolean,created_at:string}[]>([])
@@ -441,6 +443,26 @@ export default function AdminPage() {
     } catch { }
   }
 
+  async function sendReply(ticketId: number) {
+    const text = (replyTexts[ticketId] || '').trim()
+    if (!text) return
+    setReplyLoading((prev) => ({ ...prev, [ticketId]: true }))
+    try {
+      const res = await apiFetch(`/admin/tickets/${ticketId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: text }),
+      })
+      if (res.ok) {
+        setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, status: 'in_elaborazione' } : t))
+        setReplyTexts((prev) => ({ ...prev, [ticketId]: '' }))
+        setMsg('Risposta inviata al cliente')
+        setTimeout(() => setMsg(''), 3000)
+      }
+    } catch { }
+    setReplyLoading((prev) => ({ ...prev, [ticketId]: false }))
+  }
+
   async function updateTicketStatus(id: number, status: 'aperto' | 'in_elaborazione' | 'risolto') {
     try {
       const res = await apiFetch(`/admin/tickets/${id}/status`, {
@@ -450,7 +472,7 @@ export default function AdminPage() {
       })
       if (res.ok) {
         setTickets((prev) => prev.map((t) => t.id === id ? { ...t, status } : t))
-        setPendingTickets((prev) => tickets.filter((t) => (t.id === id ? status : t.status) === 'aperto').length)
+        setPendingTickets(() => tickets.filter((t) => (t.id === id ? status : t.status) === 'aperto').length)
         setMsg('Stato aggiornato')
         setTimeout(() => setMsg(''), 3000)
       }
@@ -460,20 +482,11 @@ export default function AdminPage() {
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
-  // Media fatturato mensile: calcola i mesi da Gennaio 2025 a oggi
-  const monthsSinceOnline = (() => {
-    const start = new Date(2025, 0, 1) // Gennaio 2025
-    const now = new Date()
-    return Math.max(1, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1)
-  })()
-  const avgRevenuePerMonth = (stats.total_revenue_eur || 0) / monthsSinceOnline
-
   const statCards = [
     { icon: <Building2 size={18} />, label: 'Aziende attive', value: stats.active_companies || 0, prefix: '' },
     { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
     { icon: <TrendingUp size={18} />, label: 'Fatturato medio mese', value: stats.revenue_month_eur || 0, prefix: '€' },
     { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
-    { icon: <TrendingUp size={18} />, label: 'Media mensile (da Gen 2025)', value: Math.round(avgRevenuePerMonth), prefix: '€' },
   ]
 
   return (
@@ -1085,24 +1098,29 @@ export default function AdminPage() {
                               </span>
                             </div>
                             <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{t.message}</p>
-                            <a
-                              href={`mailto:${t.company_email}?subject=Re:%20%23${t.id}%20${encodeURIComponent(t.subject)}&body=Gentile%20${encodeURIComponent(t.company_name || '')}%2C%0A%0A`}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textDecoration: 'none', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 6, padding: '0.25rem 0.6rem' }}
-                            >
-                              ✉ Rispondi via email
-                            </a>
+                            {/* Reply form */}
+                            {t.status !== 'risolto' && (
+                              <div style={{ marginTop: 10 }}>
+                                <textarea
+                                  rows={2}
+                                  className="form-input"
+                                  style={{ fontSize: '0.8rem', resize: 'vertical', marginBottom: 6 }}
+                                  placeholder="Scrivi la risposta al cliente..."
+                                  value={replyTexts[t.id] || ''}
+                                  onChange={(e) => setReplyTexts((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                                />
+                                <button
+                                  className="btn-amber"
+                                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.8rem' }}
+                                  disabled={replyLoading[t.id] || !(replyTexts[t.id] || '').trim()}
+                                  onClick={() => sendReply(t.id)}
+                                >
+                                  {replyLoading[t.id] ? 'Invio...' : 'Invia risposta'}
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <div className="flex flex-col gap-1.5 flex-shrink-0">
-                            {t.status !== 'in_elaborazione' && (
-                              <button
-                                className="btn-ghost"
-                                disabled={t.status === 'risolto'}
-                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: t.status === 'risolto' ? '#475569' : '#eab308', borderColor: t.status === 'risolto' ? 'rgba(71,85,105,0.3)' : 'rgba(234,179,8,0.3)', whiteSpace: 'nowrap', opacity: t.status === 'risolto' ? 0.45 : 1, cursor: t.status === 'risolto' ? 'not-allowed' : 'pointer' }}
-                                onClick={() => t.status !== 'risolto' && updateTicketStatus(t.id, 'in_elaborazione')}
-                              >
-                                In elaborazione
-                              </button>
-                            )}
                             {t.status !== 'risolto' && (
                               <button
                                 className="btn-ghost"

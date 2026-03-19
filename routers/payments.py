@@ -42,6 +42,27 @@ PACKAGES = {
     },
 }
 
+SUBSCRIPTION_PLANS = {
+    "starter": {
+        "credits":   10,
+        "price_id":  os.getenv("STRIPE_PRICE_STARTER_SUB", "price_1TCifiRo7NIommh0dweIouUa"),
+        "label":     "Starter",
+        "price_eur": 99.99,
+    },
+    "medium": {
+        "credits":   20,
+        "price_id":  os.getenv("STRIPE_PRICE_MEDIUM_SUB", "price_1TChkVRyfpFdIlYDlIkNIK3F"),
+        "label":     "Medium",
+        "price_eur": 169.99,
+    },
+    "unlimited": {
+        "credits":   None,   # crediti illimitati — gestiti via webhook
+        "price_id":  os.getenv("STRIPE_PRICE_UNLIMITED_SUB", "price_1TChltRyfpFdIlYDTu5GK85t"),
+        "label":     "Unlimited",
+        "price_eur": 299.99,
+    },
+}
+
 
 class CheckoutBody(BaseModel):
     package: str  # starter | pro | enterprise
@@ -124,42 +145,135 @@ async def stripe_webhook(
 
     if event["type"] == "checkout.session.completed":
         sess       = event["data"]["object"]
-        company_id = int(sess["metadata"]["company_id"])
-        credits    = int(sess["metadata"]["credits"])
-        package    = sess["metadata"].get("package", "")
+        meta       = sess.get("metadata") or {}
+        company_id = int(meta.get("company_id", 0))
+        is_subscription = sess.get("mode") == "subscription"
+        credits    = int(meta.get("credits", 0))
+        package    = meta.get("package") or meta.get("plan", "")
 
+        if company_id:
+            db = SessionLocal()
+            try:
+                company = db.query(models.Company).filter(models.Company.id == company_id).first()
+                if company:
+                    company.credits += credits
+                    if is_subscription:
+                        company.subscription_active = True
+                    sync_credits_by_vat(db, company.vat_number, company.credits)
+                    amount_eur = (sess.get("amount_total") or 0) / 100
+                    existing = db.query(models.StripePayment).filter(
+                        models.StripePayment.stripe_session == sess.get("id")
+                    ).first()
+                    if not existing:
+                        sp = models.StripePayment(
+                            company_id     = company_id,
+                            stripe_session = sess.get("id"),
+                            package        = package,
+                            credits        = credits,
+                            amount_eur     = amount_eur,
+                        )
+                        db.add(sp)
+                    db.commit()
+                    # Notifica admin
+                    email_utils.notify_stripe_payment(
+                        company_name=company.ragione_sociale or company.name,
+                        company_email=company.email,
+                        package=package,
+                        amount_eur=amount_eur,
+                        credits=credits,
+                    )
+                    # Ricevuta al cliente per abbonamenti
+                    if is_subscription:
+                        plan_info = SUBSCRIPTION_PLANS.get(package, {})
+                        email_utils.notify_subscription_receipt(
+                            company_name=company.ragione_sociale or company.name,
+                            company_email=company.email,
+                            plan=package,
+                            amount_eur=amount_eur,
+                            credits=credits,
+                        )
+            finally:
+                db.close()
+
+    elif event["type"] == "customer.subscription.deleted":
+        # Abbonamento cancellato — disattiva il flag
+        sub = event["data"]["object"]
+        customer_id = sub.get("customer")
         db = SessionLocal()
         try:
-            company = db.query(models.Company).filter(models.Company.id == company_id).first()
+            company = db.query(models.Company).filter(
+                models.Company.stripe_customer_id == customer_id
+            ).first()
             if company:
-                company.credits += credits
-                sync_credits_by_vat(db, company.vat_number, company.credits)
-                amount_eur = (sess.get("amount_total") or 0) / 100
-                # Salva il pagamento Stripe nel DB
-                existing = db.query(models.StripePayment).filter(
-                    models.StripePayment.stripe_session == sess.get("id")
-                ).first()
-                if not existing:
-                    sp = models.StripePayment(
-                        company_id     = company_id,
-                        stripe_session = sess.get("id"),
-                        package        = package,
-                        credits        = credits,
-                        amount_eur     = amount_eur,
-                    )
-                    db.add(sp)
+                company.subscription_active = False
                 db.commit()
-                email_utils.notify_stripe_payment(
-                    company_name=company.ragione_sociale or company.name,
-                    company_email=company.email,
-                    package=package,
-                    amount_eur=amount_eur,
-                    credits=credits,
-                )
         finally:
             db.close()
 
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Subscription checkout
+# ---------------------------------------------------------------------------
+
+@router.post("/subscribe")
+def create_subscription_checkout(
+    body: CheckoutBody,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Pagamenti non ancora configurati.")
+
+    plan = SUBSCRIPTION_PLANS.get(body.package)
+    if not plan:
+        raise HTTPException(status_code=400, detail="Piano non valido")
+
+    if not current.stripe_customer_id:
+        customer = stripe.Customer.create(email=current.email, name=current.name)
+        current.stripe_customer_id = customer.id
+        db.commit()
+
+    try:
+        session = stripe.checkout.Session.create(
+            customer=current.stripe_customer_id,
+            automatic_payment_methods={"enabled": True},
+            line_items=[{"price": plan["price_id"], "quantity": 1}],
+            mode="subscription",
+            success_url=f"{FRONTEND_URL}/dashboard?payment=success",
+            cancel_url=f"{FRONTEND_URL}/dashboard?payment=cancelled",
+            metadata={
+                "company_id": str(current.id),
+                "plan":       body.package,
+                "credits":    str(plan["credits"] or 9999),
+            },
+        )
+        return {"checkout_url": session.url}
+    except stripe.error.StripeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Stripe Customer Portal (gestione / cancellazione abbonamento)
+# ---------------------------------------------------------------------------
+
+@router.post("/portal")
+def create_portal_session(
+    current: models.Company = Depends(auth_utils.get_current_company),
+):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Pagamenti non ancora configurati.")
+    if not current.stripe_customer_id:
+        raise HTTPException(status_code=404, detail="Nessun abbonamento attivo trovato.")
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=current.stripe_customer_id,
+            return_url=f"{FRONTEND_URL}/dashboard",
+        )
+        return {"portal_url": session.url}
+    except stripe.error.StripeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ---------------------------------------------------------------------------

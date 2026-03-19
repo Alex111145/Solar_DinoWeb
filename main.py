@@ -44,6 +44,13 @@ async def lifespan(app: FastAPI):
             # Nuove colonne manager/slave e ticket status
             "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
             "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'aperto'",
+            # Nuove colonne sessione 3-4
+            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS reply TEXT",
+            "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP",
+            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_active BOOLEAN DEFAULT FALSE",
+            # Tabella messaggi ticket (sistema conversazione)
+            "CREATE TABLE IF NOT EXISTS ticket_messages (id SERIAL PRIMARY KEY, ticket_id INTEGER REFERENCES support_tickets(id) ON DELETE CASCADE, sender VARCHAR NOT NULL, text TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())",
         ]:
             try:
                 conn.execute(text(col_sql))

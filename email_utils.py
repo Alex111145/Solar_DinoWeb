@@ -103,3 +103,46 @@ def notify_bonifico(company_name: str, company_email: str, package: str, amount_
     </div>
     """
     send_email(ADMIN_NOTIFY_EMAIL, subject, html)
+
+
+def notify_subscription_receipt(company_name: str, company_email: str, plan: str, amount_eur: float, credits: int):
+    plan_label = {"starter": "Starter", "medium": "Medium", "unlimited": "Unlimited"}.get(plan, plan.upper())
+    credits_label = "Illimitati" if credits >= 9999 else f"{credits} ortomosaici/mese"
+    subject = f"SolarDino — Ricevuta abbonamento {plan_label}"
+    html = f"""
+    <div style="font-family:sans-serif;max-width:520px;margin:auto;background:#0f172a;color:#e2e8f0;padding:32px;border-radius:16px;">
+      <h2 style="color:#f59e0b;margin-top:0;">☀️ SolarDino — Abbonamento attivato</h2>
+      <p style="color:#94a3b8;">Ciao {company_name}, il tuo abbonamento è stato attivato con successo.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+        <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Piano</td>
+            <td style="padding:8px 0;font-weight:600;">{plan_label}</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Elaborazioni incluse</td>
+            <td style="padding:8px 0;color:#fbbf24;font-weight:600;">{credits_label}</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Importo addebitato</td>
+            <td style="padding:8px 0;color:#34d399;font-weight:700;font-size:18px;">€{amount_eur:.2f}/mese</td></tr>
+      </table>
+      <p style="color:#94a3b8;font-size:13px;">Puoi gestire o annullare il tuo abbonamento in qualsiasi momento dalla sezione "Gestione abbonamento" nella tua dashboard.</p>
+      <p style="margin-top:24px;font-size:12px;color:#475569;">SolarDino © 2026</p>
+    </div>
+    """
+    send_email(company_email, subject, html)
+
+
+def notify_ticket_reply(company_email: str, company_name: str, ticket_id: int, ticket_subject: str, reply_text: str):
+    subject = f"SolarDino — Risposta alla tua segnalazione #{ticket_id}"
+    html = f"""
+    <div style="font-family:sans-serif;max-width:520px;margin:auto;background:#0f172a;color:#e2e8f0;padding:32px;border-radius:16px;">
+      <h2 style="color:#f59e0b;margin-top:0;">&#9728;&#65039; SolarDino — Risposta alla segnalazione</h2>
+      <p style="color:#94a3b8;">Ciao {company_name}, il team SolarDino ha risposto alla tua segnalazione.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:100px;">Ticket</td>
+            <td style="padding:8px 0;font-weight:600;">#{ticket_id} &mdash; {ticket_subject}</td></tr>
+      </table>
+      <div style="background:#1e293b;border-left:3px solid #f59e0b;padding:16px;border-radius:8px;margin:16px 0;">
+        <p style="color:#e2e8f0;margin:0;white-space:pre-wrap;font-size:14px;line-height:1.6;">{reply_text}</p>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;">Puoi visualizzare la risposta anche nella sezione Notifiche del tuo account.</p>
+      <p style="margin-top:24px;font-size:12px;color:#475569;">SolarDino &copy; 2026</p>
+    </div>
+    """
+    send_email(company_email, subject, html)

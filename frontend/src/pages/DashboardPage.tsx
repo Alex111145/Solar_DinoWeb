@@ -19,14 +19,6 @@ interface Job {
   error_message?: string
 }
 
-interface Package {
-  key: string
-  label: string
-  credits: number
-  price_eur: number
-  popular?: boolean
-}
-
 interface Review {
   id: string
   company?: string
@@ -244,7 +236,7 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
 interface SlaveAccount { id: number; name: string; email: string; is_active: boolean }
 
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete, subscriptionActive, isManager,
 }: {
   name: string
   email: string
@@ -258,6 +250,8 @@ function ProfileSidebar({
   isDark: boolean
   onToggleTheme: () => void
   onRequestDelete: () => void
+  subscriptionActive: boolean
+  isManager: boolean
 }) {
   const navigate = useNavigate()
   const [openSection, setOpenSection] = useState<string | null>(null)
@@ -270,6 +264,7 @@ function ProfileSidebar({
   const [editStars, setEditStars] = useState(myReview?.stars ?? 0)
   const [editComment, setEditComment] = useState(myReview?.comment ?? '')
   const [reviewMsg, setReviewMsg] = useState('')
+  const [subMsg, setSubMsg] = useState('')
 
   useEffect(() => {
     if (myReview) {
@@ -333,10 +328,24 @@ function ProfileSidebar({
     } catch { setMsg('Errore') }
   }
 
-  async function logout() {
-    await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
+  async function cancelSubscription() {
+    try {
+      const res = await apiFetch('/payments/portal', { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        window.location.href = data.portal_url
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setSubMsg(err.detail || 'Nessun abbonamento attivo trovato.')
+        setTimeout(() => setSubMsg(''), 4000)
+      }
+    } catch { setSubMsg('Errore di rete'); setTimeout(() => setSubMsg(''), 4000) }
+  }
+
+  function logout() {
     localStorage.clear()
     navigate('/login')
+    fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
   }
 
   const initials = name ? name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2) : '??'
@@ -441,13 +450,15 @@ function ProfileSidebar({
                 <p style={{ fontSize: '0.75rem', color: st.textMuted, marginBottom: '0.75rem' }}>
                   Per modificare email o password usa le sezioni dedicate. Per altri dati contatta il supporto.
                 </p>
-                <button
-                  className="flex items-center gap-2"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}
-                  onClick={() => { onClose(); onRequestDelete() }}
-                >
-                  <Trash2 size={13} /> Elimina account
-                </button>
+                {isManager && (
+                  <button
+                    className="flex items-center gap-2"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}
+                    onClick={() => { onClose(); onRequestDelete() }}
+                  >
+                    <Trash2 size={13} /> Elimina account
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -620,11 +631,6 @@ function ProfileSidebar({
               >
                 <span className="flex items-center gap-2 text-sm font-medium">
                   <Star size={15} /> Modifica recensione
-                  {myReview.status === 'approved' || myReview.status === 'approvata' ? (
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 7px' }}>Approvata</span>
-                  ) : (
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#eab308', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 20, padding: '1px 7px' }}>In attesa di approvazione</span>
-                  )}
                 </span>
                 <ChevronRight size={15} style={{ transform: openSection === 'recensione' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
               </button>
@@ -649,6 +655,39 @@ function ProfileSidebar({
                   )}
                   <button className="btn-amber w-full mt-3" style={{ fontSize: '0.85rem', padding: '0.6rem' }} onClick={updateReview}>
                     <Check size={14} /> Salva modifiche
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Gestione abbonamento — visibile solo se abbonamento attivo */}
+          {subscriptionActive && (
+            <div className="card mb-2" style={{ padding: 0, borderRadius: 14, overflow: 'hidden' }}>
+              <button
+                className="w-full flex items-center justify-between p-4"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
+                onClick={() => toggle('abbonamento')}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium"><CreditCard size={15} /> Gestione abbonamento</span>
+                <ChevronRight size={15} style={{ transform: openSection === 'abbonamento' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
+              </button>
+              {openSection === 'abbonamento' && (
+                <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
+                  <p style={{ fontSize: '0.78rem', color: st.textSec, marginTop: '0.75rem', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+                    Puoi gestire o disdire il tuo abbonamento direttamente dal portale Stripe.
+                  </p>
+                  {subMsg && (
+                    <div className="rounded-xl p-2 mb-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', fontSize: '0.78rem' }}>
+                      {subMsg}
+                    </div>
+                  )}
+                  <button
+                    className="btn-ghost w-full"
+                    style={{ fontSize: '0.85rem', padding: '0.6rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+                    onClick={cancelSubscription}
+                  >
+                    Annulla abbonamento
                   </button>
                 </div>
               )}
@@ -782,6 +821,7 @@ export default function DashboardPage() {
   const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
   const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
   const [isManager, setIsManager] = useState(false)
+  const [subscriptionActive, setSubscriptionActive] = useState(false)
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(true) // default true until verified
   const [trialAlreadyRequested, setTrialAlreadyRequested] = useState(true) // default true per nascondere fino a verifica
   const [trialMessage, setTrialMessage] = useState('')
@@ -793,20 +833,26 @@ export default function DashboardPage() {
   const [showTeamModal, setShowTeamModal] = useState(false)
   const [teamSlaves, setTeamSlaves] = useState<SlaveAccount[]>([])
   const [teamSlavesLoaded, setTeamSlavesLoaded] = useState(false)
-  const [teamSlaveForm, setTeamSlaveForm] = useState({ nome: '', cognome: '', email: '', password: '' })
+  const [teamSlaveForm, setTeamSlaveForm] = useState({ email: '', password: '' })
   const [teamSlaveMsg, setTeamSlaveMsg] = useState('')
   const [teamSlaveLoading, setTeamSlaveLoading] = useState(false)
 
   // Bell notifications (C)
-  const [openTickets, setOpenTickets] = useState<{id: number; subject: string; created_at: string}[]>([])
+  const [notifications, setNotifications] = useState<{id: number; title: string; message: string; is_read: boolean; ticket_id: number | null; created_at: string}[]>([])
   const [showBellDropdown, setShowBellDropdown] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
 
+  // Ticket conversation modal
+  interface TicketMsg { id: number; sender: string; text: string; created_at: string }
+  interface TicketDetail { id: number; subject: string; status: string; created_at: string; messages: TicketMsg[] }
+  const [showTicketModal, setShowTicketModal] = useState(false)
+  const [ticketDetail, setTicketDetail] = useState<TicketDetail | null>(null)
+  const [ticketReplyText, setTicketReplyText] = useState('')
+  const [ticketReplyLoading, setTicketReplyLoading] = useState(false)
+  const [ticketActionMsg, setTicketActionMsg] = useState('')
+
   // Delete account confirm modal (E)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-
-  // Subscription modal (A)
-  const [showSubModal, setShowSubModal] = useState(false)
 
   // Theme state
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
@@ -850,7 +896,6 @@ export default function DashboardPage() {
 
   // UI state
   const [showProfile, setShowProfile] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
 
   // Upload state
   const [thermalTif, setThermalTif] = useState<File | null>(null)
@@ -871,13 +916,6 @@ export default function DashboardPage() {
   // History
   const [history, setHistory] = useState<Job[]>([])
 
-  // Payments
-  const [payTab, setPayTab] = useState<'carta' | 'bonifico'>('carta')
-  const [packages, setPackages] = useState<Package[]>([])
-  const [bonificoReceipt, setBonificoReceipt] = useState<File | null>(null)
-  const bonificoRef = useRef<HTMLInputElement>(null)
-  const [bonificoMsg, setBonificoMsg] = useState('')
-  const [bonificoPackage, setBonificoPackage] = useState('')
 
   // Reviews
   const [myReview, setMyReview] = useState<Review | null>(null)
@@ -908,6 +946,7 @@ export default function DashboardPage() {
         if (d.ragione_sociale) { setRagioneSociale(d.ragione_sociale); localStorage.setItem('ragione_sociale', d.ragione_sociale) }
         if (d.vat_number) { setVatNumber(d.vat_number); localStorage.setItem('vat_number', d.vat_number) }
         if (d.is_manager !== undefined) setIsManager(!!d.is_manager)
+        if (d.subscription_active !== undefined) setSubscriptionActive(!!d.subscription_active)
         if (d.welcome_bonus_used !== undefined) setWelcomeBonusUsed(!!d.welcome_bonus_used)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
@@ -915,15 +954,10 @@ export default function DashboardPage() {
       })
       .catch(() => {})
 
-    // Load open support tickets for bell (C)
-    apiFetch('/auth/support')
+    // Load notifications for bell (C)
+    apiFetch('/auth/notifications')
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => {
-        if (d) {
-          const arr = Array.isArray(d) ? d : []
-          setOpenTickets(arr.filter((t: {status?: string}) => t.status === 'aperto' || t.status === 'open'))
-        }
-      })
+      .then((d) => { if (Array.isArray(d)) setNotifications(d) })
       .catch(() => {})
 
     apiFetch('/missions/history')
@@ -931,10 +965,6 @@ export default function DashboardPage() {
       .then((d) => { if (d) setHistory(Array.isArray(d) ? d : d.missions || []) })
       .catch(() => {})
 
-    apiFetch('/payments/packages')
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setPackages(Array.isArray(d) ? d : d.packages || []) })
-      .catch(() => {})
 
     apiFetch('/reviews/mine')
       .then((r) => r.ok ? r.json() : null)
@@ -1055,29 +1085,67 @@ export default function DashboardPage() {
   }
 
   // ── Payments ───────────────────────────────────────────────────────────
-  async function buyPackage(pkg: Package) {
+  async function subscribePlan(planKey: string) {
     try {
-      const res = await apiFetch('/payments/checkout', {
+      const res = await apiFetch('/payments/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ package: pkg.key }),
+        body: JSON.stringify({ package: planKey }),
       })
       const d = await res.json()
-      if (d.checkout_url || d.url) window.location.href = d.checkout_url || d.url
+      if (d.checkout_url) window.location.href = d.checkout_url
     } catch { }
   }
 
-  async function sendBonifico() {
-    if (!bonificoPackage) { setBonificoMsg('Seleziona un pacchetto'); return }
-    if (!bonificoReceipt) { setBonificoMsg('Allega la ricevuta'); return }
+  // ── Ticket conversation ────────────────────────────────────────────────
+  async function openTicketModal(ticketId: number, notifId?: number) {
+    if (notifId) {
+      apiFetch(`/auth/notifications/${notifId}/read`, { method: 'POST' }).catch(() => {})
+      setNotifications((prev) => prev.map((x) => x.id === notifId ? { ...x, is_read: true } : x))
+    }
     try {
-      const fd = new FormData()
-      fd.append('receipt', bonificoReceipt)
-      fd.append('package', bonificoPackage)
-      const res = await apiFetch('/payments/bonifico-request', { method: 'POST', body: fd })
-      if (res.ok) { setBonificoMsg('Richiesta inviata! Riceverai conferma via email.'); setBonificoPackage(''); setBonificoReceipt(null) }
-      else setBonificoMsg('Errore invio')
-    } catch { setBonificoMsg('Errore') }
+      const res = await apiFetch(`/auth/tickets/${ticketId}`)
+      if (res.ok) {
+        const d = await res.json()
+        setTicketDetail(d)
+        setShowTicketModal(true)
+        setShowBellDropdown(false)
+        setTicketActionMsg('')
+        setTicketReplyText('')
+      }
+    } catch { /* noop */ }
+  }
+
+  async function sendTicketReply() {
+    if (!ticketDetail || !ticketReplyText.trim()) return
+    setTicketReplyLoading(true)
+    try {
+      const res = await apiFetch(`/auth/tickets/${ticketDetail.id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: ticketReplyText.trim() }),
+      })
+      if (res.ok) {
+        const newMsg = { id: Date.now(), sender: 'client', text: ticketReplyText.trim(), created_at: new Date().toISOString() }
+        setTicketDetail((prev) => prev ? { ...prev, status: 'aperto', messages: [...prev.messages, newMsg] } : prev)
+        setTicketReplyText('')
+        setTicketActionMsg('Messaggio inviato')
+        setTimeout(() => setTicketActionMsg(''), 3000)
+      }
+    } catch { /* noop */ }
+    setTicketReplyLoading(false)
+  }
+
+  async function handleCloseTicket() {
+    if (!ticketDetail) return
+    try {
+      const res = await apiFetch(`/auth/tickets/${ticketDetail.id}/close`, { method: 'POST' })
+      if (res.ok) {
+        setTicketDetail((prev) => prev ? { ...prev, status: 'risolto' } : prev)
+        setTicketActionMsg('Ticket chiuso')
+        setTimeout(() => setTicketActionMsg(''), 3000)
+      }
+    } catch { /* noop */ }
   }
 
   // ── Reviews ────────────────────────────────────────────────────────────
@@ -1167,7 +1235,7 @@ export default function DashboardPage() {
   }
 
   async function createTeamSlave() {
-    if (!teamSlaveForm.nome || !teamSlaveForm.cognome || !teamSlaveForm.email || !teamSlaveForm.password) {
+    if (!teamSlaveForm.email || !teamSlaveForm.password) {
       setTeamSlaveMsg('Compila tutti i campi'); return
     }
     setTeamSlaveLoading(true)
@@ -1177,13 +1245,12 @@ export default function DashboardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `${teamSlaveForm.nome} ${teamSlaveForm.cognome}`.trim(),
           email: teamSlaveForm.email,
           password: teamSlaveForm.password,
         }),
       })
       if (res.ok) {
-        setTeamSlaveForm({ nome: '', cognome: '', email: '', password: '' })
+        setTeamSlaveForm({ email: '', password: '' })
         setTeamSlaveMsg('Account creato con successo!')
         await loadTeamSlaves()
       } else {
@@ -1204,7 +1271,7 @@ export default function DashboardPage() {
   // ── Delete account (E) ─────────────────────────────────────────────────
   async function deleteAccountFromMain() {
     try {
-      await apiFetch('/auth/delete-account', { method: 'DELETE' })
+      await apiFetch('/auth/me', { method: 'DELETE' })
       localStorage.clear()
       navigate('/login')
     } catch { /* noop */ }
@@ -1251,7 +1318,7 @@ export default function DashboardPage() {
               className="badge badge-amber"
               style={{ cursor: 'default' }}
             >
-              <Zap size={12} /> {credits} elaborazioni
+              {credits} elaborazioni rimaste
             </div>
 
             {/* Bell icon (C) */}
@@ -1263,7 +1330,7 @@ export default function DashboardPage() {
                 title="Notifiche"
               >
                 <Bell size={17} />
-                {openTickets.length > 0 && (
+                {notifications.filter((n) => !n.is_read).length > 0 && (
                   <span style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 16, height: 16, borderRadius: '50%',
@@ -1272,7 +1339,7 @@ export default function DashboardPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     border: '2px solid var(--navbar-bg)',
                   }}>
-                    {openTickets.length}
+                    {notifications.filter((n) => !n.is_read).length}
                   </span>
                 )}
               </button>
@@ -1287,29 +1354,42 @@ export default function DashboardPage() {
                       position: 'absolute', top: '110%', right: 0, zIndex: 100,
                       background: isDark ? '#0d1117' : '#fff',
                       border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: 14, minWidth: 280, maxWidth: 340,
+                      borderRadius: 14, minWidth: 300, maxWidth: 360,
                       boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                       overflow: 'hidden',
                     }}
                   >
                     <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                       <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        Ticket aperti
+                        Notifiche
                       </span>
                     </div>
-                    {openTickets.length === 0 ? (
+                    {notifications.length === 0 ? (
                       <div style={{ padding: '1rem', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                        Nessun ticket aperto
+                        Nessuna notifica
                       </div>
                     ) : (
-                      <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-                        {openTickets.map((t) => (
-                          <div key={t.id} style={{ padding: '0.65rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
-                              #{t.id} — {t.subject}
+                      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                        {notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            style={{ padding: '0.7rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', background: n.is_read ? 'transparent' : 'rgba(245,158,11,0.05)', cursor: 'pointer' }}
+                            onClick={() => {
+                              if (n.ticket_id) {
+                                openTicketModal(n.ticket_id, n.id)
+                              } else if (!n.is_read) {
+                                apiFetch(`/auth/notifications/${n.id}/read`, { method: 'POST' }).catch(() => {})
+                                setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, is_read: true } : x))
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>{n.title}</span>
+                              {!n.is_read && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />}
                             </div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              {new Date(t.created_at).toLocaleDateString('it-IT')}
+                            <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 2 }}>{n.message}</div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                              {new Date(n.created_at).toLocaleDateString('it-IT')}
                             </div>
                           </div>
                         ))}
@@ -1326,7 +1406,7 @@ export default function DashboardPage() {
                 onClick={() => { setShowTeamModal(true); if (!teamSlavesLoaded) loadTeamSlaves() }}
                 className="btn-ghost flex items-center justify-center"
                 style={{ width: 36, height: 36, padding: 0 }}
-                title="Gestione Team"
+                title="Gestione Teams"
               >
                 <Users size={17} />
               </button>
@@ -1397,7 +1477,7 @@ export default function DashboardPage() {
                 <div>
                   <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Prova gratuita</div>
                   <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.975rem', marginBottom: 3 }}>
-                    Richiedi il tuo primo credito gratuito
+                      Richiedi la tua prova gratuita
                   </div>
                   <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                     Invia una richiesta all'amministratore con i dati della tua azienda e un messaggio opzionale.
@@ -1774,8 +1854,8 @@ export default function DashboardPage() {
 
         {/* Active job — floating popup (rendered outside flow at bottom of return) */}
 
-        {/* Credits / Payments */}
-        <motion.div variants={cardAnim} className="card mb-6">
+        {/* Credits / Payments — nascosto se abbonamento attivo */}
+        {!subscriptionActive && <motion.div variants={cardAnim} className="card mb-6">
           <div className="flex items-center gap-3 mb-5">
             <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
               <CreditCard size={17} />
@@ -1786,234 +1866,76 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex gap-2 mb-5">
-            <button className={`tab-btn ${payTab === 'carta' ? 'active' : ''}`} onClick={() => setPayTab('carta')}>
-              Carta di credito
-            </button>
-            <button className={`tab-btn ${payTab === 'bonifico' ? 'active' : ''}`} onClick={() => setPayTab('bonifico')}>
-              Bonifico bancario
-            </button>
-          </div>
-
-          {/* Abbonamenti Mensili — sempre visibili nella tab carta */}
-          {payTab === 'carta' && (
-            <div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { key: 'starter', label: 'Starter', credits: 10, price: 100, originalPrice: 120, discount: 17, popular: false },
-                  { key: 'medium', label: 'Medium', credits: 20, price: 150, originalPrice: 180, discount: 17, popular: true },
-                  { key: 'unlimited', label: 'Unlimited', credits: null, price: 200, originalPrice: 250, discount: 20, popular: false },
-                ].map((plan) => (
-                  <div
-                    key={plan.key}
-                    className="rounded-xl p-4 flex flex-col gap-2"
-                    style={{
-                      background: plan.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
-                      border: plan.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
-                      position: 'relative',
-                    }}
-                  >
-                    {plan.popular && (
-                      <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20, padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000', whiteSpace: 'nowrap' }}>
-                        Più popolare
+          {/* Abbonamenti Mensili */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {([
+              { key: 'starter',  label: 'Starter',  credits: 10,   price: 99.99,  originalPrice: null,   popular: false, color: 'rgba(255,255,255,0.07)', btnStyle: { background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' } },
+              { key: 'medium',   label: 'Medium',   credits: 20,   price: 169.99, originalPrice: 199.99, popular: true,  color: 'rgba(245,158,11,0.35)',   btnStyle: { background: 'linear-gradient(90deg,#f59e0b,#f97316)', color: '#000' } },
+              { key: 'unlimited',label: 'Unlimited',credits: null, price: 299.99, originalPrice: 400,    popular: false, color: 'rgba(34,197,94,0.35)',    btnStyle: { background: '#22c55e', color: '#000' } },
+            ] as { key: string; label: string; credits: number | null; price: number; originalPrice: number | null; popular: boolean; color: string; btnStyle: React.CSSProperties }[]).map((plan) => {
+              const discount = plan.originalPrice ? Math.round((1 - plan.price / plan.originalPrice) * 100) : 0
+              const savings  = plan.originalPrice ? (plan.originalPrice - plan.price).toFixed(2) : null
+              const perElab  = plan.credits != null ? (plan.price / plan.credits).toFixed(2) : null
+              return (
+                <div
+                  key={plan.key}
+                  className="rounded-xl flex flex-col"
+                  style={{ border: `1px solid ${plan.color}`, background: 'rgba(255,255,255,0.02)', position: 'relative', overflow: 'hidden' }}
+                >
+                  {plan.popular && (
+                    <div style={{ background: 'linear-gradient(90deg,#f59e0b,#f97316)', textAlign: 'center', padding: '4px 0', fontSize: '0.7rem', fontWeight: 700, color: '#000', letterSpacing: '0.05em' }}>
+                      PIÙ POPOLARE
+                    </div>
+                  )}
+                  <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* label + discount */}
+                    <div className="flex items-center justify-between">
+                      <span style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{plan.label}</span>
+                      {discount > 0 && (
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 20, padding: '1px 8px' }}>-{discount}%</span>
+                      )}
+                    </div>
+                    {/* elaborazioni */}
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '2rem', lineHeight: 1 }}>
+                      {plan.credits != null ? plan.credits : '∞'}
+                      <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>elaborazioni/mese</span>
+                    </div>
+                    {/* prezzo per elaborazione */}
+                    {perElab && (
+                      <div className="flex items-center justify-between" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <span>Prezzo per elaborazione</span>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>€{perElab}</span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{plan.label}</span>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>
-                        -{plan.discount}%
+                    {/* banner risparmio */}
+                    {savings && (
+                      <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '5px 10px', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>
+                        🔥 Risparmi €{savings} rispetto al prezzo pieno
+                      </div>
+                    )}
+                    {/* prezzo */}
+                    <div className="flex items-baseline gap-2" style={{ marginTop: 'auto', paddingTop: 6 }}>
+                      {plan.originalPrice && (
+                        <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}/mese</span>
+                      )}
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.4rem' }}>
+                        €{plan.price.toFixed(2)}<span style={{ fontSize: '0.78rem', fontWeight: 400, color: 'var(--text-muted)' }}>/mese</span>
                       </span>
                     </div>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
-                      {plan.credits != null ? plan.credits : '∞'}{' '}
-                      <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni/mese</span>
-                    </div>
-                    <div className="flex items-baseline gap-2" style={{ marginTop: 2 }}>
-                      <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}/mese</span>
-                      <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>
-                        €{plan.price}<span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--text-muted)' }}>/mese</span>
-                      </span>
-                    </div>
+                    {/* bottone */}
                     <button
-                      className="btn-amber w-full"
-                      style={{ fontSize: '0.85rem', padding: '0.6rem', marginTop: 4 }}
-                      onClick={() => setShowSubModal(true)}
+                      className="w-full"
+                      style={{ ...plan.btnStyle, border: 'none', borderRadius: 10, padding: '0.65rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginTop: 4 }}
+                      onClick={() => subscribePlan(plan.key)}
                     >
                       Attiva abbonamento
                     </button>
                   </div>
-                ))}
-              </div>
-
-              {/* Pacchetti singoli — visibili solo se crediti esauriti */}
-              {credits === 0 && (
-                <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Acquisto singolo
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>— crediti esauriti, preferisci non fare upgrade?</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {(packages.length > 0
-                      ? packages.map((p, i) => ({ ...p, popular: i === 1 }))
-                      : [
-                          { key: 'single', label: 'Singola', credits: 1, price_eur: 49.99, popular: false },
-                          { key: 'pack5', label: 'Pack 5', credits: 5, price_eur: 219.99, popular: true },
-                          { key: 'pack10', label: 'Pack 10', credits: 10, price_eur: 399.99, popular: false },
-                        ]
-                    ).map((pkg) => {
-                      const fullPrice = pkg.credits * 49.99
-                      const hasDiscount = pkg.credits > 1
-                      const discountPct = hasDiscount ? Math.round((1 - pkg.price_eur / fullPrice) * 100) : 0
-                      return (
-                        <div
-                          key={pkg.key}
-                          className="rounded-xl p-4 flex flex-col gap-2"
-                          style={{
-                            background: pkg.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
-                            border: pkg.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
-                            position: 'relative',
-                          }}
-                        >
-                          {pkg.popular && (
-                            <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20, padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000', whiteSpace: 'nowrap' }}>
-                              Più popolare
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                              {pkg.label}
-                            </span>
-                            {hasDiscount && (
-                              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>
-                                -{discountPct}%
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
-                            {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni</span>
-                          </div>
-                          <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', flex: 1 }}>
-                            €{(pkg.price_eur / pkg.credits).toFixed(2)} per elaborazione
-                          </div>
-                          <div className="flex items-baseline gap-2">
-                            {hasDiscount && (
-                              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                                €{fullPrice.toFixed(2)}
-                              </span>
-                            )}
-                            <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>
-                              €{pkg.price_eur.toFixed(2)}
-                            </span>
-                          </div>
-                          <button
-                            className="btn-amber w-full"
-                            style={{ fontSize: '0.85rem', padding: '0.6rem' }}
-                            onClick={() => buyPackage(pkg)}
-                          >
-                            Acquista
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          {payTab === 'bonifico' && (
-            <div>
-              {/* Selezione pacchetto — stessa grafica carta */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-                {(packages.length > 0
-                  ? packages.map((p, i) => ({ ...p, popular: i === 1 }))
-                  : [
-                      { key: 'single', label: 'Singola', credits: 1, price_eur: 49.99, popular: false },
-                      { key: 'pack5', label: 'Pack 5', credits: 5, price_eur: 219.99, popular: true },
-                      { key: 'pack10', label: 'Pack 10', credits: 10, price_eur: 399.99, popular: false },
-                    ]
-                ).map((pkg) => {
-                  const fullPrice = pkg.credits * 49.99
-                  const hasDiscount = pkg.credits > 1
-                  const discountPct = hasDiscount ? Math.round((1 - pkg.price_eur / fullPrice) * 100) : 0
-                  const selected = bonificoPackage === pkg.key
-                  return (
-                    <div
-                      key={pkg.key}
-                      className="rounded-xl p-4 flex flex-col gap-2"
-                      style={{
-                        background: selected ? 'rgba(245,158,11,0.1)' : pkg.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
-                        border: selected ? '2px solid rgba(245,158,11,0.6)' : pkg.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
-                        position: 'relative', cursor: 'pointer',
-                      }}
-                      onClick={() => setBonificoPackage(pkg.key)}
-                    >
-                      {pkg.popular && (
-                        <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20, padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000', whiteSpace: 'nowrap' }}>
-                          Più popolare
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{pkg.label}</span>
-                        {hasDiscount && (
-                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>-{discountPct}%</span>
-                        )}
-                      </div>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
-                        {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni</span>
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        {hasDiscount && <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{fullPrice.toFixed(2)}</span>}
-                        <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>€{pkg.price_eur.toFixed(2)}</span>
-                      </div>
-                      {selected && <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700 }}>✓ Selezionato</div>}
-                    </div>
-                  )
-                })}
-              </div>
-
-            <div className="rounded-xl p-5" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              <h3 style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.925rem', marginBottom: 12 }}>Dati per il bonifico</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                {[
-                  { label: 'Intestatario', value: 'SolarDino Srl' },
-                  { label: 'IBAN', value: 'IT60 X054 2811 1010 0000 0123 456' },
-                  { label: 'BIC/SWIFT', value: 'BLOPIT22' },
-                  { label: 'Causale', value: 'Acquisto elaborazioni SolarDino' },
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500 }}>{value}</div>
-                  </div>
-                ))}
-              </div>
-              <label className="form-label">Allega ricevuta bonifico</label>
-              <div
-                className={`drop-zone mb-4 ${bonificoReceipt ? 'has-file' : ''}`}
-                onClick={() => bonificoRef.current?.click()}
-                style={{ minHeight: 70 }}
-              >
-                <input ref={bonificoRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => setBonificoReceipt(e.target.files?.[0] || null)} />
-                {bonificoReceipt ? (
-                  <span style={{ fontSize: '0.8rem', color: '#f59e0b' }}>{bonificoReceipt.name}</span>
-                ) : (
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>PDF, JPG, PNG</span>
-                )}
-              </div>
-              {bonificoMsg && (
-                <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.85rem' }}>
-                  {bonificoMsg}
-                </div>
-              )}
-              <button className="btn-amber" onClick={sendBonifico}>
-                <FileDown size={15} /> Invia richiesta
-              </button>
-            </div>
-            </div>
-          )}
-        </motion.div>
+              )
+            })}
+          </div>
+        </motion.div>}
 
         {/* Form recensione — sparisce se l'utente ha già recensito */}
         {!myReview && (
@@ -2238,6 +2160,8 @@ export default function DashboardPage() {
             isDark={isDark}
             onToggleTheme={toggleTheme}
             isManager={isManager}
+            subscriptionActive={subscriptionActive}
+            onRequestDelete={() => setShowDeleteModal(true)}
           />
         )}
       </AnimatePresence>
@@ -2405,7 +2329,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Users size={18} style={{ color: '#f59e0b' }} />
-                  <h3 style={{ color: 'var(--text-primary)', fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Gestione Team</h3>
+                  <h3 style={{ color: 'var(--text-primary)', fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Gestione Teams</h3>
                 </div>
                 <button onClick={() => setShowTeamModal(false)} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
               </div>
@@ -2439,10 +2363,6 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2 mb-3">
                   <UserPlus size={14} style={{ color: '#f59e0b' }} />
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Nuovo account dipendente</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input className="form-input" placeholder="Nome *" value={teamSlaveForm.nome} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, nome: e.target.value }))} style={{ fontSize: '0.85rem' }} />
-                  <input className="form-input" placeholder="Cognome *" value={teamSlaveForm.cognome} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, cognome: e.target.value }))} style={{ fontSize: '0.85rem' }} />
                 </div>
                 <input className="form-input mb-2" type="email" placeholder="Email dipendente" value={teamSlaveForm.email} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, email: e.target.value }))} style={{ fontSize: '0.85rem' }} />
                 <input className="form-input mb-3" type="password" placeholder="Password temporanea" value={teamSlaveForm.password} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, password: e.target.value }))} style={{ fontSize: '0.85rem' }} />
@@ -2492,29 +2412,6 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ── Subscription "Coming Soon" Modal (A) ─────────────────────────── */}
-      <AnimatePresence>
-        {showSubModal && (
-          <div className="modal-overlay" onClick={() => setShowSubModal(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-              className="card"
-              style={{ maxWidth: 400, width: '100%', padding: '2rem', borderRadius: 20, textAlign: 'center' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ fontSize: 42, marginBottom: 12 }}>🚀</div>
-              <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Funzionalità in arrivo</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: 20 }}>
-                Gli abbonamenti mensili saranno disponibili a breve. Sarai avvisato via email non appena attivi.
-              </p>
-              <button className="btn-amber w-full" onClick={() => setShowSubModal(false)}>Chiudi</button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Modal richiesta prova gratuita */}
       <AnimatePresence>
@@ -2555,6 +2452,100 @@ export default function DashboardPage() {
                   {trialLoading ? 'Invio...' : 'Invia richiesta'}
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Ticket Conversation Modal ─────────────────────────────────── */}
+      <AnimatePresence>
+        {showTicketModal && ticketDetail && (
+          <div className="modal-overlay" style={{ zIndex: 300 }} onClick={() => setShowTicketModal(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="card"
+              style={{ maxWidth: 520, width: '100%', padding: '1.5rem', borderRadius: 20, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                    Ticket #{ticketDetail.id} · {ticketDetail.status === 'risolto' ? '🔒 Chiuso' : ticketDetail.status === 'in_elaborazione' ? '⚙️ In elaborazione' : '🟢 Aperto'}
+                  </div>
+                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0, wordBreak: 'break-word' }}>{ticketDetail.subject}</h3>
+                </div>
+                <button onClick={() => setShowTicketModal(false)} className="btn-ghost" style={{ padding: '0.3rem', marginLeft: 8, flexShrink: 0 }}><X size={18} /></button>
+              </div>
+
+              {/* Message history */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16, paddingRight: 4 }}>
+                {ticketDetail.messages.map((m) => (
+                  <div
+                    key={m.id}
+                    style={{
+                      alignSelf: m.sender === 'client' ? 'flex-end' : 'flex-start',
+                      maxWidth: '80%',
+                      background: m.sender === 'client' ? 'linear-gradient(135deg,#f59e0b,#f97316)' : 'rgba(255,255,255,0.06)',
+                      border: m.sender === 'admin' ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                      borderRadius: m.sender === 'client' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                      padding: '0.6rem 0.85rem',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, marginBottom: 3, color: m.sender === 'client' ? 'rgba(0,0,0,0.6)' : '#f59e0b' }}>
+                      {m.sender === 'client' ? 'Tu' : 'SolarDino'}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: m.sender === 'client' ? '#000' : 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.text}</div>
+                    <div style={{ fontSize: '0.65rem', color: m.sender === 'client' ? 'rgba(0,0,0,0.5)' : 'var(--text-muted)', marginTop: 4, textAlign: 'right' }}>
+                      {new Date(m.created_at).toLocaleString('it-IT', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {ticketActionMsg && (
+                <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, padding: '0.5rem 0.75rem', fontSize: '0.8rem', color: '#22c55e', marginBottom: 10 }}>
+                  {ticketActionMsg}
+                </div>
+              )}
+
+              {/* Reply box (only if ticket not closed) */}
+              {ticketDetail.status !== 'risolto' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <textarea
+                    className="form-input"
+                    rows={3}
+                    placeholder="Scrivi un messaggio..."
+                    value={ticketReplyText}
+                    onChange={(e) => setTicketReplyText(e.target.value)}
+                    style={{ resize: 'none', fontSize: '0.85rem' }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-amber flex-1"
+                      style={{ fontSize: '0.85rem', padding: '0.6rem' }}
+                      disabled={ticketReplyLoading || !ticketReplyText.trim()}
+                      onClick={sendTicketReply}
+                    >
+                      {ticketReplyLoading ? 'Invio...' : 'Invia messaggio'}
+                    </button>
+                    <button
+                      className="btn-ghost"
+                      style={{ fontSize: '0.85rem', padding: '0.6rem 1rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+                      onClick={handleCloseTicket}
+                    >
+                      Chiudi ticket
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem 0' }}>
+                  Ticket chiuso. Apri una nuova segnalazione se hai bisogno di assistenza.
+                </div>
+              )}
             </motion.div>
           </div>
         )}

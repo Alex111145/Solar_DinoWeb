@@ -766,6 +766,56 @@ def update_ticket_status(
     return {"message": "Stato aggiornato", "status": new_status}
 
 
+@router.post("/tickets/{ticket_id}/reply")
+def reply_ticket(
+    ticket_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Invia una risposta al ticket: notifica in-app + email al cliente."""
+    ticket = db.query(models.SupportTicket).filter(models.SupportTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket non trovato")
+
+    reply_text = (body.get("reply") or "").strip()
+    if not reply_text:
+        raise HTTPException(status_code=400, detail="Messaggio di risposta obbligatorio")
+
+    ticket.reply      = reply_text
+    ticket.replied_at = datetime.now(timezone.utc)
+    ticket.status     = "in_elaborazione"
+
+    # Crea messaggio nella conversazione
+    msg = models.TicketMessage(ticket_id=ticket_id, sender="admin", text=reply_text)
+    db.add(msg)
+
+    notif = models.Notification(
+        company_id = ticket.company_id,
+        title      = f"Risposta alla tua segnalazione #{ticket_id}",
+        message    = reply_text[:120],
+        ticket_id  = ticket_id,
+    )
+    db.add(notif)
+    db.commit()
+
+    # Email al cliente
+    company = ticket.company
+    try:
+        import email_utils
+        email_utils.notify_ticket_reply(
+            company_email  = company.email,
+            company_name   = company.ragione_sociale or company.name,
+            ticket_id      = ticket_id,
+            ticket_subject = ticket.subject,
+            reply_text     = reply_text,
+        )
+    except Exception:
+        pass
+
+    return {"message": "Risposta inviata", "status": ticket.status}
+
+
 @router.get("/companies/{company_id}/tickets")
 def company_tickets(
     company_id: int,

@@ -72,6 +72,11 @@ export default function LoginPage() {
   const [blockedModal, setBlockedModal] = useState(false)
   const [reviews, setReviews] = useState<Review[]>([])
   const [isDark, setIsDark] = useState(true)
+  const [forceChangePwd, setForceChangePwd] = useState(false)
+  const [forcePwdNew, setForcePwdNew] = useState('')
+  const [forcePwdConfirm, setForcePwdConfirm] = useState('')
+  const [forcePwdMsg, setForcePwdMsg] = useState('')
+  const [forcePwdLoading, setForcePwdLoading] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   const [showRegister, setShowRegister] = useState(false)
 
@@ -93,9 +98,6 @@ export default function LoginPage() {
     const e: Record<string, string> = {}
     if (!regForm.ragione_sociale.trim()) e.ragione_sociale = 'Campo obbligatorio'
     else if (!/\b(srl|s\.r\.l|spa|s\.p\.a|snc|s\.n\.c|sas|s\.a\.s|srls|ss|soc\.)\b/i.test(regForm.ragione_sociale)) e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc...)'
-    const parts = regForm.name.trim().split(/\s+/)
-    if (!regForm.name.trim()) e.name = 'Campo obbligatorio'
-    else if (parts.length < 2 || parts[0].length < 2 || parts[parts.length - 1].length < 2) e.name = 'Inserire nome e cognome'
     if (!regForm.vat_number.trim()) e.vat_number = 'Obbligatoria'
     else if (/^it/i.test(regForm.vat_number.trim())) e.vat_number = 'Solo 11 cifre, senza IT'
     else if (!/^\d{11}$/.test(regForm.vat_number.trim())) e.vat_number = 'Esattamente 11 cifre'
@@ -126,7 +128,7 @@ export default function LoginPage() {
       if (!res.ok) { const d = await res.json().catch(() => ({})); setRegError(d.detail || 'Errore durante la registrazione'); setRegLoading(false); return }
       const data = await res.json()
 
-      localStorage.setItem('name', data.name || regForm.name)
+      localStorage.setItem('name', data.name || '')
       localStorage.setItem('email', data.email || regForm.email)
       localStorage.setItem('credits', String(data.credits ?? 0))
       localStorage.setItem('is_admin', 'false')
@@ -174,12 +176,37 @@ export default function LoginPage() {
       localStorage.setItem('is_admin', String(data.is_admin ?? data.user?.is_admin ?? false))
       setLoading(false)
       window.scrollTo(0, 0)
-      if (data.is_admin || data.user?.is_admin) navigate('/admin')
-      else navigate('/dashboard')
+      if (data.is_admin || data.user?.is_admin) { navigate('/admin'); return }
+      if (data.must_change_password) { setForceChangePwd(true); return }
+      navigate('/dashboard')
     } catch (err) {
       setError('Errore di connessione al server')
       setLoading(false)
     }
+  }
+
+  async function handleForceChangePwd(e: React.FormEvent) {
+    e.preventDefault()
+    if (forcePwdNew.length < 8) { setForcePwdMsg('Minimo 8 caratteri'); return }
+    if (forcePwdNew !== forcePwdConfirm) { setForcePwdMsg('Le password non coincidono'); return }
+    setForcePwdLoading(true)
+    try {
+      const res = await fetch('/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ old_password: password, new_password: forcePwdNew }),
+      })
+      if (res.ok) {
+        setForcePwdMsg('')
+        window.scrollTo(0, 0)
+        navigate('/dashboard')
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setForcePwdMsg(d.detail || 'Errore aggiornamento password')
+      }
+    } catch { setForcePwdMsg('Errore di connessione') }
+    setForcePwdLoading(false)
   }
 
   return (
@@ -259,7 +286,7 @@ export default function LoginPage() {
             className="btn-amber"
             style={{ fontSize: '1rem', padding: '0.85rem 2rem' }}
           >
-            <Zap size={17} /> Login
+            Accedi
           </button>
           <button
             onClick={() => setShowRegister(true)}
@@ -482,28 +509,6 @@ export default function LoginPage() {
           ))}
         </div>
 
-        {/* CTA unico */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
-          className="rounded-3xl p-8 flex flex-col sm:flex-row items-center justify-between gap-6 mb-20"
-          style={{ background: 'linear-gradient(135deg,rgba(245,158,11,0.08),rgba(249,115,22,0.04))', border: '1.5px solid rgba(245,158,11,0.25)' }}
-        >
-          <div>
-            <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Niente registrazioni multiple</div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: t.text, margin: 0, letterSpacing: '-0.02em' }}>
-              Registra l'azienda e gestisci tutto dal tuo profilo
-            </h3>
-            <p style={{ fontSize: '0.875rem', color: t.textMuted, margin: '6px 0 0', lineHeight: 1.6 }}>
-              Un solo form, validazione automatica VIES + PEC, accesso immediato alla dashboard.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowRegister(true)}
-            style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 14, padding: '0.85rem 2rem', color: '#000', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 20px rgba(245,158,11,0.3)' }}
-          >
-            Registra la tua azienda →
-          </button>
-        </motion.div>
       </section>
 
       {/* ── Features grid ───────────────────────────────────────── */}
@@ -718,19 +723,11 @@ export default function LoginPage() {
                   {regErrors.ragione_sociale && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 3 }}>{regErrors.ragione_sociale}</p>}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="form-label" style={{ color: t.textMuted }}>Nome</label>
-                    <input className="form-input" type="text" placeholder="Mario Rossi" value={regForm.name} onChange={(e) => updateReg('name', e.target.value)}
-                      style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text, ...(regErrors.name ? { borderColor: '#ef4444' } : {}) }} />
-                    {regErrors.name && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 3 }}>{regErrors.name}</p>}
-                  </div>
-                  <div>
-                    <label className="form-label" style={{ color: t.textMuted }}>Partita IVA</label>
-                    <input className="form-input" type="text" placeholder="12345678901" value={regForm.vat_number} onChange={(e) => updateReg('vat_number', e.target.value)}
-                      style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text, ...(regErrors.vat_number ? { borderColor: '#ef4444' } : {}) }} />
-                    {regErrors.vat_number && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 3 }}>{regErrors.vat_number}</p>}
-                  </div>
+                <div>
+                  <label className="form-label" style={{ color: t.textMuted }}>Partita IVA</label>
+                  <input className="form-input" type="text" placeholder="12345678901" value={regForm.vat_number} onChange={(e) => updateReg('vat_number', e.target.value)}
+                    style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text, ...(regErrors.vat_number ? { borderColor: '#ef4444' } : {}) }} />
+                  {regErrors.vat_number && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 3 }}>{regErrors.vat_number}</p>}
                 </div>
 
                 <div>
@@ -784,6 +781,53 @@ export default function LoginPage() {
                   </a>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Forza cambio password (slave al primo accesso) */}
+      <AnimatePresence>
+        {forceChangePwd && (
+          <div className="modal-overlay">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{ background: isDark ? '#0d1117' : '#fff', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 20, padding: '2rem', maxWidth: 400, width: '90%' }}
+            >
+              <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 12 }}>🔑</div>
+              <h3 style={{ color: 'var(--text-primary, #f1f5f9)', fontWeight: 700, fontSize: '1.1rem', marginBottom: 6, textAlign: 'center' }}>
+                Imposta la tua password
+              </h3>
+              <p style={{ color: t.textMuted, fontSize: '0.8rem', marginBottom: 20, textAlign: 'center', lineHeight: 1.5 }}>
+                Il tuo manager ha impostato una password temporanea. Devi cambiarla prima di continuare.
+              </p>
+              <form onSubmit={handleForceChangePwd} className="flex flex-col gap-3">
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Nuova password (min 8 caratteri)"
+                  value={forcePwdNew}
+                  onChange={(e) => setForcePwdNew(e.target.value)}
+                  autoFocus
+                />
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Conferma nuova password"
+                  value={forcePwdConfirm}
+                  onChange={(e) => setForcePwdConfirm(e.target.value)}
+                />
+                {forcePwdMsg && (
+                  <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '0.5rem 0.75rem', color: '#ef4444', fontSize: '0.8rem' }}>
+                    {forcePwdMsg}
+                  </div>
+                )}
+                <button type="submit" className="btn-amber w-full" disabled={forcePwdLoading}>
+                  {forcePwdLoading ? 'Salvataggio...' : 'Salva e accedi'}
+                </button>
+              </form>
             </motion.div>
           </div>
         )}
