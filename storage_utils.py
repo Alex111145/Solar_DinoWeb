@@ -1,6 +1,7 @@
 """Supabase Storage helpers — tutti i file dell'app vanno qui."""
 import mimetypes
 import os
+from typing import Optional
 
 import httpx
 
@@ -9,7 +10,7 @@ SUPABASE_KEY   = os.getenv("SUPABASE_SERVICE_KEY", "")
 STORAGE_BUCKET = os.getenv("SUPABASE_BUCKET", "pth")
 
 
-def _headers(content_type: str | None = None) -> dict:
+def _headers(content_type: Optional[str] = None) -> dict:
     h = {
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "apikey": SUPABASE_KEY,

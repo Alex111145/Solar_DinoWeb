@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import Depends, HTTPException, Request
 from jose import JWTError, jwt
@@ -46,7 +47,7 @@ def _decode_token(token: str):
         return None
 
 
-def _extract_token(request: Request) -> str | None:
+def _extract_token(request: Request) -> Optional[str]:
     """Legge il token prima dal cookie HttpOnly, poi dall'header Authorization."""
     token = request.cookies.get("token")
     if token:
