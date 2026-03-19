@@ -1795,94 +1795,14 @@ export default function DashboardPage() {
             </button>
           </div>
 
+          {/* Abbonamenti Mensili — sempre visibili nella tab carta */}
           {payTab === 'carta' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {(packages.length > 0
-                ? packages.map((p, i) => ({ ...p, popular: i === 1 }))
-                : [
-                    { key: 'single', label: 'Singola', credits: 1, price_eur: 49.99, popular: false },
-                    { key: 'pack5', label: 'Pack 5', credits: 5, price_eur: 219.99, popular: true },
-                    { key: 'pack10', label: 'Pack 10', credits: 10, price_eur: 399.99, popular: false },
-                  ]
-              ).map((pkg) => {
-                // prezzi originali (senza sconto) calcolati a prezzo pieno (49.99/cred)
-                const fullPrice = pkg.credits * 49.99
-                const hasDiscount = pkg.credits > 1
-                const discountPct = hasDiscount ? Math.round((1 - pkg.price_eur / fullPrice) * 100) : 0
-                return (
-                <div
-                  key={pkg.key}
-                  className="rounded-xl p-4 flex flex-col gap-2"
-                  style={{
-                    background: pkg.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
-                    border: pkg.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
-                    position: 'relative',
-                  }}
-                >
-                  {pkg.popular && (
-                    <div
-                      style={{
-                        position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
-                        background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20,
-                        padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Più popolare
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      {pkg.label}
-                    </span>
-                    {hasDiscount && (
-                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>
-                        -{discountPct}%
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
-                    {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni</span>
-                  </div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', flex: 1 }}>
-                    €{(pkg.price_eur / pkg.credits).toFixed(2)} per elaborazione
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    {hasDiscount && (
-                      <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                        €{fullPrice.toFixed(2)}
-                      </span>
-                    )}
-                    <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>
-                      €{pkg.price_eur.toFixed(2)}
-                    </span>
-                  </div>
-                  <button
-                    className="btn-amber w-full"
-                    style={{ fontSize: '0.85rem', padding: '0.6rem' }}
-                    onClick={() => buyPackage(pkg)}
-                  >
-                    Acquista
-                  </button>
-                </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Abbonamenti Mensili (A) */}
-          {payTab === 'carta' && (
-            <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-2 mb-4">
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Abbonamenti Mensili
-                </span>
-              </div>
+            <div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
-                  { key: 'starter', label: 'Starter', elab: '10 elaborazioni/mese', price: 100, originalPrice: 120, discount: 17, popular: false },
-                  { key: 'medium', label: 'Medium', elab: '20 elaborazioni/mese', price: 150, originalPrice: 180, discount: 17, popular: true },
-                  { key: 'unlimited', label: 'Unlimited', elab: 'Elaborazioni illimitate', price: 200, originalPrice: 250, discount: 20, popular: false },
+                  { key: 'starter', label: 'Starter', credits: 10, price: 100, originalPrice: 120, discount: 17, popular: false },
+                  { key: 'medium', label: 'Medium', credits: 20, price: 150, originalPrice: 180, discount: 17, popular: true },
+                  { key: 'unlimited', label: 'Unlimited', credits: null, price: 200, originalPrice: 250, discount: 20, popular: false },
                 ].map((plan) => (
                   <div
                     key={plan.key}
@@ -1904,10 +1824,15 @@ export default function DashboardPage() {
                         -{plan.discount}%
                       </span>
                     </div>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.9rem' }}>{plan.elab}</div>
-                    <div className="flex items-baseline gap-2">
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
+                      {plan.credits != null ? plan.credits : '∞'}{' '}
+                      <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni/mese</span>
+                    </div>
+                    <div className="flex items-baseline gap-2" style={{ marginTop: 2 }}>
                       <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}/mese</span>
-                      <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>€{plan.price}<span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--text-muted)' }}>/mese</span></span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>
+                        €{plan.price}<span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--text-muted)' }}>/mese</span>
+                      </span>
                     </div>
                     <button
                       className="btn-amber w-full"
@@ -1919,6 +1844,82 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Pacchetti singoli — visibili solo se crediti esauriti */}
+              {credits === 0 && (
+                <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Acquisto singolo
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>— crediti esauriti, preferisci non fare upgrade?</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {(packages.length > 0
+                      ? packages.map((p, i) => ({ ...p, popular: i === 1 }))
+                      : [
+                          { key: 'single', label: 'Singola', credits: 1, price_eur: 49.99, popular: false },
+                          { key: 'pack5', label: 'Pack 5', credits: 5, price_eur: 219.99, popular: true },
+                          { key: 'pack10', label: 'Pack 10', credits: 10, price_eur: 399.99, popular: false },
+                        ]
+                    ).map((pkg) => {
+                      const fullPrice = pkg.credits * 49.99
+                      const hasDiscount = pkg.credits > 1
+                      const discountPct = hasDiscount ? Math.round((1 - pkg.price_eur / fullPrice) * 100) : 0
+                      return (
+                        <div
+                          key={pkg.key}
+                          className="rounded-xl p-4 flex flex-col gap-2"
+                          style={{
+                            background: pkg.popular ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.03)',
+                            border: pkg.popular ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.07)',
+                            position: 'relative',
+                          }}
+                        >
+                          {pkg.popular && (
+                            <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius: 20, padding: '2px 12px', fontSize: '0.7rem', fontWeight: 700, color: '#000', whiteSpace: 'nowrap' }}>
+                              Più popolare
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              {pkg.label}
+                            </span>
+                            {hasDiscount && (
+                              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 20, padding: '1px 8px' }}>
+                                -{discountPct}%
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.5rem' }}>
+                            {pkg.credits} <span style={{ fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>elaborazioni</span>
+                          </div>
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', flex: 1 }}>
+                            €{(pkg.price_eur / pkg.credits).toFixed(2)} per elaborazione
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            {hasDiscount && (
+                              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                                €{fullPrice.toFixed(2)}
+                              </span>
+                            )}
+                            <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem' }}>
+                              €{pkg.price_eur.toFixed(2)}
+                            </span>
+                          </div>
+                          <button
+                            className="btn-amber w-full"
+                            style={{ fontSize: '0.85rem', padding: '0.6rem' }}
+                            onClick={() => buyPackage(pkg)}
+                          >
+                            Acquista
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

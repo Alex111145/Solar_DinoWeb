@@ -473,6 +473,7 @@ export default function AdminPage() {
     { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
     { icon: <TrendingUp size={18} />, label: 'Fatturato medio mese', value: stats.revenue_month_eur || 0, prefix: '€' },
     { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
+    { icon: <TrendingUp size={18} />, label: 'Media mensile (da Gen 2025)', value: Math.round(avgRevenuePerMonth), prefix: '€' },
   ]
 
   return (
@@ -533,7 +534,7 @@ export default function AdminPage() {
         </AnimatePresence>
 
         {/* Stats row */}
-        <motion.div variants={cardAnim} className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <motion.div variants={cardAnim} className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
           {statCards.map((s, i) => (
             <motion.div
               key={s.label}
@@ -555,26 +556,6 @@ export default function AdminPage() {
               </div>
             </motion.div>
           ))}
-        </motion.div>
-
-        {/* Media fatturato mensile banner */}
-        <motion.div
-          variants={cardAnim}
-          className="card mb-8"
-          style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', padding: '1rem 1.5rem' }}
-        >
-          <div className="flex items-center gap-3 flex-wrap">
-            <div style={{ width: 32, height: 32, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
-              <TrendingUp size={15} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 2 }}>Media fatturato mensile (da Gennaio 2025)</div>
-              <div style={{ fontSize: '0.875rem', color: '#94a3b8', fontFamily: 'monospace' }}>
-                €{(stats.total_revenue_eur || 0).toFixed(2)} ÷ {monthsSinceOnline} mesi ={' '}
-                <span style={{ color: '#f59e0b', fontWeight: 700 }}>€{avgRevenuePerMonth.toFixed(2)}/mese</span>
-              </div>
-            </div>
-          </div>
         </motion.div>
 
         {/* Tabs */}
