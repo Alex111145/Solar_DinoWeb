@@ -32,7 +32,7 @@ def get_stats(
     total_companies = (
         db.query(func.count(models.Company.id))
         .filter(
-            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.is_admin == False,
             models.Company.is_active == True,
             models.Company.deleted_at.is_(None),
         )
@@ -96,7 +96,7 @@ def list_companies(
     companies = (
         db.query(models.Company)
         .filter(
-            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.is_admin == False,
             models.Company.deleted_at.is_(None),
         )
         .order_by(models.Company.created_at.desc())
@@ -256,6 +256,8 @@ def delete_company(
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Azienda non trovata")
+    if company.is_admin:
+        raise HTTPException(status_code=403, detail="L'account amministratore non può essere eliminato.")
 
     db.delete(company)
     db.commit()
@@ -373,7 +375,7 @@ def billing_report(
     companies = (
         db.query(models.Company)
         .filter(
-            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.is_admin == False,
             models.Company.deleted_at.is_(None),
         )
         .order_by(models.Company.created_at.asc())
@@ -652,7 +654,7 @@ def list_uploads(
     companies = (
         db.query(models.Company)
         .filter(
-            models.Company.email != auth_utils.ADMIN_EMAIL,
+            models.Company.is_admin == False,
             models.Company.deleted_at.is_(None),
         )
         .order_by(models.Company.created_at.desc())

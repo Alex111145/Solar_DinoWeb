@@ -215,7 +215,7 @@ def job_status(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and current.email != auth_utils.ADMIN_EMAIL:
+    if job.company_id != current.id and not current.is_admin:
         raise HTTPException(status_code=403, detail="Accesso negato")
     d = _job_dict(job)
     d["progress"] = STATUS_PROGRESS.get(job.status, 0)
@@ -232,7 +232,7 @@ def download_result(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and current.email != auth_utils.ADMIN_EMAIL:
+    if job.company_id != current.id and not current.is_admin:
         raise HTTPException(status_code=403, detail="Accesso negato")
     if job.status != "completato":
         raise HTTPException(status_code=400, detail="Analisi non ancora completata")
@@ -264,7 +264,7 @@ def download_input(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and current.email != auth_utils.ADMIN_EMAIL:
+    if job.company_id != current.id and not current.is_admin:
         raise HTTPException(status_code=403, detail="Accesso negato")
     if not job.tif_filename:
         raise HTTPException(status_code=404, detail="File input non disponibile")
@@ -286,7 +286,7 @@ def list_input_files(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and current.email != auth_utils.ADMIN_EMAIL:
+    if job.company_id != current.id and not current.is_admin:
         raise HTTPException(status_code=403, detail="Accesso negato")
 
     all_files = storage_utils.list_files(f"jobs/{job_id}")

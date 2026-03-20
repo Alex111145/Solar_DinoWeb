@@ -94,6 +94,6 @@ def sync_credits_by_vat(db: Session, vat_number: str, new_credits: int) -> None:
 def require_admin(
     company: models.Company = Depends(get_current_company),
 ) -> models.Company:
-    if company.email != _admin_email():
+    if not company.is_admin:
         raise HTTPException(status_code=403, detail="Accesso riservato all'amministratore")
     return company

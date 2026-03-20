@@ -549,7 +549,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
         "name": company.name,
         "email": company.email,
         "credits": company.credits,
-        "is_admin": company.email == auth_utils.ADMIN_EMAIL,
+        "is_admin": bool(company.is_admin),
         "must_change_password": bool(company.must_change_password),
     }
 
@@ -583,7 +583,7 @@ def me(current: models.Company = Depends(auth_utils.get_current_company), db: Se
         "ragione_sociale":       current.ragione_sociale or "",
         "vat_number":            current.vat_number or "",
         "credits":               current.credits,
-        "is_admin":              current.email == auth_utils.ADMIN_EMAIL,
+        "is_admin":              bool(current.is_admin),
         "is_manager":            bool(current.is_manager),
         "subscription_active":   bool(current.subscription_active),
         "subscription_plan":     manager.subscription_plan,
@@ -738,6 +738,8 @@ def delete_account(
     db: Session = Depends(get_db),
 ):
     """Soft-delete dell'account aziendale (solo manager). Tutti i dati vengono conservati."""
+    if current.is_admin:
+        raise HTTPException(status_code=403, detail="L'account amministratore non può essere eliminato.")
     if not current.is_manager:
         raise HTTPException(status_code=403, detail="Solo il manager può eliminare l'account aziendale.")
     # Soft-delete di tutti gli account slave della stessa P.IVA

@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'aperto'",
             # Nuove colonne sessione 3-4
             "ALTER TABLE companies ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS reply TEXT",
             "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP",
             "ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_active BOOLEAN DEFAULT FALSE",
@@ -67,18 +68,24 @@ async def lifespan(app: FastAPI):
         admin_email    = os.getenv("ADMIN_EMAIL",    "admin@solardino.it")
         admin_password = os.getenv("ADMIN_PASSWORD", "changeme123")
 
-        if not db.query(models.Company).filter(models.Company.email == admin_email).first():
+        existing_admin = db.query(models.Company).filter(models.Company.email == admin_email).first()
+        if not existing_admin:
             admin_user = models.Company(
                 email         = admin_email,
                 name          = "Admin",
                 password_hash = auth_utils.hash_password(admin_password),
                 credits       = 9999,
                 is_active     = True,
+                is_admin      = True,
             )
             db.add(admin_user)
             db.commit()
             print(f"[STARTUP] Admin creato: {admin_email}")
         else:
+            # Assicura is_admin=True su account esistente (migrazione)
+            if not existing_admin.is_admin:
+                existing_admin.is_admin = True
+                db.commit()
             print(f"[STARTUP] Admin esistente: {admin_email}")
     finally:
         db.close()
