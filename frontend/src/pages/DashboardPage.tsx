@@ -1583,7 +1583,7 @@ export default function DashboardPage() {
                 className="btn-ghost flex items-center gap-1.5"
                 style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', fontWeight: 600 }}
               >
-                <Users size={15} /> Gestione Teams
+                <Users size={15} /> Gestione Team
               </button>
             )}
 
