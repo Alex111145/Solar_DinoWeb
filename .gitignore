@@ -23,3 +23,4 @@ elaborazioni/model_best.pth
 
 # Ricevute
 elaborazioni/ricevute/
+oracle_retry.sh
