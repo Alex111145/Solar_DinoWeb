@@ -254,6 +254,8 @@ def cancel_subscription(
 
     # subscription_active rimane True — i crediti restano fino a subscription_end_date.
     # Il webhook "customer.subscription.deleted" disattiverà il flag a scadenza naturale.
+    manager.subscription_cancelled = True
+    db.commit()
     return {
         "message": "Abbonamento cancellato. Non verrà rinnovato.",
         "end_date": end_date_str,

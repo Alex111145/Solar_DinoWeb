@@ -231,6 +231,27 @@ def download_result(
     return RedirectResponse(url=signed_url)
 
 
+@router.get("/{job_id}/download-input")
+def download_input(
+    job_id: str,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job non trovato")
+    if job.company_id != current.id and current.email != auth_utils.ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Accesso negato")
+    if not job.tif_filename:
+        raise HTTPException(status_code=404, detail="File input non disponibile")
+    storage_path = f"jobs/{job_id}/{job.tif_filename}"
+    try:
+        signed_url = storage_utils.get_signed_url(storage_path, expires_in=300)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
+    return RedirectResponse(url=signed_url)
+
+
 @router.get("/trial-status")
 def trial_status(
     request,

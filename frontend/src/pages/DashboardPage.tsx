@@ -235,7 +235,7 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
 interface SlaveAccount { id: number; name: string; email: string; is_active: boolean }
 
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete, subscriptionActive, subscriptionPlan, subscriptionEndDate, isManager,
+  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete, subscriptionActive, subscriptionPlan, subscriptionEndDate, subscriptionCancelled, isManager,
 }: {
   name: string
   email: string
@@ -252,6 +252,7 @@ function ProfileSidebar({
   subscriptionActive: boolean
   subscriptionPlan: string | null
   subscriptionEndDate: string | null
+  subscriptionCancelled: boolean
   isManager: boolean
 }) {
   const [openSection, setOpenSection] = useState<string | null>(null)
@@ -702,13 +703,19 @@ function ProfileSidebar({
                       {subMsg}
                     </div>
                   )}
-                  <button
-                    className="btn-ghost w-full"
-                    style={{ fontSize: '0.85rem', padding: '0.6rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
-                    onClick={() => setShowCancelSubModal(true)}
-                  >
-                    Annulla abbonamento
-                  </button>
+                  {subscriptionCancelled ? (
+                    <div style={{ fontSize: '0.78rem', color: '#f59e0b', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: '0.6rem 0.75rem', lineHeight: 1.5 }}>
+                      ⚠️ Rinnovo automatico disattivato. I benefici restano attivi fino alla scadenza.
+                    </div>
+                  ) : (
+                    <button
+                      className="btn-ghost w-full"
+                      style={{ fontSize: '0.85rem', padding: '0.6rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+                      onClick={() => setShowCancelSubModal(true)}
+                    >
+                      Annulla abbonamento
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -747,7 +754,7 @@ function ProfileSidebar({
                 : 'Manterrai i crediti rimasti fino alla scadenza.'}
             </p>
             <p style={{ fontSize: '0.78rem', color: '#f59e0b', marginBottom: '1.25rem', lineHeight: 1.5 }}>
-              ⚠️ L'abbonamento è condiviso tra tutti gli account del tuo team. Annullarlo rimuoverà i benefici per tutta l'azienda.
+              ⚠️ L'abbonamento è condiviso tra tutti gli account del tuo team. Annullarlo rimuoverà il rinnovo automatico per tutta l'azienda.
             </p>
             <div className="flex gap-3">
               <button
@@ -961,7 +968,9 @@ export default function DashboardPage() {
   const [subscriptionActive, setSubscriptionActive] = useState(false)
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
+  const [subscriptionCancelled, setSubscriptionCancelled] = useState(false)
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(true) // default true until verified
+  const [welcomeBonusRequested, setWelcomeBonusRequested] = useState(true) // default true per nascondere fino a verifica
   const [trialAlreadyRequested, setTrialAlreadyRequested] = useState(true) // default true per nascondere fino a verifica
   const [trialMessage, setTrialMessage] = useState('')
   const [trialLoading, setTrialLoading] = useState(false)
@@ -989,6 +998,7 @@ export default function DashboardPage() {
   const [ticketReplyText, setTicketReplyText] = useState('')
   const [ticketReplyLoading, setTicketReplyLoading] = useState(false)
   const [ticketActionMsg, setTicketActionMsg] = useState('')
+  const [clientClosedTicketIds, setClientClosedTicketIds] = useState<Set<number>>(new Set())
 
   // Delete account confirm modal (E)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -1090,7 +1100,9 @@ export default function DashboardPage() {
         if (d.subscription_active !== undefined) setSubscriptionActive(!!d.subscription_active)
         if (d.subscription_plan !== undefined) setSubscriptionPlan(d.subscription_plan ?? null)
         if (d.subscription_end_date !== undefined) setSubscriptionEndDate(d.subscription_end_date ?? null)
+        if (d.subscription_cancelled !== undefined) setSubscriptionCancelled(!!d.subscription_cancelled)
         if (d.welcome_bonus_used !== undefined) setWelcomeBonusUsed(!!d.welcome_bonus_used)
+        if (d.welcome_bonus_requested !== undefined) setWelcomeBonusRequested(!!d.welcome_bonus_requested)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
         localStorage.setItem('credits', String(c))
@@ -1296,9 +1308,8 @@ export default function DashboardPage() {
     try {
       const res = await apiFetch(`/auth/tickets/${ticketDetail.id}/close`, { method: 'POST' })
       if (res.ok) {
+        setClientClosedTicketIds((prev) => new Set([...prev, ticketDetail.id]))
         setTicketDetail((prev) => prev ? { ...prev, status: 'risolto' } : prev)
-        setTicketActionMsg('Ticket chiuso')
-        setTimeout(() => setTicketActionMsg(''), 3000)
       }
     } catch { /* noop */ }
   }
@@ -1626,8 +1637,8 @@ export default function DashboardPage() {
           </p>
         </motion.div>
 
-        {/* Richiedi credito gratuito */}
-        {credits <= 0 && !trialAlreadyRequested && !trialSent && (
+        {/* Bonus di benvenuto — visibile ai nuovi utenti senza abbonamento */}
+        {!subscriptionActive && !welcomeBonusRequested && !welcomeBonusUsed && !trialSent && (
           <motion.div
             variants={cardAnim}
             className="card mb-6"
@@ -1639,33 +1650,29 @@ export default function DashboardPage() {
                   🎁
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Prova gratuita</div>
+                  <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Bonus benvenuto</div>
                   <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.975rem', marginBottom: 3 }}>
-                      Richiedi la tua prova gratuita
+                    Richiedi il tuo bonus di benvenuto
                   </div>
                   <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    Invia una richiesta all'amministratore con i dati della tua azienda e un messaggio opzionale.
+                    Ottieni 1 credito gratuito per provare il servizio. La richiesta verrà valutata dall'amministratore.
                   </div>
                 </div>
               </div>
-              {welcomeBonusUsed ? (
-                <div style={{ flexShrink: 0, textAlign: 'center' }}>
-                  <button
-                    disabled
-                    style={{ flexShrink: 0, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '0.65rem 1.5rem', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.875rem', cursor: 'not-allowed', whiteSpace: 'nowrap', opacity: 0.6 }}
-                  >
-                    Richiedi credito gratuito
-                  </button>
-                  <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginTop: 4 }}>Già utilizzato dalla tua azienda</div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowTrialModal(true)}
-                  style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.65rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                >
-                  Richiedi credito gratuito
-                </button>
-              )}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await apiFetch('/auth/request-welcome-bonus', { method: 'POST' })
+                    if (res.ok) {
+                      setWelcomeBonusRequested(true)
+                      setTrialSent(true)
+                    }
+                  } catch { /* noop */ }
+                }}
+                style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.65rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Richiedi il tuo bonus di benvenuto
+              </button>
             </div>
           </motion.div>
         )}
@@ -2334,6 +2341,7 @@ export default function DashboardPage() {
             subscriptionActive={subscriptionActive}
             subscriptionPlan={subscriptionPlan}
             subscriptionEndDate={subscriptionEndDate}
+            subscriptionCancelled={subscriptionCancelled}
             onRequestDelete={() => setShowDeleteModal(true)}
           />
         )}
@@ -2761,8 +2769,10 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '0.85rem 1rem', fontSize: '0.82rem', color: '#f87171', lineHeight: 1.6 }}>
-                  <strong>Ticket chiuso dall'amministratore.</strong> Non è possibile aggiungere nuovi messaggi a questo ticket.
-                  Per ulteriore assistenza, apri una nuova segnalazione.
+                  {clientClosedTicketIds.has(ticketDetail.id)
+                    ? <><strong>Ticket chiuso da te.</strong></>
+                    : <><strong>Ticket chiuso dall'amministratore.</strong></>
+                  }{' '}Non è possibile aggiungere nuovi messaggi a questo ticket. Per ulteriore assistenza, apri una nuova segnalazione.
                 </div>
               )}
             </motion.div>

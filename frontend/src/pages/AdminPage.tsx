@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, LogOut, Users, BarChart2, Star,
   Check, X, TrendingUp, Building2, Euro,
-  FolderOpen, FileDown, ChevronRight, ChevronDown, Radio, MessageSquare,
+  FolderOpen, FileDown, ChevronRight, ChevronDown, MessageSquare, Gift,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -118,13 +118,6 @@ interface AdminTicket {
   created_at: string
 }
 
-const FAKE_ENTERPRISE = [
-  { id: 1, company_name: 'SunTech Srl', company_email: 'ops@suntech.it', vat_number: '02345678901', fh_workspace_id: 'ws_suntech_prod_001', data_consent: true, created_at: '2026-03-10T09:14:00Z' },
-  { id: 2, company_name: 'Greenfield Energy Spa', company_email: 'drone@greenfield.eu', vat_number: '04567890123', fh_workspace_id: 'ws_gfe_europe_003', data_consent: true, created_at: '2026-03-12T11:02:00Z' },
-  { id: 3, company_name: 'Solar Pro Italia', company_email: 'info@solarproitalia.it', vat_number: '09876543210', fh_workspace_id: 'ws_spi_italia_07', data_consent: true, created_at: '2026-03-15T14:30:00Z' },
-  { id: 4, company_name: 'Nord Energy Solutions', company_email: 'tech@nordenergy.it', vat_number: '01234567890', fh_workspace_id: 'ws_nes_nord_02', data_consent: true, created_at: '2026-03-17T08:55:00Z' },
-  { id: 5, company_name: 'Adriatic Solar Srl', company_email: 'admin@adriaticsolar.com', vat_number: '07654321098', fh_workspace_id: 'ws_adriatic_live_05', data_consent: false, created_at: '2026-03-18T16:20:00Z' },
-]
 
 // ── Animated counter ───────────────────────────────────────────────────────
 function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
@@ -161,12 +154,6 @@ interface SupportTicket {
 }
 
 function CompanyModal({ company, onClose }: { company: Company; onClose: () => void }) {
-  const months = ['Ott', 'Nov', 'Dic', 'Gen', 'Feb', 'Mar']
-  const revenues = [149, 349, 219, 449, 299, (company.mission_count || 2) * 49.99]
-  const maxRevenue = Math.max(...revenues, 1)
-
-  const yLabels = [0, Math.round(maxRevenue / 2), Math.round(maxRevenue)]
-
   const [tickets, setTickets] = useState<SupportTicket[]>([])
 
   useEffect(() => {
@@ -200,6 +187,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
 
         <div className="grid grid-cols-2 gap-3 mb-5">
           {[
+            { label: 'Tipologia cliente', value: 'Normal' },
             { label: 'Ragione sociale', value: company.ragione_sociale || '—' },
             { label: 'Partita IVA', value: company.vat_number || '—' },
             { label: 'Nome', value: company.name || '—' },
@@ -218,47 +206,6 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
               <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.875rem', wordBreak: 'break-all' }}>{value}</div>
             </div>
           ))}
-        </div>
-
-        {/* Bar chart with X and Y axes */}
-        <div>
-          <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 10, fontWeight: 600 }}>
-            Fatturato stimato (ultimi 6 mesi)
-          </div>
-          <div className="flex gap-2">
-            {/* Y axis */}
-            <div className="flex flex-col justify-between items-end" style={{ height: 100, paddingBottom: 20 }}>
-              {yLabels.slice().reverse().map((v) => (
-                <span key={v} style={{ fontSize: '0.62rem', color: '#475569' }}>€{v}</span>
-              ))}
-            </div>
-
-            {/* Chart area */}
-            <div style={{ flex: 1 }}>
-              <div className="flex items-end gap-1.5" style={{ height: 80, borderLeft: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingLeft: 4 }}>
-                {revenues.map((v, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${(v / maxRevenue) * 100}%` }}
-                    transition={{ delay: i * 0.08, duration: 0.5 }}
-                    style={{
-                      flex: 1,
-                      background: i === revenues.length - 1 ? 'linear-gradient(180deg,#f59e0b,#f97316)' : 'rgba(245,158,11,0.25)',
-                      borderRadius: '4px 4px 0 0',
-                      minHeight: 3,
-                    }}
-                  />
-                ))}
-              </div>
-              {/* X axis labels */}
-              <div className="flex gap-1.5" style={{ paddingLeft: 4, marginTop: 4 }}>
-                {months.map((m) => (
-                  <div key={m} style={{ flex: 1, textAlign: 'center', fontSize: '0.62rem', color: '#475569' }}>{m}</div>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Support Tickets */}
@@ -294,7 +241,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
 // ── Main Admin Page ────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'tickets' | 'uploads' | 'enterprise'>('companies')
+  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'tickets' | 'uploads' | 'bonus'>('companies')
 
   const [stats, setStats] = useState<Stats>({})
   const [companies, setCompanies] = useState<Company[]>([])
@@ -304,7 +251,6 @@ export default function AdminPage() {
   const [uploads, setUploads] = useState<UploadCompany[]>([])
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
-  const [enterpriseLogs, setEnterpriseLogs] = useState<{id:number,company_name:string,company_email:string,vat_number:string,fh_workspace_id:string,data_consent:boolean,created_at:string}[]>([])
 
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -324,6 +270,8 @@ export default function AdminPage() {
   const [adminReplyText, setAdminReplyText] = useState('')
   const [adminReplyLoading, setAdminReplyLoading] = useState(false)
   const [adminTicketSubTab, setAdminTicketSubTab] = useState<'aperte' | 'chiuse'>('aperte')
+
+  const [bonusRequests, setBonusRequests] = useState<{id:number;company_name:string;company_email:string;vat_number:string;status:string;ip:string;ip_status:'ok'|'warning';created_at:string;credits_current:number;company_id:number;duplicate_company_id:number|null;duplicate_company_name:string|null}[]>([])
 
   // Billing filters
   const [billingFilterCompany, setBillingFilterCompany] = useState('')
@@ -370,15 +318,15 @@ export default function AdminPage() {
     apiFetch('/admin/uploads').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setUploads(Array.isArray(d) ? d : [])
     }).catch(() => {})
-    apiFetch('/admin/enterprise-logs').then((r) => r.ok ? r.json() : null).then((d) => {
-      if (d) setEnterpriseLogs(Array.isArray(d) ? d : [])
-    }).catch(() => {})
     apiFetch('/admin/tickets').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) {
         const arr = Array.isArray(d) ? d : []
         setTickets(arr)
         setPendingTickets(arr.filter((t: AdminTicket) => t.status === 'in_elaborazione').length)
       }
+    }).catch(() => {})
+    apiFetch('/admin/welcome-bonus-requests').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setBonusRequests(Array.isArray(d) ? d : [])
     }).catch(() => {})
   }
 
@@ -635,7 +583,7 @@ export default function AdminPage() {
               { key: 'reviews', label: 'Recensioni', icon: <Star size={14} />, badge: pendingReviews },
               { key: 'tickets', label: 'Segnalazioni', icon: <MessageSquare size={14} />, badge: pendingTickets },
               { key: 'uploads', label: 'Dati caricati', icon: <FolderOpen size={14} /> },
-              { key: 'enterprise', label: 'Enterprise', icon: <Radio size={14} /> },
+              { key: 'bonus', label: 'Bonus Benvenuto', icon: <Gift size={14} /> },
             ].map((t) => (
               <button
                 key={t.key}
@@ -878,22 +826,23 @@ export default function AdminPage() {
               </div>
 
               {(() => {
-                const filteredBilling = billing.filter((b) => {
-                  if (billingFilterCompany && !(b.name || '').toLowerCase().includes(billingFilterCompany.toLowerCase())) return false
-                  if (billingFilterMonth || billingFilterYear) {
-                    const payments = b.payments || []
-                    const hasMatch = payments.some((p) => {
-                      const d = new Date(p.date)
-                      if (billingFilterMonth && String(d.getMonth() + 1) !== billingFilterMonth) return false
-                      if (billingFilterYear && String(d.getFullYear()) !== billingFilterYear) return false
-                      return true
-                    })
-                    if (!hasMatch) return false
-                  }
-                  return true
+                // Flatten all payments from all companies
+                type FlatPayment = BillingPayment & { company_name: string; company_email: string; company_id: number }
+                const allPayments: FlatPayment[] = []
+                billing.forEach((b) => {
+                  const payments = b.payments || []
+                  payments.forEach((p) => {
+                    // Apply company filter
+                    if (billingFilterCompany && !(b.name || '').toLowerCase().includes(billingFilterCompany.toLowerCase())) return
+                    // Apply month/year filter
+                    const d = new Date(p.date)
+                    if (billingFilterMonth && String(d.getMonth() + 1) !== billingFilterMonth) return
+                    if (billingFilterYear && String(d.getFullYear()) !== billingFilterYear) return
+                    allPayments.push({ ...p, company_name: b.name || '—', company_email: b.email || '', company_id: b.id })
+                  })
                 })
 
-                if (filteredBilling.length === 0) {
+                if (allPayments.length === 0) {
                   return (
                     <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
                       Nessun dato di fatturazione disponibile
@@ -901,142 +850,82 @@ export default function AdminPage() {
                   )
                 }
 
-                // Group all payments by month/year for display
+                // Raggruppa per mese (come recensioni)
+                const byMonth: Record<string, FlatPayment[]> = {}
+                allPayments.forEach((p) => {
+                  const key = new Date(p.date).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+                  if (!byMonth[key]) byMonth[key] = []
+                  byMonth[key].push(p)
+                })
+                const months = Object.keys(byMonth)
+
                 return (
-                  <div className="flex flex-col gap-3">
-                    {filteredBilling.map((b) => {
-                      let payments = b.payments || []
-                      // Apply month/year filter to payments
-                      if (billingFilterMonth || billingFilterYear) {
-                        payments = payments.filter((p) => {
-                          const d = new Date(p.date)
-                          if (billingFilterMonth && String(d.getMonth() + 1) !== billingFilterMonth) return false
-                          if (billingFilterYear && String(d.getFullYear()) !== billingFilterYear) return false
-                          return true
-                        })
-                      }
-
-                      // Group payments by month
-                      const byMonth: Record<string, typeof payments> = {}
-                      payments.forEach((p) => {
-                        const d = new Date(p.date)
-                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                        if (!byMonth[key]) byMonth[key] = []
-                        byMonth[key].push(p)
-                      })
-                      const monthKeys = Object.keys(byMonth).sort().reverse()
-
-                      const isOpen = expandedCompany === b.id
-                      const totalPaid = b.total_paid ?? 0
+                  <div className="flex flex-col gap-5">
+                    {months.map((month) => {
+                      const monthPayments = byMonth[month]
+                      const monthTotal = monthPayments.reduce((s, p) => s + (p.amount_eur ?? 0), 0)
                       return (
-                        <div key={b.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
-                          {/* Company header row */}
-                          <button
-                            className="w-full flex items-center justify-between p-4"
-                            style={{ background: 'rgba(255,255,255,0.03)', border: 'none', cursor: 'pointer', color: '#f1f5f9' }}
-                            onClick={() => setExpandedCompany(isOpen ? null : b.id)}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div style={{ textAlign: 'left' }}>
-                                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f1f5f9' }}>{b.name || '—'}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{b.email}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                                  <span style={{ color: '#f59e0b', fontWeight: 600 }}>{b.credits ?? 0}</span> crediti · <span style={{ color: '#22c55e', fontWeight: 600 }}>€{totalPaid.toFixed(2)}</span> totale
-                                </div>
-                              </div>
-                              <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>{payments.length} pagamenti</span>
-                              {isOpen
-                                ? <ChevronDown size={15} style={{ color: '#64748b' }} />
-                                : <ChevronRight size={15} style={{ color: '#64748b' }} />}
-                            </div>
-                          </button>
-
-                          {/* Payments list grouped by month */}
-                          {isOpen && (
-                            <div style={{ padding: '0.5rem 1rem 1rem' }}>
-                              {payments.length === 0 ? (
-                                <div style={{ fontSize: '0.82rem', color: '#475569', padding: '0.75rem 0' }}>Nessun pagamento registrato</div>
-                              ) : (
-                                <div className="flex flex-col gap-4">
-                                  {monthKeys.map((mk) => {
-                                    const [y, m] = mk.split('-')
-                                    const monthName = new Date(Number(y), Number(m) - 1, 1).toLocaleString('it-IT', { month: 'long', year: 'numeric' })
-                                    return (
-                                      <div key={mk}>
-                                        <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid rgba(245,158,11,0.15)' }}>
-                                          {monthName}
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                          {byMonth[mk].map((p) => {
-                                            const statusColor = p.status === 'approved' ? '#22c55e' : p.status === 'rejected' ? '#ef4444' : '#f59e0b'
-                                            const statusLabel = p.status === 'approved' ? 'Approvato' : p.status === 'rejected' ? 'Rifiutato' : 'In attesa'
-                                            return (
-                                              <div
-                                                key={p.id}
-                                                className="flex items-center justify-between rounded-lg px-3 py-2.5"
-                                                style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
-                                              >
-                                                <div className="flex items-center gap-3">
-                                                  <div
-                                                    style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem',
-                                                      background: p.type === 'stripe' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.1)',
-                                                    }}
-                                                  >
-                                                    {p.type === 'stripe' ? '💳' : '🏦'}
-                                                  </div>
-                                                  <div>
-                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
-                                                      {p.method_label} · +{p.credits} crediti
-                                                    </div>
-                                                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                                      {new Date(p.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 flex-shrink-0">
-                                                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f59e0b' }}>€{p.amount_eur.toFixed(2)}</span>
-                                                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
-                                                    {statusLabel}
-                                                  </span>
-                                                  {p.type === 'bonifico' && p.receipt_id && (
-                                                    <button
-                                                      className="btn-ghost flex items-center gap-1"
-                                                      style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
-                                                      onClick={async () => {
-                                                        const token = localStorage.getItem('token')
-                                                        const res = await fetch(`/admin/bonifico-requests/${p.receipt_id}/receipt`, {
-                                                          headers: { Authorization: `Bearer ${token}` },
-                                                        })
-                                                        if (!res.ok) return
-                                                        const blob = await res.blob()
-                                                        const url = URL.createObjectURL(blob)
-                                                        const a = document.createElement('a')
-                                                        a.href = url; a.download = `ricevuta-${p.receipt_id}.pdf`; a.click()
-                                                        URL.revokeObjectURL(url)
-                                                      }}
-                                                    >
-                                                      <FileDown size={12} /> Ricevuta
-                                                    </button>
-                                                  )}
-                                                  {p.type === 'bonifico' && !p.receipt_id && (
-                                                    <span style={{ fontSize: '0.7rem', color: '#475569' }}>no allegato</span>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            )
-                                          })}
-                                        </div>
+                        <div key={month}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid rgba(245,158,11,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>{month} · {monthPayments.length} pagament{monthPayments.length === 1 ? 'o' : 'i'}</span>
+                            <span style={{ color: '#22c55e' }}>€{monthTotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            {monthPayments.map((p) => {
+                              const statusColor = p.status === 'approved' ? '#22c55e' : p.status === 'rejected' ? '#ef4444' : '#f59e0b'
+                              const statusLabel = p.status === 'approved' ? 'Approvato' : p.status === 'rejected' ? 'Rifiutato' : 'In attesa'
+                              return (
+                                <div
+                                  key={p.id}
+                                  className="flex items-center justify-between rounded-lg px-3 py-2.5"
+                                  style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', background: p.type === 'stripe' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.1)' }}>
+                                      {p.type === 'stripe' ? '💳' : '🏦'}
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
+                                        {p.method_label} · +{p.credits} crediti
                                       </div>
-                                    )
-                                  })}
+                                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 500 }}>
+                                        {p.company_name}
+                                      </div>
+                                      <div style={{ fontSize: '0.68rem', color: '#475569' }}>
+                                        {new Date(p.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f59e0b' }}>€{p.amount_eur.toFixed(2)}</span>
+                                    <span style={{ fontSize: '0.68rem', fontWeight: 600, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 5, padding: '0.15rem 0.45rem' }}>
+                                      {statusLabel}
+                                    </span>
+                                    {p.type === 'bonifico' && p.receipt_id && (
+                                      <button
+                                        className="btn-ghost flex items-center gap-1"
+                                        style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
+                                        onClick={async () => {
+                                          const res = await fetch(`/admin/bonifico-requests/${p.receipt_id}/receipt`, { credentials: 'include' })
+                                          if (!res.ok) return
+                                          const blob = await res.blob()
+                                          const url = URL.createObjectURL(blob)
+                                          const a = document.createElement('a')
+                                          a.href = url; a.download = `ricevuta-${p.receipt_id}.pdf`; a.click()
+                                          URL.revokeObjectURL(url)
+                                        }}
+                                      >
+                                        <FileDown size={12} /> Ricevuta
+                                      </button>
+                                    )}
+                                    {p.type === 'bonifico' && !p.receipt_id && (
+                                      <span style={{ fontSize: '0.7rem', color: '#475569' }}>no allegato</span>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          )}
+                              )
+                            })}
+                          </div>
                         </div>
                       )
                     })}
@@ -1418,44 +1307,69 @@ export default function AdminPage() {
                                     <div style={{ paddingLeft: 28, paddingTop: 4 }}>
                                       {job.files.length === 0 ? (
                                         <div style={{ fontSize: '0.78rem', color: '#475569', padding: '6px 0' }}>Nessun file trovato</div>
-                                      ) : (
-                                        <div className="flex flex-col gap-1">
-                                          {job.files.map((file) => {
-                                            const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-                                            const icon = ext === 'pdf' ? '📄' : ext === 'tif' || ext === 'tiff' ? '🗺️' : ext === 'jpg' || ext === 'png' ? '🖼️' : '📋'
-                                            return (
-                                              <div
-                                                key={file.name}
-                                                className="flex items-center justify-between rounded-lg px-3 py-1.5"
-                                                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
-                                              >
-                                                <div className="flex items-center gap-2">
-                                                  <span style={{ fontSize: '0.9rem' }}>{icon}</span>
-                                                  <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 500 }}>{file.name}</span>
-                                                  <span style={{ fontSize: '0.68rem', color: '#475569' }}>{file.size_mb} MB</span>
-                                                </div>
-                                                <button
-                                                  onClick={async () => {
-                                                    const res = await fetch(`/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`, {
-                                                      credentials: 'include',
-                                                    })
-                                                    if (!res.ok) return
-                                                    const blob = await res.blob()
-                                                    const url = URL.createObjectURL(blob)
-                                                    const a = document.createElement('a')
-                                                    a.href = url; a.download = file.name; a.click()
-                                                    URL.revokeObjectURL(url)
-                                                  }}
-                                                  className="btn-ghost flex items-center gap-1"
-                                                  style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
-                                                >
-                                                  <FileDown size={12} /> Scarica
-                                                </button>
+                                      ) : (() => {
+                                        const inputExts = ['tif', 'tiff', 'tfw']
+                                        const inputFiles = job.files.filter(f => inputExts.includes(f.name.split('.').pop()?.toLowerCase() ?? ''))
+                                        const outputFiles = job.files.filter(f => !inputExts.includes(f.name.split('.').pop()?.toLowerCase() ?? ''))
+                                        const renderFile = (file: UploadedFile) => {
+                                          const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+                                          const icon = ext === 'pdf' ? '📄' : ext === 'tif' || ext === 'tiff' ? '🗺️' : ext === 'jpg' || ext === 'png' ? '🖼️' : ext === 'tfw' ? '🗺️' : '📋'
+                                          return (
+                                            <div
+                                              key={file.name}
+                                              className="flex items-center justify-between rounded-lg px-3 py-1.5"
+                                              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
+                                            >
+                                              <div className="flex items-center gap-2">
+                                                <span style={{ fontSize: '0.9rem' }}>{icon}</span>
+                                                <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 500 }}>{file.name}</span>
+                                                <span style={{ fontSize: '0.68rem', color: '#475569' }}>{file.size_mb} MB</span>
                                               </div>
-                                            )
-                                          })}
-                                        </div>
-                                      )}
+                                              <button
+                                                onClick={async () => {
+                                                  const res = await fetch(`/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`, {
+                                                    credentials: 'include',
+                                                  })
+                                                  if (!res.ok) return
+                                                  const blob = await res.blob()
+                                                  const url = URL.createObjectURL(blob)
+                                                  const a = document.createElement('a')
+                                                  a.href = url; a.download = file.name; a.click()
+                                                  URL.revokeObjectURL(url)
+                                                }}
+                                                className="btn-ghost flex items-center gap-1"
+                                                style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
+                                              >
+                                                <FileDown size={12} /> Scarica
+                                              </button>
+                                            </div>
+                                          )
+                                        }
+                                        return (
+                                          <div className="flex flex-col gap-3">
+                                            {inputFiles.length > 0 && (
+                                              <div>
+                                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, paddingBottom: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                  📥 File di input ({inputFiles.length})
+                                                </div>
+                                                <div className="flex flex-col gap-1 mt-1">
+                                                  {inputFiles.map(renderFile)}
+                                                </div>
+                                              </div>
+                                            )}
+                                            {outputFiles.length > 0 && (
+                                              <div>
+                                                <div style={{ fontSize: '0.65rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, paddingBottom: 3, borderBottom: '1px solid rgba(245,158,11,0.12)' }}>
+                                                  📤 File di output ({outputFiles.length})
+                                                </div>
+                                                <div className="flex flex-col gap-1 mt-1">
+                                                  {outputFiles.map(renderFile)}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )
+                                      })()}
                                     </div>
                                   )}
                                 </div>
@@ -1471,9 +1385,9 @@ export default function AdminPage() {
               })()}
             </motion.div>
           )}
-          {tab === 'enterprise' && (
+          {tab === 'bonus' && (
             <motion.div
-              key="enterprise"
+              key="bonus"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -1482,65 +1396,97 @@ export default function AdminPage() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
-                  Clienti Enterprise
+                  Richieste Bonus Benvenuto ({bonusRequests.filter(r => r.status === 'pending').length} in attesa)
                 </h3>
-                <a
-                  href="/admin/enterprise-logs/csv"
-                  download
-                  onClick={(e) => {
-                    e.preventDefault()
-                    const token = localStorage.getItem('token')
-                    fetch('/admin/enterprise-logs/csv', { headers: { Authorization: `Bearer ${token}` } })
-                      .then((r) => r.blob())
-                      .then((blob) => {
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url; a.download = 'enterprise_clients.csv'; a.click()
-                        URL.revokeObjectURL(url)
-                      })
-                  }}
-                  className="btn-ghost flex items-center gap-1.5"
-                  style={{ fontSize: '0.8rem', padding: '0.4rem 0.9rem' }}
-                >
-                  <FileDown size={13} /> Esporta CSV
-                </a>
               </div>
 
-              {(() => {
-                const logs = enterpriseLogs.length > 0 ? enterpriseLogs : FAKE_ENTERPRISE
-                const isFake = enterpriseLogs.length === 0
-                return (
-                  <>
-                    {isFake && (
-                      <div className="rounded-xl px-4 py-2 mb-4" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', fontSize: '0.78rem', color: '#f59e0b' }}>
-                        Dati di esempio — nessun cliente Enterprise reale ancora registrato
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-2">
-                      {logs.map((l) => (
-                        <div key={l.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                          <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div>
-                              <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '0.875rem' }}>{l.company_name || l.company_email}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{l.company_email}</div>
-                              {l.vat_number && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>P.IVA: {l.vat_number}</div>}
-                              {l.fh_workspace_id && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Workspace: {l.fh_workspace_id}</div>}
+              {bonusRequests.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
+                  Nessuna richiesta bonus
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {bonusRequests.map((r) => {
+                    const ipColor = r.ip_status === 'warning' ? '#eab308' : '#64748b'
+                    return (
+                      <div key={r.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: `1px solid ${r.ip_status === 'warning' ? 'rgba(234,179,8,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: r.ip_status === 'warning' ? '#eab308' : '#f1f5f9' }}>{r.company_name}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{r.company_email}</div>
+                            {r.vat_number && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>P.IVA: {r.vat_number}</div>}
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: ipColor, flexShrink: 0, display: 'inline-block' }} />
+                              <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: ipColor }}>{r.ip}</span>
+                              {r.ip_status === 'warning' && (
+                                <span style={{ fontSize: '0.68rem', color: '#eab308', fontWeight: 600 }}>⚠ IP già presente</span>
+                              )}
+                              {r.ip_status === 'warning' && r.duplicate_company_id && (
+                                <button
+                                  className="btn-ghost"
+                                  style={{ fontSize: '0.65rem', padding: '0.1rem 0.45rem', color: '#eab308', borderColor: 'rgba(234,179,8,0.3)' }}
+                                  onClick={() => {
+                                    const dupComp = companies.find(c => c.id === String(r.duplicate_company_id))
+                                    if (dupComp) setSelectedCompany(dupComp)
+                                  }}
+                                >
+                                  Vedi: {r.duplicate_company_name}
+                                </button>
+                              )}
                             </div>
-                            <div className="flex flex-col items-end gap-1">
-                              <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>
-                                <Check size={9} /> Consenso dati
-                              </span>
-                              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                {new Date(l.created_at).toLocaleString('it-IT')}
-                              </span>
+                            <div style={{ fontSize: '0.68rem', color: '#475569', marginTop: 3 }}>
+                              {new Date(r.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </div>
                           </div>
+                          <div className="flex flex-col items-end gap-2">
+                            {r.status === 'pending' ? (
+                              <div className="flex gap-2">
+                                <button
+                                  className="btn-ghost flex items-center gap-1"
+                                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.3)' }}
+                                  onClick={async () => {
+                                    const res = await apiFetch(`/admin/welcome-bonus-requests/${r.id}/approve`, { method: 'POST' })
+                                    if (res.ok) {
+                                      setBonusRequests((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'approved' } : x))
+                                      setMsg('+1 credito bonus approvato')
+                                      setTimeout(() => setMsg(''), 3000)
+                                    }
+                                  }}
+                                >
+                                  <Check size={12} /> Approva
+                                </button>
+                                <button
+                                  className="btn-ghost flex items-center gap-1"
+                                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                                  onClick={async () => {
+                                    const res = await apiFetch(`/admin/welcome-bonus-requests/${r.id}/reject`, { method: 'POST' })
+                                    if (res.ok) {
+                                      setBonusRequests((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'rejected' } : x))
+                                      setMsg('Richiesta rifiutata')
+                                      setTimeout(() => setMsg(''), 3000)
+                                    }
+                                  }}
+                                >
+                                  <X size={12} /> Rifiuta
+                                </button>
+                              </div>
+                            ) : (
+                              <span style={{
+                                fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: 6,
+                                ...(r.status === 'approved'
+                                  ? { background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }
+                                  : { background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }),
+                              }}>
+                                {r.status === 'approved' ? 'Approvato' : 'Rifiutato'}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </>
-                )
-              })()}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

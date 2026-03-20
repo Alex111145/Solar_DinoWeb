@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 import auth_utils
 import models
 from sqlalchemy import text
-from database import Base, SessionLocal, engine
+from database import Base, SessionLocal, engine, run_migrations
 from routers import admin, auth, flighthub, missions, payments, reviews
 
 
@@ -20,6 +20,9 @@ from routers import admin, auth, flighthub, missions, payments, reviews
 async def lifespan(app: FastAPI):
     # Crea tutte le tabelle del database
     Base.metadata.create_all(bind=engine)
+
+    # Migrazione nuove colonne (subscription_cancelled, welcome_bonus_requested, welcome_bonus_requests)
+    run_migrations(engine)
 
     # Migrazione: aggiungi nuove colonne se non esistono (SQLite non supporta IF NOT EXISTS)
     with engine.connect() as conn:

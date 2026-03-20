@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -14,6 +14,28 @@ if DATABASE_URL.startswith("postgres://"):
 # Decommentare in produzione se il Transaction Pooler è abilitato su Supabase
 # if "pooler.supabase.com:5432" in DATABASE_URL:
 #     DATABASE_URL = DATABASE_URL.replace(":5432/", ":6543/")
+
+def run_migrations(engine):
+    """Applica colonne mancanti — idempotente (IF NOT EXISTS)."""
+    ddl = [
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_cancelled BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS welcome_bonus_requested BOOLEAN DEFAULT FALSE",
+        """CREATE TABLE IF NOT EXISTS welcome_bonus_requests (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            status VARCHAR DEFAULT 'pending',
+            ip VARCHAR,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+    ]
+    with engine.connect() as conn:
+        for sql in ddl:
+            try:
+                conn.execute(text(sql))
+            except Exception as e:
+                print(f"[MIGRATION] {e}")
+        conn.commit()
+
 
 engine = create_engine(
     DATABASE_URL,

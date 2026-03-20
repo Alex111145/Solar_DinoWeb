@@ -955,3 +955,106 @@ def enterprise_logs_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=enterprise_clients.csv"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Welcome Bonus Requests
+# ---------------------------------------------------------------------------
+
+@router.get("/welcome-bonus-requests")
+def list_welcome_bonus_requests(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Elenco richieste bonus di benvenuto con info IP."""
+    requests_list = (
+        db.query(models.WelcomeBonusRequest)
+        .join(models.Company, models.WelcomeBonusRequest.company_id == models.Company.id)
+        .filter(models.Company.deleted_at.is_(None))
+        .order_by(models.WelcomeBonusRequest.created_at.desc())
+        .all()
+    )
+
+    # IP duplicati tra aziende attive (per colorazione)
+    all_companies = db.query(models.Company).filter(
+        models.Company.deleted_at.is_(None),
+        models.Company.is_active == True,
+        models.Company.last_ip.isnot(None),
+    ).all()
+    all_ips = [c.last_ip for c in all_companies if c.last_ip and c.last_ip != "—"]
+    duplicate_ips = {ip for ip in all_ips if all_ips.count(ip) > 1}
+    # Mappa IP -> prima azienda con quell'IP (diversa da quella corrente)
+    ip_to_companies: dict = {}
+    for comp in all_companies:
+        if comp.last_ip and comp.last_ip != "—":
+            ip_to_companies.setdefault(comp.last_ip, []).append(comp)
+
+    result = []
+    for r in requests_list:
+        c = r.company
+        req_ip = r.ip or c.last_ip or "—"
+        is_warning = (r.ip and r.ip in duplicate_ips) or (c.last_ip and c.last_ip in duplicate_ips)
+        # Trova l'altra azienda con lo stesso IP
+        dup_id = None
+        dup_name = None
+        if is_warning:
+            others = [x for x in ip_to_companies.get(req_ip, []) if x.id != c.id]
+            if others:
+                dup_id = others[0].id
+                dup_name = others[0].ragione_sociale or others[0].name
+        result.append({
+            "id":                    r.id,
+            "company_id":            c.id,
+            "company_name":          c.ragione_sociale or c.name,
+            "company_email":         c.email,
+            "vat_number":            c.vat_number or "",
+            "status":                r.status,
+            "ip":                    req_ip,
+            "ip_status":             "warning" if is_warning else "ok",
+            "created_at":            r.created_at.isoformat(),
+            "credits_current":       c.credits,
+            "duplicate_company_id":  dup_id,
+            "duplicate_company_name": dup_name,
+        })
+    return result
+
+
+@router.post("/welcome-bonus-requests/{req_id}/approve")
+def approve_welcome_bonus(
+    req_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    req = db.query(models.WelcomeBonusRequest).filter(models.WelcomeBonusRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="Richiesta già elaborata")
+
+    company = db.query(models.Company).filter(models.Company.id == req.company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Azienda non trovata")
+
+    # Aggiungi 1 credito bonus
+    company.credits += 1
+    company.welcome_bonus_used = True
+    req.status = "approved"
+    db.commit()
+    return {"message": "Bonus approvato. +1 credito aggiunto.", "credits": company.credits}
+
+
+@router.post("/welcome-bonus-requests/{req_id}/reject")
+def reject_welcome_bonus(
+    req_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    req = db.query(models.WelcomeBonusRequest).filter(models.WelcomeBonusRequest.id == req_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    if req.status != "pending":
+        raise HTTPException(status_code=400, detail="Richiesta già elaborata")
+
+    req.status = "rejected"
+    db.commit()
+    return {"message": "Richiesta rifiutata"}
