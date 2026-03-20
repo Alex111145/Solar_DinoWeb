@@ -256,6 +256,9 @@ function ProfileSidebar({
   isManager: boolean
 }) {
   const [openSection, setOpenSection] = useState<string | null>(null)
+  const [selectedHistoryJob, setSelectedHistoryJob] = useState<Job | null>(null)
+  const [inputFiles, setInputFiles] = useState<{name: string; url: string; size_mb: number}[] | null>(null)
+  const [inputFilesLoading, setInputFilesLoading] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [emailPwd, setEmailPwd] = useState('')
   const [oldPwd, setOldPwd] = useState('')
@@ -274,6 +277,16 @@ function ProfileSidebar({
       setEditComment(myReview.comment ?? '')
     }
   }, [myReview])
+
+  useEffect(() => {
+    if (!selectedHistoryJob) { setInputFiles(null); return }
+    setInputFilesLoading(true)
+    apiFetch(`/missions/${selectedHistoryJob.id}/input-files`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((d) => setInputFiles(Array.isArray(d) ? d : []))
+      .catch(() => setInputFiles([]))
+      .finally(() => setInputFilesLoading(false))
+  }, [selectedHistoryJob?.id])
 
   function toggle(s: string) {
     setOpenSection((prev) => (prev === s ? null : s))
@@ -604,7 +617,11 @@ function ProfileSidebar({
                 ) : (
                   <div className="flex flex-col gap-2 mt-3">
                     {history.map((job) => (
-                      <div key={job.id} style={{ padding: '0.65rem 0.75rem', background: st.rowBg, borderRadius: 10, border: `1px solid ${st.rowBorder}` }}>
+                      <div
+                        key={job.id}
+                        onClick={() => setSelectedHistoryJob(job)}
+                        style={{ padding: '0.65rem 0.75rem', background: st.rowBg, borderRadius: 10, border: `1px solid ${st.rowBorder}`, cursor: 'pointer' }}
+                      >
                         <div className="flex items-center justify-between mb-1">
                           <span style={{ fontSize: '0.78rem', color: st.text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
                             {job.filename || `Job ${job.id.slice(0, 8)}`}
@@ -613,30 +630,82 @@ function ProfileSidebar({
                             {statusLabel(job.status)}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                            {job.created_at ? new Date(job.created_at).toLocaleDateString('it-IT') : '—'}
-                            {job.panel_count != null ? ` · ${job.panel_count} pannelli` : ''}
-                          </span>
-                          {job.status === 'completato' && (
-                            <div className="flex gap-1">
-                              {['kml', 'json', 'csv'].map((fmt) => (
-                                <button
-                                  key={fmt}
-                                  onClick={() => downloadFile(job.id, fmt)}
-                                  className="btn-ghost"
-                                  style={{ padding: '0.2rem 0.45rem', fontSize: '0.65rem', textTransform: 'uppercase' }}
-                                >
-                                  {fmt}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          {job.created_at ? new Date(job.created_at).toLocaleDateString('it-IT') : '—'}
+                          {job.panel_count != null ? ` · ${job.panel_count} pannelli` : ''}
+                        </span>
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Popup dettaglio elaborazione */}
+            {selectedHistoryJob && (
+              <div
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+                onClick={() => setSelectedHistoryJob(null)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ background: st.bg, border: `1px solid ${st.border}`, borderRadius: 18, padding: '1.5rem', width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: st.text }}>
+                      {selectedHistoryJob.filename || `Elaborazione ${selectedHistoryJob.id.slice(0, 8)}`}
+                    </span>
+                    <button onClick={() => setSelectedHistoryJob(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.textMuted, fontSize: '1.2rem', lineHeight: 1 }}>×</button>
+                  </div>
+
+                  <div style={{ fontSize: '0.75rem', color: st.textMuted, marginBottom: '1.2rem' }}>
+                    {selectedHistoryJob.created_at ? new Date(selectedHistoryJob.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}
+                    {selectedHistoryJob.panel_count != null ? ` · ${selectedHistoryJob.panel_count} pannelli rilevati` : ''}
+                  </div>
+
+                  {/* Input */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <p style={{ fontSize: '0.75rem', fontWeight: 600, color: st.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>📥 File di input</p>
+                    {inputFilesLoading ? (
+                      <div style={{ fontSize: '0.78rem', color: st.textMuted, padding: '0.4rem 0' }}>Caricamento...</div>
+                    ) : inputFiles && inputFiles.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {inputFiles.map((f) => (
+                          <a
+                            key={f.name}
+                            href={f.url}
+                            download={f.name}
+                            className="btn-ghost w-full"
+                            style={{ fontSize: '0.82rem', padding: '0.5rem', justifyContent: 'center', textDecoration: 'none', display: 'block', textAlign: 'center' }}
+                          >
+                            {f.name}{f.size_mb > 0 ? ` (${f.size_mb} MB)` : ''}
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.78rem', color: st.textMuted }}>Nessun file di input disponibile.</div>
+                    )}
+                  </div>
+
+                  {/* Output */}
+                  {selectedHistoryJob.status === 'completato' && (
+                    <div>
+                      <p style={{ fontSize: '0.75rem', fontWeight: 600, color: st.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>📤 File di output</p>
+                      <div className="flex flex-col gap-1">
+                        {['kml', 'kmz', 'json', 'csv', 'geojson'].map((fmt) => (
+                          <button
+                            key={fmt}
+                            className="btn-ghost w-full"
+                            style={{ fontSize: '0.82rem', padding: '0.5rem', justifyContent: 'center', textTransform: 'uppercase' }}
+                            onClick={() => downloadFile(selectedHistoryJob.id, fmt)}
+                          >
+                            {fmt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -783,25 +852,25 @@ function ProfileSidebar({
 interface TicketListItem { id: number; subject: string; status: string; created_at: string }
 
 function statusBadge(s: string) {
-  if (s === 'risolto')         return { label: 'Chiuso',         bg: 'rgba(239,68,68,0.1)',   color: '#f87171' }
-  if (s === 'in_elaborazione') return { label: 'In elaborazione', bg: 'rgba(245,158,11,0.1)', color: '#f59e0b' }
-  return                              { label: 'Aperto',          bg: 'rgba(34,197,94,0.1)',  color: '#22c55e' }
+  if (s === 'risolto') return { label: 'Chiuso',          bg: 'rgba(100,116,139,0.15)', color: '#94a3b8' }
+  return                      { label: 'In elaborazione', bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' }
 }
 
-function SupportCard({ onOpenTicket }: { onOpenTicket: (id: number) => void }) {
+function SupportCard({ onOpenTicket, refreshKey }: { onOpenTicket: (id: number) => void; refreshKey: number }) {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [tickets, setTickets] = useState<TicketListItem[]>([])
   const [showNewForm, setShowNewForm] = useState(false)
+  const [ticketFilter, setTicketFilter] = useState<'elaborazione' | 'chiuse'>('elaborazione')
 
   useEffect(() => {
     apiFetch('/auth/tickets')
       .then((r) => r.ok ? r.json() : [])
       .then((d) => { if (Array.isArray(d)) setTickets(d) })
       .catch(() => {})
-  }, [])
+  }, [refreshKey])
 
   async function send() {
     if (!subject.trim() || !message.trim()) return
@@ -860,37 +929,70 @@ function SupportCard({ onOpenTicket }: { onOpenTicket: (id: number) => void }) {
         </button>
       </div>
 
-      {/* Lista ticket esistenti */}
+      {/* Filtri stato */}
       {tickets.length > 0 && (
-        <div className="flex flex-col gap-2 mb-4">
-          {tickets.map((t) => {
-            const badge = statusBadge(t.status)
-            return (
-              <button
-                key={t.id}
-                onClick={() => onOpenTicket(t.id)}
-                style={{ width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left' }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    #{t.id} — {t.subject}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                    {new Date(t.created_at).toLocaleDateString('it-IT')}
-                  </div>
-                </div>
-                <span style={{ flexShrink: 0, background: badge.bg, color: badge.color, fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  {badge.label}
-                </span>
-              </button>
-            )
-          })}
+        <div className="flex gap-1 mb-4" style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 3, display: 'inline-flex' }}>
+          {(['elaborazione', 'chiuse'] as const).map((f) => (
+            <button key={f} onClick={() => setTicketFilter(f)}
+              style={{ background: ticketFilter === f ? 'rgba(245,158,11,0.15)' : 'transparent', border: ticketFilter === f ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent', color: ticketFilter === f ? '#f59e0b' : '#64748b', borderRadius: 8, padding: '0.3rem 0.9rem', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
+              {f === 'elaborazione'
+                ? `In elaborazione (${tickets.filter((t) => t.status !== 'risolto').length})`
+                : `Chiuse (${tickets.filter((t) => t.status === 'risolto').length})`}
+            </button>
+          ))}
         </div>
       )}
 
+      {/* Lista ticket per mese */}
+      {tickets.length > 0 && (() => {
+        const filtered = tickets.filter((t) => ticketFilter === 'chiuse' ? t.status === 'risolto' : t.status !== 'risolto')
+        const byMonth: Record<string, TicketListItem[]> = {}
+        filtered.forEach((t) => {
+          const key = new Date(t.created_at).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+          if (!byMonth[key]) byMonth[key] = []
+          byMonth[key].push(t)
+        })
+        const months = Object.keys(byMonth).sort((a, b) =>
+          new Date(byMonth[b][0].created_at).getTime() - new Date(byMonth[a][0].created_at).getTime()
+        )
+        if (months.length === 0) return (
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            Nessuna segnalazione {ticketFilter === 'chiuse' ? 'chiusa' : 'in elaborazione'}.
+          </p>
+        )
+        return (
+          <div className="flex flex-col gap-4 mb-4">
+            {months.map((month) => (
+              <div key={month}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f59e0b', textTransform: 'capitalize' }}>{month}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{byMonth[month].length} segnalazioni</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {byMonth[month].map((t) => {
+                    const badge = statusBadge(t.status)
+                    const isClosed = t.status === 'risolto'
+                    return (
+                      <button key={t.id} onClick={() => onOpenTicket(t.id)}
+                        style={{ width: '100%', background: isClosed ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isClosed ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 10, padding: '0.65rem 0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, textAlign: 'left', opacity: isClosed ? 0.75 : 1 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{t.id} — {t.subject}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1 }}>{new Date(t.created_at).toLocaleDateString('it-IT')}</div>
+                        </div>
+                        <span style={{ flexShrink: 0, background: badge.bg, color: badge.color, fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{badge.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
       {tickets.length === 0 && !showNewForm && (
         <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-          Nessuna segnalazione aperta. Usa il tasto in alto per aprirne una nuova.
+          Nessuna segnalazione ancora. Usa il tasto in alto per aprirne una nuova.
         </p>
       )}
 
@@ -999,6 +1101,7 @@ export default function DashboardPage() {
   const [ticketReplyLoading, setTicketReplyLoading] = useState(false)
   const [ticketActionMsg, setTicketActionMsg] = useState('')
   const [clientClosedTicketIds, setClientClosedTicketIds] = useState<Set<number>>(new Set())
+  const [ticketRefreshKey, setTicketRefreshKey] = useState(0)
 
   // Delete account confirm modal (E)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -1310,6 +1413,7 @@ export default function DashboardPage() {
       if (res.ok) {
         setClientClosedTicketIds((prev) => new Set([...prev, ticketDetail.id]))
         setTicketDetail((prev) => prev ? { ...prev, status: 'risolto' } : prev)
+        setTicketRefreshKey((k) => k + 1)
       }
     } catch { /* noop */ }
   }
@@ -1466,6 +1570,7 @@ export default function DashboardPage() {
       URL.revokeObjectURL(url)
     } catch { }
   }
+
 
   const initials = userName ? userName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) : '??'
 
@@ -2056,14 +2161,12 @@ export default function DashboardPage() {
               return (
                 <div
                   key={plan.key}
-                  className="rounded-xl flex flex-col"
+                  className={`rounded-xl flex flex-col${plan.key === 'unlimited_annual' ? ' sm:col-span-3' : ''}`}
                   style={{ border: `1px solid ${plan.color}`, background: 'rgba(255,255,255,0.02)', position: 'relative', overflow: 'hidden' }}
                 >
-                  {plan.popular && (
-                    <div style={{ background: 'linear-gradient(90deg,#f59e0b,#f97316)', textAlign: 'center', padding: '4px 0', fontSize: '0.7rem', fontWeight: 700, color: '#000', letterSpacing: '0.05em' }}>
-                      PIÙ POPOLARE
-                    </div>
-                  )}
+                  <div style={{ background: plan.popular ? 'linear-gradient(90deg,#f59e0b,#f97316)' : 'transparent', textAlign: 'center', padding: '4px 0', fontSize: '0.7rem', fontWeight: 700, color: '#000', letterSpacing: '0.05em', visibility: plan.popular ? 'visible' : 'hidden' }}>
+                    PIÙ POPOLARE
+                  </div>
                   <div style={{ padding: '1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {/* label + discount */}
                     <div className="flex items-center justify-between">
@@ -2073,25 +2176,21 @@ export default function DashboardPage() {
                       )}
                     </div>
                     {/* elaborazioni */}
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '2rem', lineHeight: 1 }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: plan.key === 'unlimited_annual' ? '2.8rem' : '2rem', lineHeight: 1, ...(plan.key === 'unlimited_annual' ? { textAlign: 'center' } : {}) }}>
                       {plan.credits != null ? plan.credits : '∞'}
-                      <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>elaborazioni{plan.period}</span>
+                      <span style={{ fontSize: plan.key === 'unlimited_annual' ? '1.05rem' : '0.82rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>elaborazioni{plan.period}</span>
                     </div>
                     {/* prezzo per elaborazione */}
-                    {perElab && (
-                      <div className="flex items-center justify-between" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        <span>Prezzo per elaborazione</span>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>€{perElab}</span>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', visibility: perElab ? 'visible' : 'hidden' }}>
+                      <span>Prezzo per elaborazione</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>€{perElab}</span>
+                    </div>
                     {/* banner risparmio */}
-                    {savings && (
-                      <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '5px 10px', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600 }}>
-                        🔥 Risparmi €{savings} rispetto al prezzo pieno
-                      </div>
-                    )}
+                    <div style={{ background: 'rgba(245,158,11,0.1)', border: `1px solid ${savings ? 'rgba(245,158,11,0.2)' : 'transparent'}`, borderRadius: 8, padding: '5px 10px', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, visibility: savings ? 'visible' : 'hidden', ...(plan.key === 'unlimited_annual' ? { textAlign: 'center' } : {}) }}>
+                      🔥 Risparmi €{savings} rispetto al prezzo pieno
+                    </div>
                     {/* prezzo */}
-                    <div className="flex items-baseline gap-2" style={{ marginTop: 'auto', paddingTop: 6 }}>
+                    <div className="flex items-baseline gap-2" style={{ marginTop: 'auto', paddingTop: 6, ...(plan.key === 'unlimited_annual' ? { justifyContent: 'center' } : {}) }}>
                       {plan.originalPrice && (
                         <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}{plan.period}</span>
                       )}
@@ -2154,7 +2253,7 @@ export default function DashboardPage() {
 
 
         {/* Richiesta assistenza */}
-        <SupportCard onOpenTicket={openTicketModal} />
+        <SupportCard onOpenTicket={openTicketModal} refreshKey={ticketRefreshKey} />
       </motion.div>
 
       {/* ── Modals ───────────────────────────────────────────────────── */}

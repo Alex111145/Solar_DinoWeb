@@ -24,6 +24,14 @@ ML_SERVER_SECRET = os.getenv("ML_SERVER_SECRET", "")
 
 os.makedirs(_LOCAL_TMP, exist_ok=True)
 
+_OUTPUT_FILENAMES = {
+    "Rilevamenti_Pannelli.json",
+    "Rilevamenti_Pannelli.csv",
+    "Rilevamenti_Pannelli.geojson",
+    "Mappa_Pannelli.kml",
+    "Mappa_Pannelli.kmz",
+}
+
 STATUS_PROGRESS = {
     "in_coda":     5,
     "taglio_tile": 30,
@@ -266,6 +274,33 @@ def download_input(
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
     return RedirectResponse(url=signed_url)
+
+
+@router.get("/{job_id}/input-files")
+def list_input_files(
+    job_id: str,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Elenca i file di input di un job con URL firmati per il download."""
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job non trovato")
+    if job.company_id != current.id and current.email != auth_utils.ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Accesso negato")
+
+    all_files = storage_utils.list_files(f"jobs/{job_id}")
+    result = []
+    for f in all_files:
+        name = f["name"]
+        if name in _OUTPUT_FILENAMES:
+            continue
+        try:
+            url = storage_utils.get_signed_url(f"jobs/{job_id}/{name}", expires_in=300)
+            result.append({"name": name, "url": url, "size_mb": f.get("size_mb", 0)})
+        except Exception:
+            pass
+    return result
 
 
 @router.get("/trial-status")
