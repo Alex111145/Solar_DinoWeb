@@ -51,7 +51,7 @@ def get_stats(
     ) or 0
 
     now             = datetime.now(timezone.utc)
-    start_of_month  = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_30_days    = now - timedelta(days=30)
 
     # Fatturato totale = somma di tutti i pagamenti approvati (Stripe + bonifico)
     total_stripe = db.query(func.sum(models.StripePayment.amount_eur)).scalar() or 0
@@ -62,21 +62,16 @@ def get_stats(
     ) or 0
     total_revenue = total_stripe + total_bonif
 
-    # Fatturato mese corrente = pagamenti con data >= 1° del mese corrente
-    cur_month_stripe = (
+    # Fatturato mese corrente = solo abbonamenti attivati negli ultimi 30 gg
+    SUBSCRIPTION_PACKAGES = ('starter', 'medium', 'unlimited', 'unlimited_annual')
+    revenue_current_month = (
         db.query(func.sum(models.StripePayment.amount_eur))
-        .filter(models.StripePayment.created_at >= start_of_month)
-        .scalar()
-    ) or 0
-    cur_month_bonif = (
-        db.query(func.sum(models.BonificoRequest.amount_eur))
         .filter(
-            models.BonificoRequest.status == "approved",
-            models.BonificoRequest.approved_at >= start_of_month,
+            models.StripePayment.created_at >= last_30_days,
+            models.StripePayment.package.in_(SUBSCRIPTION_PACKAGES),
         )
         .scalar()
     ) or 0
-    revenue_current_month = cur_month_stripe + cur_month_bonif
 
     return {
         "active_companies":        total_companies,
@@ -138,7 +133,7 @@ def list_companies(
             "panels_detected":  panels,
             "amount_owed_eur":  round(amount_owed, 2),
             "last_ip":              c.last_ip or "—",
-            "ip_status":            "warning" if c.last_ip and c.last_ip in duplicate_ips else "ok",
+            "ip_status":            "warning" if c.is_active and c.last_ip and c.last_ip in duplicate_ips else "ok",
             "welcome_bonus_used":   bool(c.welcome_bonus_used),
             "last_login_at":        c.last_login_at.isoformat() if c.last_login_at else None,
             "created_at":           c.created_at.isoformat(),

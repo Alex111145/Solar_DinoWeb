@@ -36,6 +36,28 @@ def run_migrations(engine):
                 print(f"[MIGRATION] {e}")
         conn.commit()
 
+    # Popola welcome_bonus_requests per aziende con welcome_bonus_requested=True
+    # ma senza record nella tabella (idempotente)
+    seed_sql = """
+        INSERT INTO welcome_bonus_requests (company_id, status, ip, created_at)
+        SELECT c.id,
+               CASE WHEN c.welcome_bonus_used THEN 'approved' ELSE 'pending' END,
+               c.last_ip,
+               COALESCE(c.last_login_at, c.created_at)
+        FROM companies c
+        WHERE c.welcome_bonus_requested = TRUE
+          AND c.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM welcome_bonus_requests r WHERE r.company_id = c.id
+          )
+    """
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(seed_sql))
+            conn.commit()
+        except Exception as e:
+            print(f"[SEED bonus] {e}")
+
 
 engine = create_engine(
     DATABASE_URL,

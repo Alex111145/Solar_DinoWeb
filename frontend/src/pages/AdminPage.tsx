@@ -153,13 +153,20 @@ interface SupportTicket {
   created_at: string
 }
 
+interface HistoryPoint { label: string; count: number }
+
 function CompanyModal({ company, onClose }: { company: Company; onClose: () => void }) {
   const [tickets, setTickets] = useState<SupportTicket[]>([])
+  const [history, setHistory] = useState<HistoryPoint[]>([])
 
   useEffect(() => {
     apiFetch(`/admin/companies/${company.id}/tickets`)
       .then((r) => r.ok ? r.json() : [])
       .then((d) => setTickets(Array.isArray(d) ? d : []))
+      .catch(() => {})
+    apiFetch(`/admin/companies/${company.id}/history`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((d) => setHistory(Array.isArray(d) ? d : []))
       .catch(() => {})
   }, [company.id])
 
@@ -207,6 +214,46 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
             </div>
           ))}
         </div>
+
+        {/* Grafico elaborazioni mensili */}
+        {history.length > 0 && history.some(h => h.count > 0) && (() => {
+          const maxVal = Math.max(...history.map(h => h.count), 1)
+          const chartH = 60
+          const barW = 100 / history.length
+          return (
+            <div style={{ marginTop: '1.25rem', marginBottom: '0.5rem' }}>
+              <div style={{ fontSize: '0.72rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                Elaborazioni ultimi 12 mesi
+              </div>
+              <svg width="100%" height={chartH + 20} style={{ overflow: 'visible' }}>
+                {history.map((h, i) => {
+                  const barH = h.count === 0 ? 2 : Math.max(4, (h.count / maxVal) * chartH)
+                  const x = i * barW + barW * 0.15
+                  const w = barW * 0.7
+                  const y = chartH - barH
+                  return (
+                    <g key={h.label}>
+                      <rect
+                        x={`${x}%`} y={y} width={`${w}%`} height={barH}
+                        rx={3}
+                        fill={h.count > 0 ? '#f59e0b' : 'rgba(255,255,255,0.06)'}
+                        opacity={h.count > 0 ? 0.85 : 1}
+                      />
+                      {h.count > 0 && (
+                        <text x={`${x + w / 2}%`} y={y - 3} textAnchor="middle" fill="#f1f5f9" fontSize={9} fontWeight={700}>
+                          {h.count}
+                        </text>
+                      )}
+                      <text x={`${x + w / 2}%`} y={chartH + 14} textAnchor="middle" fill="#475569" fontSize={8}>
+                        {h.label.slice(0, 3)}
+                      </text>
+                    </g>
+                  )
+                })}
+              </svg>
+            </div>
+          )
+        })()}
 
         {/* Support Tickets */}
         {tickets.length > 0 && (
