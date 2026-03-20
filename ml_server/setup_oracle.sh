@@ -23,8 +23,8 @@ pip install -r ml_server/requirements.txt
 echo "=== [4/6] File .env ==="
 # Copia le variabili necessarie
 cat > /opt/solardino/.env << 'ENVEOF'
-DATABASE_URL=postgresql://postgres.msyvtrsgxfderbyametg:87l89ifA!!!@aws-1-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require
-SUPABASE_URL=https://msyvtrsgxfderbyametg.supabase.co
+DATABASE_URL=INSERISCI_QUI
+SUPABASE_URL=INSERISCI_QUI
 SUPABASE_SERVICE_KEY=INSERISCI_QUI
 SUPABASE_BUCKET=pth
 ML_SERVER_SECRET=SCEGLI_UNA_PASSWORD_SEGRETA

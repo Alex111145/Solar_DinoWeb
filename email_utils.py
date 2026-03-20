@@ -82,7 +82,7 @@ def _wrap(title_bar: str, body: str, preheader: str = "") -> str:
             <div style="font-size:12px;color:#475569;">
               <strong style="color:#64748b;">SolarDino</strong> &copy; 2026 &nbsp;&middot;&nbsp; Tutti i diritti riservati
             </div>
-            <div style="font-size:11px;color:#334155;margin-top:6px;">
+            <div style="font-size:11px;color:#000000;margin-top:6px;">
               Questa &egrave; un&rsquo;email automatica &mdash; si prega di non rispondere.
             </div>
           </td>
