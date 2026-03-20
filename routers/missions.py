@@ -18,9 +18,9 @@ from email_utils import send_email
 
 router = APIRouter(prefix="/missions", tags=["Missions"])
 
-_LOCAL_TMP     = os.getenv("UPLOAD_DIR", "/tmp/elaborazioni")
-ML_SERVER_URL  = os.getenv("ML_SERVER_URL", "")      # es. http://1.2.3.4:8001
-ML_SERVER_SECRET = os.getenv("ML_SERVER_SECRET", "")
+_LOCAL_TMP         = os.getenv("UPLOAD_DIR", "/tmp/elaborazioni")
+RUNPOD_API_KEY     = os.getenv("RUNPOD_API_KEY", "")
+RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID", "")
 
 os.makedirs(_LOCAL_TMP, exist_ok=True)
 
@@ -71,18 +71,18 @@ def _upload_and_dispatch(job_id: str, job_dir: str, tif_name: str, tfw_name: str
             elif fname == tfw_name:
                 tfw_storage_path = spath
 
-        # Chiama il ML server
-        if not ML_SERVER_URL:
-            raise RuntimeError("ML_SERVER_URL non configurato")
+        # Invia job a RunPod Serverless
+        if not RUNPOD_API_KEY or not RUNPOD_ENDPOINT_ID:
+            raise RuntimeError("RUNPOD_API_KEY / RUNPOD_ENDPOINT_ID non configurati")
 
         resp = httpx.post(
-            f"{ML_SERVER_URL}/run",
-            json={
+            f"https://api.runpod.io/v2/{RUNPOD_ENDPOINT_ID}/run",
+            json={"input": {
                 "job_id":           job_id,
                 "tif_storage_path": tif_storage_path,
                 "tfw_storage_path": tfw_storage_path,
-            },
-            headers={"x-secret": ML_SERVER_SECRET},
+            }},
+            headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
             timeout=30,
         )
         resp.raise_for_status()
@@ -91,7 +91,7 @@ def _upload_and_dispatch(job_id: str, job_dir: str, tif_name: str, tfw_name: str
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
         if job:
             job.status = "errore"
-            job.log    = f"Dispatch ML server fallito: {exc}"
+            job.log    = f"Dispatch RunPod fallito: {exc}"
             db.commit()
     finally:
         db.close()

@@ -1,0 +1,33 @@
+# ── SolarDino — RunPod Serverless image ──────────────────────────────────────
+# Build from project root:
+#   docker buildx build --platform linux/amd64 \
+#     -t ale397/solardino-ml:latest \
+#     -f ml_server/Dockerfile.runpod . --push
+
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-dnn8-devel
+
+# System deps for GDAL / OpenCV / compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgdal-dev gdal-bin \
+        libgl1-mesa-glx libglib2.0-0 \
+        ninja-build \
+        gcc g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy project
+COPY . .
+
+# Install Python dependencies (torch already in base image)
+RUN pip install --no-cache-dir -r ml_server/requirements_runpod.txt
+
+# Install detectron2 from local source
+RUN pip install --no-cache-dir -e ./core/libs/detectron2
+
+# Build MultiScaleDeformableAttention CUDA extension (needed by MaskDINO)
+RUN cd core/libs/maskdino/modeling/pixel_decoder/ops \
+    && python setup.py build_ext --inplace
+
+# RunPod will call this handler
+CMD ["python", "-u", "ml_server/runpod_handler.py"]

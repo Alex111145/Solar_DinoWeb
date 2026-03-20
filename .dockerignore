@@ -1,0 +1,16 @@
+.git
+.env
+*.env
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.DS_Store
+frontend/
+node_modules/
+venv/
+venv_api/
+venv_ml/
+*.md
+oracle_retry.sh
+.claude/
