@@ -182,6 +182,22 @@ def list_jobs(
     return [_job_dict(j) for j in jobs]
 
 
+@router.get("/history")
+def list_jobs_history(
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    """Alias di /missions usato dal frontend per lo storico elaborazioni."""
+    jobs = (
+        db.query(models.Job)
+        .filter(models.Job.company_id == current.id)
+        .order_by(models.Job.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [_job_dict(j) for j in jobs]
+
+
 @router.get("/{job_id}/status")
 def job_status(
     job_id: str,
