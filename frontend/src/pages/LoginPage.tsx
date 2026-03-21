@@ -199,6 +199,7 @@ export default function LoginPage() {
       })
       if (res.ok) {
         setForcePwdMsg('')
+        setForceChangePwd(false)
         window.scrollTo(0, 0)
         navigate('/dashboard')
       } else {
@@ -260,10 +261,6 @@ export default function LoginPage() {
         className="relative z-10 flex flex-col items-center text-center px-6 pt-40 pb-20"
         style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}
       >
-        <motion.div variants={fadeUp} className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-6" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600 }}>
-          Accedi
-        </motion.div>
-
         <motion.h1
           variants={fadeUp}
           style={{ fontSize: 'clamp(2.4rem, 6vw, 4rem)', fontWeight: 900, lineHeight: 1.1, letterSpacing: '-0.04em', color: t.text, marginBottom: '1.25rem' }}
@@ -375,7 +372,7 @@ export default function LoginPage() {
           <motion.div
             initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}
             className="rounded-3xl p-8 flex flex-col gap-5"
-            style={{ background: 'rgba(245,158,11,0.04)', border: '1.5px solid rgba(245,158,11,0.2)' }}
+            style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}` }}
           >
             <div className="flex items-center gap-4">
               <div style={{ width: 52, height: 52, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
@@ -431,7 +428,7 @@ export default function LoginPage() {
             Un account aziendale, tutto il tuo team
           </h2>
           <p style={{ color: t.textMuted, fontSize: '0.95rem', marginTop: 10, maxWidth: 600, margin: '10px auto 0' }}>
-            Registra la tua azienda una sola volta. L'account che si iscrive diventa <strong style={{ color: t.text }}>Manager</strong> e può aggiungere tutti i collaboratori dal proprio profilo — nessuna registrazione separata.
+            Registra la tua azienda una sola volta. L'account che si iscrive diventa <strong style={{ color: t.text }}>Manager</strong> e può aggiungere tutti i collaboratori dal proprio profilo.
           </p>
         </motion.div>
 
@@ -464,7 +461,7 @@ export default function LoginPage() {
               key={item.step}
               initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
               className="rounded-3xl p-7 flex flex-col gap-4"
-              style={{ background: item.highlight ? 'rgba(245,158,11,0.05)' : t.cardBg, border: item.highlight ? '1.5px solid rgba(245,158,11,0.3)' : `1px solid ${t.cardBorder}` }}
+              style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}` }}
             >
               <div className="flex items-center gap-3">
                 <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#f59e0b,#f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>
@@ -767,6 +764,9 @@ export default function LoginPage() {
               exit={{ opacity: 0, scale: 0.95 }}
               style={{ background: isDark ? '#0d1117' : '#fff', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 20, padding: '2rem', maxWidth: 400, width: '90%' }}
             >
+              <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, padding: '0.6rem 1rem', marginBottom: 20, textAlign: 'center', color: '#22c55e', fontSize: '0.82rem', fontWeight: 600, lineHeight: 1.5 }}>
+                ✅ Fase di login superata — ora cambia password per sicurezza
+              </div>
               <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 12 }}>🔑</div>
               <h3 style={{ color: 'var(--text-primary, #f1f5f9)', fontWeight: 700, fontSize: '1.1rem', marginBottom: 6, textAlign: 'center' }}>
                 Imposta la tua password

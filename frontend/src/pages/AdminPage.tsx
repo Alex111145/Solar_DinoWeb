@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, LogOut, Users, BarChart2, Star,
   Check, X, TrendingUp, Building2, Euro,
-  FolderOpen, FileDown, ChevronRight, ChevronDown, MessageSquare, Gift,
+  FolderOpen, FileDown, ChevronRight, ChevronDown, MessageSquare,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -318,7 +318,6 @@ export default function AdminPage() {
   const [adminReplyLoading, setAdminReplyLoading] = useState(false)
   const [adminTicketSubTab, setAdminTicketSubTab] = useState<'aperte' | 'chiuse'>('aperte')
 
-  const [bonusRequests, setBonusRequests] = useState<{id:number;company_name:string;company_email:string;vat_number:string;status:string;ip:string;ip_status:'ok'|'warning';created_at:string;credits_current:number;company_id:number;duplicate_company_id:number|null;duplicate_company_name:string|null}[]>([])
 
   // Billing filters
   const [billingFilterCompany, setBillingFilterCompany] = useState('')
@@ -371,9 +370,6 @@ export default function AdminPage() {
         setTickets(arr)
         setPendingTickets(arr.filter((t: AdminTicket) => t.status === 'in_elaborazione').length)
       }
-    }).catch(() => {})
-    apiFetch('/admin/welcome-bonus-requests').then((r) => r.ok ? r.json() : null).then((d) => {
-      if (d) setBonusRequests(Array.isArray(d) ? d : [])
     }).catch(() => {})
   }
 
@@ -630,7 +626,6 @@ export default function AdminPage() {
               { key: 'reviews', label: 'Recensioni', icon: <Star size={14} />, badge: pendingReviews },
               { key: 'tickets', label: 'Segnalazioni', icon: <MessageSquare size={14} />, badge: pendingTickets },
               { key: 'uploads', label: 'Dati caricati', icon: <FolderOpen size={14} /> },
-              { key: 'bonus', label: 'Bonus Benvenuto', icon: <Gift size={14} /> },
             ].map((t) => (
               <button
                 key={t.key}
@@ -1430,110 +1425,6 @@ export default function AdminPage() {
                 </div>
                 )
               })()}
-            </motion.div>
-          )}
-          {tab === 'bonus' && (
-            <motion.div
-              key="bonus"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.25 }}
-              className="card mt-4"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
-                  Richieste Bonus Benvenuto ({bonusRequests.filter(r => r.status === 'pending').length} in attesa)
-                </h3>
-              </div>
-
-              {bonusRequests.length === 0 ? (
-                <div style={{ textAlign: 'center', color: '#475569', fontSize: '0.875rem', padding: '2rem 0' }}>
-                  Nessuna richiesta bonus
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {bonusRequests.map((r) => {
-                    const ipColor = r.ip_status === 'warning' ? '#eab308' : '#64748b'
-                    return (
-                      <div key={r.id} className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.025)', border: `1px solid ${r.ip_status === 'warning' ? 'rgba(234,179,8,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
-                        <div className="flex items-start justify-between gap-3 flex-wrap">
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: r.ip_status === 'warning' ? '#eab308' : '#f1f5f9' }}>{r.company_name}</div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>{r.company_email}</div>
-                            {r.vat_number && <div style={{ fontSize: '0.72rem', color: '#64748b' }}>P.IVA: {r.vat_number}</div>}
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: ipColor, flexShrink: 0, display: 'inline-block' }} />
-                              <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: ipColor }}>{r.ip}</span>
-                              {r.ip_status === 'warning' && (
-                                <span style={{ fontSize: '0.68rem', color: '#eab308', fontWeight: 600 }}>⚠ IP già presente</span>
-                              )}
-                              {r.ip_status === 'warning' && r.duplicate_company_id && (
-                                <button
-                                  className="btn-ghost"
-                                  style={{ fontSize: '0.65rem', padding: '0.1rem 0.45rem', color: '#eab308', borderColor: 'rgba(234,179,8,0.3)' }}
-                                  onClick={() => {
-                                    const dupComp = companies.find(c => c.id === String(r.duplicate_company_id))
-                                    if (dupComp) setSelectedCompany(dupComp)
-                                  }}
-                                >
-                                  Vedi: {r.duplicate_company_name}
-                                </button>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '0.68rem', color: '#475569', marginTop: 3 }}>
-                              {new Date(r.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            {r.status === 'pending' ? (
-                              <div className="flex gap-2">
-                                <button
-                                  className="btn-ghost flex items-center gap-1"
-                                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#22c55e', borderColor: 'rgba(34,197,94,0.3)' }}
-                                  onClick={async () => {
-                                    const res = await apiFetch(`/admin/welcome-bonus-requests/${r.id}/approve`, { method: 'POST' })
-                                    if (res.ok) {
-                                      setBonusRequests((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'approved' } : x))
-                                      setMsg('+1 credito bonus approvato')
-                                      setTimeout(() => setMsg(''), 3000)
-                                    }
-                                  }}
-                                >
-                                  <Check size={12} /> Approva
-                                </button>
-                                <button
-                                  className="btn-ghost flex items-center gap-1"
-                                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
-                                  onClick={async () => {
-                                    const res = await apiFetch(`/admin/welcome-bonus-requests/${r.id}/reject`, { method: 'POST' })
-                                    if (res.ok) {
-                                      setBonusRequests((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'rejected' } : x))
-                                      setMsg('Richiesta rifiutata')
-                                      setTimeout(() => setMsg(''), 3000)
-                                    }
-                                  }}
-                                >
-                                  <X size={12} /> Rifiuta
-                                </button>
-                              </div>
-                            ) : (
-                              <span style={{
-                                fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: 6,
-                                ...(r.status === 'approved'
-                                  ? { background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }
-                                  : { background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }),
-                              }}>
-                                {r.status === 'approved' ? 'Approvato' : 'Rifiutato'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </motion.div>
           )}
         </AnimatePresence>

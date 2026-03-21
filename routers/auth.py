@@ -1026,6 +1026,34 @@ def get_notifications(
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
+    # ── Avviso scadenza elaborazioni extra (7 giorni prima del rinnovo) ──────
+    if current.subscription_active and current.subscription_end_date is not None:
+        from datetime import timezone as _tz, timedelta as _td
+        now = datetime.now(_tz.utc)
+        end = current.subscription_end_date
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=_tz.utc)
+        days_left = (end - now).days
+        if 0 <= days_left <= 7:
+            cutoff = end - _td(days=8)
+            already_sent = db.query(models.Notification).filter(
+                models.Notification.company_id == current.id,
+                models.Notification.title == "Elaborazioni in scadenza",
+                models.Notification.created_at >= cutoff,
+            ).first()
+            if not already_sent:
+                db.add(models.Notification(
+                    company_id=current.id,
+                    title="Elaborazioni in scadenza",
+                    message=(
+                        f"Attenzione: tra {days_left} giorn{'o' if days_left == 1 else 'i'} "
+                        f"({end.strftime('%d/%m/%Y')}) avverrà il rinnovo dell'abbonamento e "
+                        "le elaborazioni extra acquistate andranno perse. "
+                        "Utilizzale prima della scadenza."
+                    ),
+                ))
+                db.commit()
+    # ────────────────────────────────────────────────────────────────────────
     notifs = (
         db.query(models.Notification)
         .filter(models.Notification.company_id == current.id)

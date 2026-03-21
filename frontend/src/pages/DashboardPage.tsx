@@ -8,6 +8,32 @@ import {
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
+// ── One-time credit pricing (mirrors backend CREDIT_TIERS) ────────────────
+const CREDIT_TIERS = [
+  { min: 50, price: 39.99, discount: 47 },
+  { min: 20, price: 49.99, discount: 33 },
+  { min: 10, price: 54.99, discount: 27 },
+  { min: 5,  price: 59.99, discount: 20 },
+  { min: 2,  price: 64.99, discount: 13 },
+  { min: 1,  price: 74.99, discount: 0  },
+]
+// Flat loyalty rates for active subscribers (mirrors backend CREDIT_PRICE_BY_PLAN)
+const CREDIT_PRICE_BY_PLAN: Record<string, number> = {
+  starter: 13.99,
+  medium:  10.99,
+}
+function getCreditUnitPrice(qty: number, plan: string | null = null): { price: number; discount: number; isFlat: boolean } {
+  if (plan && CREDIT_PRICE_BY_PLAN[plan] !== undefined) {
+    const price = CREDIT_PRICE_BY_PLAN[plan]
+    const discount = Math.round((1 - price / 74.99) * 100)
+    return { price, discount, isFlat: true }
+  }
+  for (const t of CREDIT_TIERS) {
+    if (qty >= t.min) return { price: t.price, discount: t.discount, isFlat: false }
+  }
+  return { price: 74.99, discount: 0, isFlat: false }
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 interface Job {
   id: string
@@ -1071,13 +1097,6 @@ export default function DashboardPage() {
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
   const [subscriptionCancelled, setSubscriptionCancelled] = useState(false)
-  const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(true) // default true until verified
-  const [welcomeBonusRequested, setWelcomeBonusRequested] = useState(true) // default true per nascondere fino a verifica
-  const [trialAlreadyRequested, setTrialAlreadyRequested] = useState(true) // default true per nascondere fino a verifica
-  const [trialMessage, setTrialMessage] = useState('')
-  const [trialLoading, setTrialLoading] = useState(false)
-  const [trialSent, setTrialSent] = useState(false)
-  const [showTrialModal, setShowTrialModal] = useState(false)
 
   // Team modal (B)
   const [showTeamModal, setShowTeamModal] = useState(false)
@@ -1204,8 +1223,6 @@ export default function DashboardPage() {
         if (d.subscription_plan !== undefined) setSubscriptionPlan(d.subscription_plan ?? null)
         if (d.subscription_end_date !== undefined) setSubscriptionEndDate(d.subscription_end_date ?? null)
         if (d.subscription_cancelled !== undefined) setSubscriptionCancelled(!!d.subscription_cancelled)
-        if (d.welcome_bonus_used !== undefined) setWelcomeBonusUsed(!!d.welcome_bonus_used)
-        if (d.welcome_bonus_requested !== undefined) setWelcomeBonusRequested(!!d.welcome_bonus_requested)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
         localStorage.setItem('credits', String(c))
@@ -1234,10 +1251,6 @@ export default function DashboardPage() {
       .then((d) => { if (d) setFhStatus(d) })
       .catch(() => {})
 
-    apiFetch('/missions/trial-status')
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setTrialAlreadyRequested(d.already_requested === true) })
-      .catch(() => {})
   }
 
   useEffect(() => {
@@ -1257,23 +1270,6 @@ export default function DashboardPage() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showBellDropdown])
-
-  async function sendTrialRequest() {
-    setTrialLoading(true)
-    try {
-      const res = await apiFetch('/missions/request-trial', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trialMessage }),
-      })
-      if (res.ok) {
-        setTrialSent(true)
-        setTrialAlreadyRequested(true)
-        setShowTrialModal(false)
-      }
-    } catch { /* noop */ }
-    setTrialLoading(false)
-  }
 
   // ── Job polling ────────────────────────────────────────────────────────
   const startPolling = useCallback((jobId: string) => {
@@ -1345,6 +1341,30 @@ export default function DashboardPage() {
   // ── Payments ───────────────────────────────────────────────────────────
   const [subscribeLoading, setSubscribeLoading] = useState<Record<string, boolean>>({})
   const [subscribeError, setSubscribeError] = useState('')
+  const [packQty, setPackQty] = useState(1)
+  const [buyCreditsLoading, setBuyCreditsLoading] = useState(false)
+  const [buyCreditsError, setBuyCreditsError] = useState('')
+
+  async function buyCredits() {
+    setBuyCreditsLoading(true)
+    setBuyCreditsError('')
+    try {
+      const res = await apiFetch('/payments/buy-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: packQty }),
+      })
+      const d = await res.json()
+      if (d.checkout_url) {
+        window.location.href = d.checkout_url
+      } else {
+        setBuyCreditsError(d.detail || 'Errore durante il pagamento. Riprova.')
+      }
+    } catch {
+      setBuyCreditsError('Errore di rete. Controlla la connessione e riprova.')
+    }
+    setBuyCreditsLoading(false)
+  }
 
   async function subscribePlan(planKey: string) {
     setSubscribeLoading((prev) => ({ ...prev, [planKey]: true }))
@@ -1716,16 +1736,12 @@ export default function DashboardPage() {
           <motion.div
             variants={cardAnim}
             className="flex items-center gap-3 rounded-2xl p-4 mb-6"
-            style={!trialAlreadyRequested && !trialSent
-              ? { background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }
-              : { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}
           >
             <AlertTriangle size={18} style={{ flexShrink: 0 }} />
             <span style={{ fontSize: '0.875rem' }}>
               <strong>Crediti esauriti.</strong>{' '}
-              {!trialAlreadyRequested && !trialSent
-                ? 'Invia la tua richiesta di prova gratuita per iniziare.'
-                : 'Acquista un pacchetto per continuare le elaborazioni.'}
+              Acquista un pacchetto per continuare le elaborazioni.
             </span>
           </motion.div>
         )}
@@ -1741,56 +1757,6 @@ export default function DashboardPage() {
             Carica due ortomosaici per avviare l'analisi AI.
           </p>
         </motion.div>
-
-        {/* Bonus di benvenuto — visibile ai nuovi utenti senza abbonamento */}
-        {!subscriptionActive && !welcomeBonusRequested && !welcomeBonusUsed && !trialSent && (
-          <motion.div
-            variants={cardAnim}
-            className="card mb-6"
-            style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.07), rgba(249,115,22,0.04))', border: '1.5px solid rgba(245,158,11,0.28)' }}
-          >
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg,#f59e0b,#f97316)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                  🎁
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Bonus benvenuto</div>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.975rem', marginBottom: 3 }}>
-                    Richiedi il tuo bonus di benvenuto
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    Ottieni 1 credito gratuito per provare il servizio. La richiesta verrà valutata dall'amministratore.
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={async () => {
-                  try {
-                    const res = await apiFetch('/auth/request-welcome-bonus', { method: 'POST' })
-                    if (res.ok) {
-                      setWelcomeBonusRequested(true)
-                      setTrialSent(true)
-                    }
-                  } catch { /* noop */ }
-                }}
-                style={{ flexShrink: 0, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.65rem 1.5rem', color: '#000', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
-              >
-                Richiedi il tuo bonus di benvenuto
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {trialSent && (
-          <motion.div
-            variants={cardAnim}
-            className="rounded-2xl p-4 mb-6"
-            style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', fontSize: '0.875rem' }}
-          >
-            ✅ Richiesta inviata! L'amministratore valuterà e aggiungerà il credito.
-          </motion.div>
-        )}
 
         {/* Metodo selector */}
         <motion.div variants={cardAnim} className="card mb-6">
@@ -2149,10 +2115,9 @@ export default function DashboardPage() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {([
-              { key: 'starter',          label: 'Starter',           credits: 10,   price: 99.99,   originalPrice: null,   popular: false, color: 'rgba(255,255,255,0.07)', btnStyle: { background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }, period: '/mese' },
-              { key: 'medium',           label: 'Medium',            credits: 20,   price: 169.99,  originalPrice: 199.99, popular: true,  color: 'rgba(245,158,11,0.35)',  btnStyle: { background: 'linear-gradient(90deg,#f59e0b,#f97316)', color: '#000' }, period: '/mese' },
-              { key: 'unlimited',        label: 'Unlimited',         credits: null, price: 299.99,  originalPrice: 400,    popular: false, color: 'rgba(34,197,94,0.35)',   btnStyle: { background: '#22c55e', color: '#000' }, period: '/mese' },
-              { key: 'unlimited_annual', label: 'Annual', credits: null, price: 2400.00, originalPrice: 3599.88, popular: false, color: 'rgba(139,92,246,0.4)',  btnStyle: { background: 'linear-gradient(90deg,#8b5cf6,#7c3aed)', color: '#fff' }, period: '/anno' },
+              { key: 'starter',   label: 'Starter',   credits: 10,   price: 149.99, originalPrice: null,   popular: false, color: 'rgba(255,255,255,0.07)', btnStyle: { background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }, period: '/mese' },
+              { key: 'medium',    label: 'Medium',    credits: 20,   price: 249.99, originalPrice: 299.00, popular: true,  color: 'rgba(245,158,11,0.35)',  btnStyle: { background: 'linear-gradient(90deg,#f59e0b,#f97316)', color: '#000' }, period: '/mese' },
+              { key: 'unlimited', label: 'Unlimited', credits: null, price: 449.99, originalPrice: 600.00, popular: false, color: 'rgba(34,197,94,0.35)',   btnStyle: { background: '#22c55e', color: '#000' }, period: '/mese' },
             ] as { key: string; label: string; credits: number | null; price: number; originalPrice: number | null; popular: boolean; color: string; btnStyle: React.CSSProperties; period: string }[]).map((plan) => {
               const discount = plan.originalPrice ? Math.round((1 - plan.price / plan.originalPrice) * 100) : 0
               const savings  = plan.originalPrice ? (plan.originalPrice - plan.price).toFixed(2) : null
@@ -2161,7 +2126,7 @@ export default function DashboardPage() {
               return (
                 <div
                   key={plan.key}
-                  className={`rounded-xl flex flex-col${plan.key === 'unlimited_annual' ? ' sm:col-span-3' : ''}`}
+                  className="rounded-xl flex flex-col"
                   style={{ border: `1px solid ${plan.color}`, background: 'rgba(255,255,255,0.02)', position: 'relative', overflow: 'hidden' }}
                 >
                   <div style={{ background: plan.popular ? 'linear-gradient(90deg,#f59e0b,#f97316)' : 'transparent', textAlign: 'center', padding: '4px 0', fontSize: '0.7rem', fontWeight: 700, color: '#000', letterSpacing: '0.05em', visibility: plan.popular ? 'visible' : 'hidden' }}>
@@ -2176,9 +2141,9 @@ export default function DashboardPage() {
                       )}
                     </div>
                     {/* elaborazioni */}
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: plan.key === 'unlimited_annual' ? '2.8rem' : '2rem', lineHeight: 1, ...(plan.key === 'unlimited_annual' ? { textAlign: 'center' } : {}) }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '2rem', lineHeight: 1 }}>
                       {plan.credits != null ? plan.credits : '∞'}
-                      <span style={{ fontSize: plan.key === 'unlimited_annual' ? '1.05rem' : '0.82rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>elaborazioni{plan.period}</span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>elaborazioni{plan.period}</span>
                     </div>
                     {/* prezzo per elaborazione */}
                     <div className="flex items-center justify-between" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', visibility: perElab ? 'visible' : 'hidden' }}>
@@ -2186,11 +2151,11 @@ export default function DashboardPage() {
                       <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>€{perElab}</span>
                     </div>
                     {/* banner risparmio */}
-                    <div style={{ background: 'rgba(245,158,11,0.1)', border: `1px solid ${savings ? 'rgba(245,158,11,0.2)' : 'transparent'}`, borderRadius: 8, padding: '5px 10px', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, visibility: savings ? 'visible' : 'hidden', ...(plan.key === 'unlimited_annual' ? { textAlign: 'center' } : {}) }}>
+                    <div style={{ background: 'rgba(245,158,11,0.1)', border: `1px solid ${savings ? 'rgba(245,158,11,0.2)' : 'transparent'}`, borderRadius: 8, padding: '5px 10px', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 600, visibility: savings ? 'visible' : 'hidden' }}>
                       🔥 Risparmi €{savings} rispetto al prezzo pieno
                     </div>
                     {/* prezzo */}
-                    <div className="flex items-baseline gap-2" style={{ marginTop: 'auto', paddingTop: 6, ...(plan.key === 'unlimited_annual' ? { justifyContent: 'center' } : {}) }}>
+                    <div className="flex items-baseline gap-2" style={{ marginTop: 'auto', paddingTop: 6 }}>
                       {plan.originalPrice && (
                         <span style={{ fontSize: '0.88rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>€{plan.originalPrice}{plan.period}</span>
                       )}
@@ -2213,6 +2178,122 @@ export default function DashboardPage() {
             })}
           </div>
         </motion.div>}
+
+        {/* ── Crediti extra (pack una-tantum) ──────────────────────────────
+            Mostrato quando:
+            • abbonamento attivo ma crediti esauriti (sezione principale)
+            • oppure sotto ai piani mensili quando non c'è abbonamento
+        ─────────────────────────────────────────────────────────────── */}
+        {subscriptionActive && credits <= 0 ? (() => {
+          const activePlan = subscriptionActive ? subscriptionPlan : null
+          const { price: unitPrice, isFlat } = getCreditUnitPrice(packQty, activePlan)
+          const total = (unitPrice * packQty)
+          const nextTier = isFlat ? null : CREDIT_TIERS.slice().reverse().find(t => t.min > packQty)
+
+          return (
+            <motion.div variants={cardAnim} className="card mb-6">
+              <div className="flex items-center gap-3 mb-1">
+                <div style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
+                  <Zap size={17} />
+                </div>
+                <div>
+                  <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1rem', margin: 0 }}>
+                    {subscriptionActive ? 'Crediti esauriti — Acquista elaborazioni extra' : 'Acquista elaborazioni una-tantum'}
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
+                    Scadono al prossimo rinnovo abbonamento
+                  </p>
+                </div>
+              </div>
+
+              {subscriptionActive && credits <= 0 && (
+                <div className="rounded-xl p-3 mb-4 mt-3" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', fontSize: '0.82rem' }}>
+                  <strong>I crediti del tuo abbonamento sono esauriti.</strong> Acquista elaborazioni extra — scadono al prossimo rinnovo.
+                </div>
+              )}
+
+              {/* ── Calcolatore quantità ── */}
+              <div className="flex flex-col lg:flex-row gap-6 mt-4">
+
+                {/* Colonna sinistra: selettore + prezzo */}
+                <div className="flex flex-col gap-4" style={{ flex: 1 }}>
+                  {/* Selettore +/- */}
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'center' }}>
+                      Numero di elaborazioni
+                    </div>
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex items-center justify-center gap-3">
+                        <button
+                          onClick={() => setPackQty(q => Math.max(1, q - 1))}
+                          style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', fontSize: '1.3rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        >−</button>
+                        <input
+                          type="number"
+                          min={1} max={500}
+                          value={packQty}
+                          onChange={e => setPackQty(Math.max(1, Math.min(500, parseInt(e.target.value) || 1)))}
+                          style={{ width: 80, textAlign: 'center', fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, padding: '0.45rem 0', outline: 'none' }}
+                        />
+                        <button
+                          onClick={() => setPackQty(q => Math.min(500, q + 1))}
+                          style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', fontSize: '1.3rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        >+</button>
+                      </div>
+                      {/* Quick-picks */}
+                      <div className="flex gap-1.5 flex-wrap justify-center">
+                        {[5, 10, 20, 50].map(n => (
+                          <button
+                            key={n}
+                            onClick={() => setPackQty(n)}
+                            style={{ padding: '0.3rem 0.7rem', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', background: packQty === n ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${packQty === n ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.1)'}`, color: packQty === n ? '#f59e0b' : 'var(--text-muted)' }}
+                          >{n}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Prezzo dinamico */}
+                  <div className="rounded-xl p-4" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)', textAlign: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 2 }}>
+                        €{unitPrice.toFixed(2)}/elab × {packQty}
+                      </div>
+                      <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-primary)', lineHeight: 1 }}>
+                        €{total.toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* hint prossimo scaglione */}
+                    {nextTier && (
+                      <div style={{ fontSize: '0.72rem', color: '#f59e0b', marginTop: 8 }}>
+                        💡 Aggiungi {nextTier.min - packQty} elaborazion{nextTier.min - packQty === 1 ? 'e' : 'i'} per arrivare a {nextTier.min} e pagare €{nextTier.price.toFixed(2)}/cad (-{nextTier.discount}%)
+                      </div>
+                    )}
+                  </div>
+
+                  {buyCreditsError && (
+                    <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', fontSize: '0.82rem' }}>
+                      {buyCreditsError}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={buyCredits}
+                    disabled={buyCreditsLoading}
+                    className="btn-amber w-full"
+                    style={{ padding: '0.85rem', fontSize: '0.95rem', opacity: buyCreditsLoading ? 0.7 : 1 }}
+                  >
+                    {buyCreditsLoading
+                      ? 'Reindirizzamento...'
+                      : `Acquista ${packQty} elaborazion${packQty === 1 ? 'e' : 'i'} — €${total.toFixed(2)}`}
+                  </button>
+                </div>
+
+              </div>
+            </motion.div>
+          )
+        })() : null}
 
         {/* Form recensione — sparisce se l'utente ha già recensito */}
         {!myReview && (
@@ -2656,18 +2737,6 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* Danger zone — solo manager */}
-              {teamSlaves.length > 0 && (
-                <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(239,68,68,0.2)', paddingTop: '1rem' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#ef4444', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Zona pericolosa</div>
-                  <button
-                    onClick={() => setShowDeleteTeamModal(true)}
-                    style={{ width: '100%', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', padding: '0.55rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                  >
-                    <Trash2 size={13} /> Elimina tutti gli account del team
-                  </button>
-                </div>
-              )}
             </motion.div>
           </div>
         )}
@@ -2731,50 +2800,6 @@ export default function DashboardPage() {
                   onClick={deleteTeamFromMain}
                 >
                   Elimina definitivamente
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal richiesta prova gratuita */}
-      <AnimatePresence>
-        {showTrialModal && (
-          <div className="modal-overlay" onClick={() => setShowTrialModal(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: 'var(--bg)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 20, padding: '2rem', maxWidth: 440, width: '90%' }}
-            >
-              <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.15rem', marginBottom: 8 }}>
-                Richiedi una prova gratuita
-              </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: 20 }}>
-                La richiesta verrà inviata all'amministratore con i dati della tua azienda. Puoi aggiungere un messaggio opzionale.
-              </p>
-              <textarea
-                placeholder="Messaggio opzionale (es. settore, numero di pannelli da analizzare...)"
-                value={trialMessage}
-                onChange={(e) => setTrialMessage(e.target.value)}
-                rows={4}
-                style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '0.75rem', color: 'var(--text-primary)', fontSize: '0.875rem', resize: 'vertical', boxSizing: 'border-box' }}
-              />
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={() => setShowTrialModal(false)}
-                  style={{ flex: 1, background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: '0.7rem', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
-                >
-                  Annulla
-                </button>
-                <button
-                  onClick={sendTrialRequest}
-                  disabled={trialLoading}
-                  style={{ flex: 2, background: 'linear-gradient(135deg,#f59e0b,#f97316)', border: 'none', borderRadius: 12, padding: '0.7rem', color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}
-                >
-                  {trialLoading ? 'Invio...' : 'Invia richiesta'}
                 </button>
               </div>
             </motion.div>

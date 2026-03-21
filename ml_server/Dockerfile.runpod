@@ -4,14 +4,15 @@
 #     -t ale397/solardino-ml:latest \
 #     -f ml_server/Dockerfile.runpod . --push
 
-FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-dnn8-devel
+FROM runpod/pytorch:1.0.3-cu1290-torch260-ubuntu2204
 
-# System deps for GDAL / OpenCV / compilation
+# System deps for GDAL / OpenCV / compilation + CUDA devel headers
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgdal-dev gdal-bin \
         libgl1-mesa-glx libglib2.0-0 \
         ninja-build \
         gcc g++ \
+        cuda-cudart-dev-12-9 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -22,8 +23,8 @@ COPY . .
 # Install Python dependencies (torch already in base image)
 RUN pip install --no-cache-dir -r ml_server/requirements_runpod.txt
 
-# Install detectron2 from local source
-RUN pip install --no-cache-dir -e ./core/libs/detectron2
+# Install detectron2 from local source (--no-build-isolation uses system torch)
+RUN pip install --no-cache-dir --no-build-isolation -e ./core/libs/detectron2
 
 # Build MultiScaleDeformableAttention CUDA extension (needed by MaskDINO)
 RUN cd core/libs/maskdino/modeling/pixel_decoder/ops \

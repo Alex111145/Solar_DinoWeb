@@ -25,31 +25,60 @@ SUBSCRIPTION_PLANS = {
         "credits":   10,
         "price_id":  os.getenv("STRIPE_PRICE_STARTER_SUB", ""),
         "label":     "Starter",
-        "price_eur": 99.99,
+        "price_eur": 149.99,
     },
     "medium": {
         "credits":   20,
         "price_id":  os.getenv("STRIPE_PRICE_MEDIUM_SUB", ""),
         "label":     "Medium",
-        "price_eur": 169.99,
+        "price_eur": 249.99,
     },
     "unlimited": {
         "credits":   None,
         "price_id":  os.getenv("STRIPE_PRICE_UNLIMITED_SUB", ""),
         "label":     "Unlimited",
-        "price_eur": 299.99,
-    },
-    "unlimited_annual": {
-        "credits":   None,
-        "price_id":  os.getenv("STRIPE_PRICE_UNLIMITED_ANNUAL_SUB", ""),
-        "label":     "Annual",
-        "price_eur": 2400.00,
+        "price_eur": 449.99,
     },
 }
 
 
+# ── One-time credit pricing tiers ──────────────────────────────────────────
+# (min_qty, price_per_credit_eur)  — checked from largest to smallest
+CREDIT_TIERS: list[tuple[int, float]] = [
+    (50, 39.99),
+    (20, 49.99),
+    (10, 54.99),
+    (5,  59.99),
+    (2,  64.99),
+    (1,  74.99),
+]
+
+# Flat per-credit price for active subscribers (cheaper than regular tiers)
+CREDIT_PRICE_BY_PLAN: dict[str, float] = {
+    "starter": 13.99,
+    "medium":  10.99,
+}
+
+def credit_unit_price(qty: int, subscription_plan: str | None = None) -> float:
+    """Return the per-credit price.
+
+    Active Starter/Medium subscribers get a flat loyalty rate.
+    Everyone else pays tiered volume pricing.
+    """
+    if subscription_plan in CREDIT_PRICE_BY_PLAN:
+        return CREDIT_PRICE_BY_PLAN[subscription_plan]
+    for min_qty, price in CREDIT_TIERS:
+        if qty >= min_qty:
+            return price
+    return 74.99
+
+
 class CheckoutBody(BaseModel):
     package: str  # starter | medium | unlimited
+
+
+class BuyCreditsBody(BaseModel):
+    quantity: int
 
 
 @router.post("/webhook")
@@ -260,3 +289,57 @@ def cancel_subscription(
         "message": "Abbonamento cancellato. Non verrà rinnovato.",
         "end_date": end_date_str,
     }
+
+
+# ---------------------------------------------------------------------------
+# One-time credit pack checkout
+# ---------------------------------------------------------------------------
+
+@router.post("/buy-credits")
+def buy_credits_checkout(
+    body: BuyCreditsBody,
+    current: models.Company = Depends(auth_utils.get_current_company),
+    db: Session = Depends(get_db),
+):
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Pagamenti non ancora configurati.")
+
+    qty = max(1, min(body.quantity, 500))
+    active_plan = current.subscription_plan if current.subscription_active else None
+    unit_price = credit_unit_price(qty, subscription_plan=active_plan)
+    unit_cents = round(unit_price * 100)
+
+    if not current.stripe_customer_id:
+        customer = stripe.Customer.create(email=current.email, name=current.name)
+        current.stripe_customer_id = customer.id
+        db.commit()
+
+    try:
+        session = stripe.checkout.Session.create(
+            customer=current.stripe_customer_id,
+            automatic_payment_methods={"enabled": True, "allow_redirects": "always"},
+            line_items=[{
+                "price_data": {
+                    "currency": "eur",
+                    "unit_amount": unit_cents,
+                    "product_data": {
+                        "name": f"SolarDino — {qty} elaborazion{'e' if qty == 1 else 'i'}",
+                        "description": f"Crediti una-tantum · €{unit_price:.2f}/cad · nessuna scadenza",
+                    },
+                },
+                "quantity": qty,
+            }],
+            mode="payment",
+            success_url=f"{FRONTEND_URL}/dashboard?payment=success",
+            cancel_url=f"{FRONTEND_URL}/dashboard?payment=cancelled",
+            metadata={
+                "company_id": str(current.id),
+                "type":       "credits",
+                "credits":    str(qty),
+                "package":    f"pack_{qty}",
+            },
+            locale="it",
+        )
+        return {"checkout_url": session.url}
+    except stripe.error.StripeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
