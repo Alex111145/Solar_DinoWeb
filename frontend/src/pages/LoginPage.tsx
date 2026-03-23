@@ -273,8 +273,9 @@ export default function LoginPage() {
           variants={fadeUp}
           style={{ fontSize: 'clamp(1rem, 2vw, 1.2rem)', color: t.textSec, lineHeight: 1.75, maxWidth: 620, marginBottom: '2.5rem' }}
         >
-          Carica i tuoi ortomosaici o connetti DJI FlightHub 2. L'AI individua hotspot, pannelli guasti
-          calcola l' efficienza, calcola i MW persi e genera report geolocalizzati in KML, GeoJSON e CSV.
+          Carica i tuoi ortomosaici o connetti DJI FlightHub 2. L'AI individua hotspot, pannelli guasti,
+          calcola la perdita energetica in <strong style={{ color: '#f59e0b' }}>kWh/giorno</strong> e
+          la <strong style={{ color: '#f59e0b' }}>perdita economica annua</strong>, e genera report geolocalizzati in KML, GeoJSON e CSV.
         </motion.p>
 
         <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-3">
@@ -297,6 +298,8 @@ export default function LoginPage() {
         <motion.div variants={fadeUp} className="flex flex-wrap justify-center gap-8 mt-14">
           {[
             { value: '< 60min', label: 'Tempo analisi' },
+            { value: 'kWh/giorno', label: 'Perdita energetica' },
+            { value: '€/anno', label: 'Perdita economica' },
             { value: 'KML · CSV · JSON', label: 'Formati export' },
             { value: 'GPS', label: 'Geolocalizzato' },
           ].map((s) => (
@@ -496,7 +499,7 @@ export default function LoginPage() {
             { icon: <MapPin size={20} />, title: 'Geolocalizzazione GPS', desc: 'Ogni anomalia rilevata è georeferenziata con coordinate GPS reali, pronta per essere visualizzata su qualsiasi GIS o Google Earth.' },
             { icon: <FileDown size={20} />, title: 'Export multi-formato', desc: 'Scarica i risultati in KML, GeoJSON, CSV e JSON. Compatibili con QGIS, ArcGIS, Google Earth e i principali strumenti GIS.' },
             { icon: <Clock size={20} />, title: 'Analisi in < 60 minuti', desc: 'Dall\'upload alla generazione del report completo in meno di un minuto. Nessuna attesa, nessun server dedicato da gestire.' },
-            { icon: <BarChart2 size={20} />, title: 'Calcolo perdita potenza', desc: 'Inserendo efficienza nominale e coefficiente di temperatura, il report include la stima della perdita di potenza e l\'impatto economico annuo.' },
+            { icon: <BarChart2 size={20} />, title: 'Perdita energetica ed economica', desc: 'Il modello calcola la perdita energetica in kWh/giorno per ogni anomalia rilevata e la perdita economica annua stimata in €, in base al prezzo di vendita dell\'energia configurato.' },
             { icon: <Shield size={20} />, title: 'Dati al sicuro', desc: 'I tuoi file sono trattati nel rispetto del GDPR. Puoi richiedere la cancellazione in qualsiasi momento. I dati non sono condivisi con terze parti.' },
           ].map((f, i) => (
             <motion.div
