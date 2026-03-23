@@ -74,6 +74,21 @@ def get_stats(
         .scalar()
     ) or 0
 
+    # Costo GPU ultimo mese = job completati negli ultimi 30 gg
+    jobs_last_month = (
+        db.query(models.Job)
+        .filter(
+            models.Job.status == "completato",
+            models.Job.completed_at.isnot(None),
+            models.Job.completed_at >= last_30_days,
+        )
+        .all()
+    )
+    gpu_cost_month = sum(
+        max((j.completed_at - j.created_at).total_seconds(), 0.0) * RUNPOD_COST_PER_SEC
+        for j in jobs_last_month
+    )
+
     return {
         "active_companies":        total_companies,
         "total_jobs":              total_jobs,
@@ -81,6 +96,7 @@ def get_stats(
         "total_panels_detected":   total_panels,
         "total_revenue_eur":       round(total_revenue, 2),
         "revenue_month_eur":       round(revenue_current_month, 2),
+        "gpu_cost_month_eur":      round(gpu_cost_month, 4),
         "price_per_panel":         PRICE_PER_PANEL,
     }
 

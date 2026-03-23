@@ -14,6 +14,7 @@ interface Stats {
   total_panels_detected?: number
   total_revenue_eur?: number
   revenue_month_eur?: number
+  gpu_cost_month_eur?: number
 }
 
 interface Company {
@@ -121,7 +122,7 @@ interface AdminTicket {
 
 
 // ── Animated counter ───────────────────────────────────────────────────────
-function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
+function AnimatedNumber({ value, prefix = '', suffix = '', decimals = 0 }: { value: number; prefix?: string; suffix?: string; decimals?: number }) {
   const [display, setDisplay] = useState(0)
   const raf = useRef<number | null>(null)
 
@@ -135,15 +136,16 @@ function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; pr
       const elapsed = now - startTime
       const progress = Math.min(elapsed / duration, 1)
       const eased = 1 - Math.pow(1 - progress, 3)
-      setDisplay(Math.round(start + (end - start) * eased))
+      const current = start + (end - start) * eased
+      setDisplay(decimals > 0 ? current : Math.round(current))
       if (progress < 1) raf.current = requestAnimationFrame(step)
     }
 
     raf.current = requestAnimationFrame(step)
     return () => { if (raf.current) cancelAnimationFrame(raf.current) }
-  }, [value])
+  }, [value, decimals])
 
-  return <>{prefix}{display.toLocaleString('it-IT')}{suffix}</>
+  return <>{prefix}{decimals > 0 ? display.toFixed(decimals) : display.toLocaleString('it-IT')}{suffix}</>
 }
 
 // ── Company Detail Modal ───────────────────────────────────────────────────
@@ -540,11 +542,17 @@ export default function AdminPage() {
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
+  const FIXED_MONTHLY_EUR = 1.00 + 7.00 // dominio + render
+  const gpuCostMonth = stats.gpu_cost_month_eur || 0
+  const totalCostMonth = gpuCostMonth + FIXED_MONTHLY_EUR
+
   const statCards = [
     { icon: <Building2 size={18} />, label: 'Aziende attive', value: stats.active_companies || 0, prefix: '' },
     { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
     { icon: <TrendingUp size={18} />, label: 'Fatturato mese corrente', value: stats.revenue_month_eur || 0, prefix: '€' },
     { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
+    { icon: <Zap size={18} />, label: 'Costo GPU ultimo mese', value: gpuCostMonth, prefix: '€', decimals: 4 },
+    { icon: <Euro size={18} />, label: 'Spese totali ultimo mese', value: totalCostMonth, prefix: '€', decimals: 2 },
   ]
 
   return (
@@ -623,7 +631,7 @@ export default function AdminPage() {
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 3 }}>{s.label}</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.03em' }}>
-                  <AnimatedNumber value={s.value} prefix={s.prefix} />
+                  <AnimatedNumber value={s.value} prefix={s.prefix} decimals={(s as any).decimals} />
                 </div>
               </div>
             </motion.div>
