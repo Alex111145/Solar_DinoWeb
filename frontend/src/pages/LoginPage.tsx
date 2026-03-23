@@ -79,6 +79,7 @@ export default function LoginPage() {
   const [forcePwdLoading, setForcePwdLoading] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   const [showRegister, setShowRegister] = useState(false)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
 
   // Consent state
   const [regConsent, setRegConsent] = useState(false)
@@ -143,6 +144,13 @@ export default function LoginPage() {
     fetch('/reviews')
       .then((r) => r.json())
       .then((d) => setReviews(Array.isArray(d) ? d : d.reviews || []))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/presentation-video')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.url) setVideoUrl(d.url) })
       .catch(() => {})
   }, [])
 
@@ -311,6 +319,25 @@ export default function LoginPage() {
         </motion.div>
       </motion.section>
 
+
+      {/* ── Video presentazione ─────────────────────────────────── */}
+      {videoUrl && (
+        <section className="relative z-10 px-6 pb-16" style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55 }}
+            className="text-center mb-6"
+          >
+            <div style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Demo</div>
+            <h2 style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)', fontWeight: 800, color: t.text, letterSpacing: '-0.03em', margin: 0 }}>Guarda SolarDino in azione</h2>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.6 }}
+            style={{ borderRadius: 20, overflow: 'hidden', border: `1px solid ${t.cardBorder}`, boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
+          >
+            <video src={videoUrl} controls playsInline style={{ width: '100%', display: 'block', background: '#000' }} />
+          </motion.div>
+        </section>
+      )}
 
       {/* ── Method panels ───────────────────────────────────────── */}
       <section className="relative z-10 px-6 lg:px-12 pb-20" style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>

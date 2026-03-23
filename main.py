@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 import auth_utils
 import models
+import storage_utils
 from sqlalchemy import text
 from database import Base, SessionLocal, engine, run_migrations
 from routers import admin, auth, flighthub, missions, payments, reviews
@@ -19,10 +20,16 @@ from routers import admin, auth, flighthub, missions, payments, reviews
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Crea tutte le tabelle del database
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"[STARTUP] create_all ignorato (tabelle già esistenti): {e}")
 
     # Migrazione nuove colonne (subscription_cancelled, welcome_bonus_requested, welcome_bonus_requests)
-    run_migrations(engine)
+    try:
+        run_migrations(engine)
+    except Exception as e:
+        print(f"[STARTUP] run_migrations ignorato: {e}")
 
     # Migrazione: aggiungi nuove colonne se non esistono (SQLite non supporta IF NOT EXISTS)
     with engine.connect() as conn:
@@ -154,6 +161,20 @@ def spa_routes():
     return FileResponse("static/app/index.html")
 
 
+
+
+PRESENTATION_VIDEO_PATH = os.getenv("PRESENTATION_VIDEO_PATH", "")
+
+@app.get("/api/presentation-video")
+def get_presentation_video():
+    """Ritorna l'URL firmato del video di presentazione da Supabase."""
+    if not PRESENTATION_VIDEO_PATH:
+        return {"url": None}
+    try:
+        url = storage_utils.get_signed_url(PRESENTATION_VIDEO_PATH, expires_in=86400)
+        return {"url": url}
+    except Exception:
+        return {"url": None}
 
 
 @app.get("/favicon.ico", include_in_schema=False)

@@ -308,6 +308,11 @@ export default function AdminPage() {
     cost_eur: number
   }
   const [gpuCosts, setGpuCosts] = useState<GpuCostItem[]>([])
+  const [supabasePlan, setSupabasePlan] = useState<'free' | 'pro'>('free')
+  const [storageInfo, setStorageInfo] = useState<{ used_mb: number; file_count: number } | null>(null)
+  const [dbInfo, setDbInfo] = useState<{ used_mb: number } | null>(null)
+  const [cleanupLoading, setCleanupLoading] = useState(false)
+  const [cleanupMsg, setCleanupMsg] = useState('')
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
 
@@ -378,6 +383,12 @@ export default function AdminPage() {
     }).catch(() => {})
     apiFetch('/admin/gpu-costs').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setGpuCosts(Array.isArray(d) ? d : [])
+    }).catch(() => {})
+    apiFetch('/admin/supabase-storage').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setStorageInfo(d)
+    }).catch(() => {})
+    apiFetch('/admin/db-size').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setDbInfo(d)
     }).catch(() => {})
     apiFetch('/admin/tickets').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) {
@@ -542,7 +553,7 @@ export default function AdminPage() {
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
-  const FIXED_MONTHLY_EUR = 1.00 + 7.00 // dominio + render
+  const FIXED_MONTHLY_EUR = 1.00 + 7.00 + (supabasePlan === 'pro' ? 23.00 : 0) // dominio + render + supabase
   const gpuCostMonth = stats.gpu_cost_month_eur || 0
   const totalCostMonth = gpuCostMonth + FIXED_MONTHLY_EUR
 
@@ -551,8 +562,11 @@ export default function AdminPage() {
     { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
     { icon: <TrendingUp size={18} />, label: 'Fatturato mese corrente', value: stats.revenue_month_eur || 0, prefix: '€' },
     { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
+  ]
+
+  const costCards = [
     { icon: <Zap size={18} />, label: 'Costo GPU ultimo mese', value: gpuCostMonth, prefix: '€', decimals: 4 },
-    { icon: <Euro size={18} />, label: 'Spese totali ultimo mese', value: totalCostMonth, prefix: '€', decimals: 2 },
+    { icon: <Euro size={18} />, label: 'Spese totali ultimo mese', value: totalCostMonth, prefix: '€', decimals: 2, sub: `GPU €${gpuCostMonth.toFixed(4)} + fissi €${FIXED_MONTHLY_EUR.toFixed(2)}` },
   ]
 
   return (
@@ -613,7 +627,7 @@ export default function AdminPage() {
         </AnimatePresence>
 
         {/* Stats row */}
-        <motion.div variants={cardAnim} className="flex flex-wrap justify-center gap-4 mb-4">
+        <motion.div variants={cardAnim} className="flex flex-wrap justify-center gap-4 mb-3">
           {statCards.map((s, i) => (
             <motion.div
               key={s.label}
@@ -633,6 +647,31 @@ export default function AdminPage() {
                 <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.03em' }}>
                   <AnimatedNumber value={s.value} prefix={s.prefix} decimals={(s as any).decimals} />
                 </div>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        {/* Cost row — wide cards */}
+        <motion.div variants={cardAnim} className="flex gap-4 mb-4" style={{ flexWrap: 'wrap' }}>
+          {costCards.map((s, i) => (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.32 + i * 0.08, duration: 0.5 }}
+              className="card flex items-center gap-5"
+              style={{ flex: '1 1 200px', maxWidth: 260 }}
+            >
+              <div style={{ width: 40, height: 40, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
+                {s.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 2 }}>{s.label}</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.03em' }}>
+                  <AnimatedNumber value={s.value} prefix={s.prefix} decimals={(s as any).decimals} />
+                </div>
+                {(s as any).sub && <div style={{ fontSize: '0.7rem', color: '#475569', marginTop: 2 }}>{(s as any).sub}</div>}
               </div>
             </motion.div>
           ))}
@@ -1472,31 +1511,125 @@ export default function AdminPage() {
                   Durata job × <code style={{ color: '#f59e0b' }}>RUNPOD_COST_PER_SEC</code> (default RTX 3090 ≈ €0.000122/s)
                 </span>
               </div>
-              {/* Spese fisse mensili */}
+              {/* Supabase plan selector + storage + cleanup */}
               {(() => {
-                const fixedCosts = [
+                const SUPABASE_FREE_STORAGE_MB = 1024
+                const SUPABASE_PRO_STORAGE_MB  = 102400
+                const SUPABASE_FREE_DB_MB       = 500
+                const SUPABASE_PRO_DB_MB        = 8192
+                const storageLimitMb  = supabasePlan === 'pro' ? SUPABASE_PRO_STORAGE_MB : SUPABASE_FREE_STORAGE_MB
+                const dbLimitMb       = supabasePlan === 'pro' ? SUPABASE_PRO_DB_MB      : SUPABASE_FREE_DB_MB
+                const usedStorageMb   = storageInfo?.used_mb ?? 0
+                const usedDbMb        = dbInfo?.used_mb ?? 0
+                const storagePct      = Math.min((usedStorageMb / storageLimitMb) * 100, 100)
+                const dbPct           = Math.min((usedDbMb / dbLimitMb) * 100, 100)
+                const fixedCosts      = [
                   { label: 'Dominio', eur: 1.00 },
-                  { label: 'Render', eur: 7.00 },
-                  { label: 'Supabase', eur: 0.00 },
+                  { label: 'Render',  eur: 7.00 },
+                  { label: 'Supabase', eur: supabasePlan === 'pro' ? 23.00 : 0.00 },
                 ]
-                const totalFixed = fixedCosts.reduce((a, c) => a + c.eur, 0)
-                const totalGpu = gpuCosts.reduce((a, r) => a + r.cost_eur, 0)
+
+                function fmtMb(mb: number, limitMb: number) {
+                  if (limitMb >= 1024) return `${mb.toFixed(0)} MB / ${(limitMb/1024).toFixed(0)} GB`
+                  return `${mb.toFixed(0)} / ${limitMb} MB`
+                }
+
+                async function handleCleanup() {
+                  setCleanupLoading(true)
+                  setCleanupMsg('')
+                  try {
+                    // 1. Scarica i file prima di cancellare
+                    const prev = await apiFetch('/admin/cleanup-preview')
+                    if (prev.ok) {
+                      const jobs: Array<{ job_id: string; company_name: string; files: Array<{ name: string; url: string | null }> }> = await prev.json()
+                      const allFiles = jobs.flatMap(j => j.files.filter(f => f.url))
+                      if (allFiles.length > 0) {
+                        if (!confirm(`Verranno scaricati ${allFiles.length} file e poi eliminati da Supabase. Continuare?`)) {
+                          setCleanupLoading(false); return
+                        }
+                        for (const f of allFiles) {
+                          const a = document.createElement('a')
+                          a.href = f.url!
+                          a.download = f.name
+                          a.target = '_blank'
+                          document.body.appendChild(a)
+                          a.click()
+                          document.body.removeChild(a)
+                          await new Promise(r => setTimeout(r, 300))
+                        }
+                      } else {
+                        if (!confirm('Nessun file da scaricare. Eliminare i job più vecchi da Supabase?')) {
+                          setCleanupLoading(false); return
+                        }
+                      }
+                    }
+                    // 2. Elimina
+                    const res = await apiFetch('/admin/cleanup-oldest', { method: 'POST' })
+                    const d   = await res.json()
+                    setCleanupMsg(`Eliminati ${d.deleted_files} file · liberati ${d.freed_mb} MB`)
+                    apiFetch('/admin/supabase-storage').then(r => r.ok ? r.json() : null).then(d => { if (d) setStorageInfo(d) })
+                  } finally {
+                    setCleanupLoading(false)
+                  }
+                }
+
+                function UsageBar({ label, pct, info }: { label: string; pct: number; info: string }) {
+                  return (
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                        <div style={{ fontSize: '0.72rem', color: pct > 80 ? '#ef4444' : '#64748b' }}>{info}</div>
+                      </div>
+                      <div style={{ height: 7, background: 'rgba(255,255,255,0.06)', borderRadius: 999, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: pct > 80 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e', borderRadius: 999, transition: 'width 0.6s ease' }} />
+                      </div>
+                    </div>
+                  )
+                }
+
                 return (
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Spese fisse mensili</div>
-                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                      {fixedCosts.map((c) => (
-                        <div key={c.label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '0.6rem 1rem', minWidth: 110 }}>
-                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>{c.label}</div>
-                          <div style={{ fontWeight: 700, color: c.eur > 0 ? '#f59e0b' : '#475569', fontSize: '0.9rem' }}>
-                            {c.eur > 0 ? `€ ${c.eur.toFixed(2)}/mese` : 'Free'}
-                          </div>
+                  <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {/* Riga 1: Piano + Utilizzo full width */}
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      {/* Piano Supabase */}
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '1rem', flex: '1 1 0' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem', textAlign: 'center' }}>Piano Supabase</div>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', justifyContent: 'center' }}>
+                          {(['free', 'pro'] as const).map((p) => (
+                            <button key={p} onClick={() => setSupabasePlan(p)} style={{ padding: '0.35rem 1.1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: supabasePlan === p ? (p === 'pro' ? 'rgba(139,92,246,0.25)' : 'rgba(245,158,11,0.2)') : 'rgba(255,255,255,0.04)', color: supabasePlan === p ? (p === 'pro' ? '#a78bfa' : '#f59e0b') : '#475569' }}>
+                              {p === 'free' ? 'Free' : 'Pro $25/mese'}
+                            </button>
+                          ))}
                         </div>
-                      ))}
-                      <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '0.6rem 1rem', minWidth: 130 }}>
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>Totale mensile</div>
-                        <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '0.9rem' }}>€ {(totalFixed + totalGpu).toFixed(2)}/mese</div>
-                        <div style={{ fontSize: '0.68rem', color: '#475569', marginTop: 2 }}>fissi + GPU</div>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.6, textAlign: 'center' }}>
+                          {supabasePlan === 'free' ? '500 MB DB · 1 GB storage · 2 GB bandwidth · Free' : '8 GB DB · 100 GB storage · 250 GB bandwidth · ~€23/mese'}
+                        </div>
+                      </div>
+
+                      {/* Utilizzo Storage + DB + cleanup */}
+                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '1rem', flex: '1 1 0' }}>
+                        <UsageBar label="Storage file" pct={storagePct} info={fmtMb(usedStorageMb, storageLimitMb)} />
+                        <UsageBar label="Database"     pct={dbPct}      info={fmtMb(usedDbMb, dbLimitMb)} />
+                        <div style={{ fontSize: '0.68rem', color: '#475569', marginBottom: '0.75rem' }}>{storageInfo?.file_count ?? 0} file job · {storagePct.toFixed(1)}% storage · {dbPct.toFixed(1)}% DB</div>
+                        <button onClick={handleCleanup} disabled={cleanupLoading} style={{ width: '100%', padding: '0.45rem', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, cursor: cleanupLoading ? 'not-allowed' : 'pointer', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', opacity: cleanupLoading ? 0.6 : 1 }}>
+                          {cleanupLoading ? 'In corso...' : '🗑 Scarica + elimina 10 job più vecchi'}
+                        </button>
+                        {cleanupMsg && <div style={{ fontSize: '0.72rem', color: '#22c55e', marginTop: 6 }}>{cleanupMsg}</div>}
+                      </div>
+                    </div>
+
+                    {/* Spese fisse mensili — centrate */}
+                    <div>
+                      <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Spese fisse mensili</div>
+                      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {fixedCosts.map((c) => (
+                          <div key={c.label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '0.6rem 1.2rem', textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>{c.label}</div>
+                            <div style={{ fontWeight: 700, color: c.eur > 0 ? '#f59e0b' : '#475569', fontSize: '0.9rem' }}>
+                              {c.eur > 0 ? `€ ${c.eur.toFixed(2)}/mese` : 'Free'}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1539,9 +1672,8 @@ export default function AdminPage() {
                   {gpuCosts.length > 0 && (
                     <tfoot>
                       <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                        <td colSpan={4} style={{ color: '#94a3b8', fontWeight: 700, paddingTop: 8 }}>Totale</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#f59e0b', paddingTop: 8 }}>
-                          € {gpuCosts.reduce((acc, r) => acc + r.cost_eur, 0).toFixed(4)}
+                        <td colSpan={5} style={{ textAlign: 'center', fontWeight: 700, color: '#f59e0b', paddingTop: 10, fontSize: '1rem' }}>
+                          Totale &nbsp;·&nbsp; € {gpuCosts.reduce((acc, r) => acc + r.cost_eur, 0).toFixed(4)}
                         </td>
                       </tr>
                     </tfoot>

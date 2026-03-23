@@ -68,3 +68,14 @@ def list_files(folder_path: str) -> list[dict]:
         size_bytes = (item.get("metadata") or {}).get("size", 0) or 0
         result.append({"name": name, "size_mb": round(size_bytes / (1024 * 1024), 2)})
     return result
+
+
+def delete_files(paths: list[str]) -> int:
+    """Elimina più file da Supabase Storage. Ritorna il numero di file eliminati."""
+    if not paths:
+        return 0
+    url = f"{SUPABASE_URL}/storage/v1/object/{STORAGE_BUCKET}"
+    resp = httpx.delete(url, json={"prefixes": paths}, headers=_headers("application/json"), timeout=60)
+    if resp.status_code not in (200, 204):
+        return 0
+    return len(paths)

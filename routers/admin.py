@@ -5,7 +5,7 @@ from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 import auth_utils
@@ -1138,3 +1138,128 @@ def gpu_costs(
 
     rows.sort(key=lambda r: r["cost_eur"], reverse=True)
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Supabase Storage info
+# ---------------------------------------------------------------------------
+
+@router.get("/db-size")
+def db_size_info(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Ritorna la dimensione attuale del database PostgreSQL in MB."""
+    try:
+        result = db.execute(
+            text("SELECT pg_database_size(current_database())")
+        ).scalar()
+        used_mb = round((result or 0) / (1024 * 1024), 2)
+    except Exception:
+        used_mb = 0.0
+    return {"used_mb": used_mb}
+
+
+@router.get("/supabase-storage")
+def supabase_storage_info(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Calcola lo spazio usato su Supabase Storage sommando tutti i file dei job."""
+    jobs = db.query(models.Job).filter(models.Job.status == "completato").all()
+    total_mb = 0.0
+    file_count = 0
+    for j in jobs:
+        prefix = j.result_path or f"jobs/{j.id}"
+        try:
+            files = storage_utils.list_files(prefix)
+            for f in files:
+                total_mb += f.get("size_mb", 0) or 0
+                file_count += 1
+        except Exception:
+            pass
+    return {
+        "used_mb":    round(total_mb, 2),
+        "file_count": file_count,
+    }
+
+
+@router.get("/cleanup-preview")
+def cleanup_preview(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Anteprima dei file dei 10 job più vecchi con URL di download firmati."""
+    SKIP_EXTENSIONS = {".pth", ".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    jobs = (
+        db.query(models.Job)
+        .filter(models.Job.status == "completato")
+        .order_by(models.Job.created_at.asc())
+        .limit(10)
+        .all()
+    )
+    company_ids = {j.company_id for j in jobs}
+    companies_map = {c.id: c for c in db.query(models.Company).filter(models.Company.id.in_(company_ids)).all()}
+
+    result = []
+    for j in jobs:
+        prefix = j.result_path or f"jobs/{j.id}"
+        c = companies_map.get(j.company_id)
+        try:
+            files = storage_utils.list_files(prefix)
+        except Exception:
+            files = []
+        files_with_urls = []
+        for f in files:
+            fname = f.get("name", "")
+            ext = os.path.splitext(fname)[1].lower()
+            if ext in SKIP_EXTENSIONS:
+                continue
+            try:
+                url = storage_utils.get_signed_url(f"{prefix}/{fname}", expires_in=3600)
+            except Exception:
+                url = None
+            files_with_urls.append({"name": fname, "size_mb": f.get("size_mb", 0), "url": url})
+        result.append({
+            "job_id":       j.id,
+            "company_name": (c.ragione_sociale or c.name) if c else "N/A",
+            "created_at":   j.created_at.isoformat(),
+            "files":        files_with_urls,
+        })
+    return result
+
+
+@router.post("/cleanup-oldest")
+def cleanup_oldest_jobs(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Elimina i file Supabase dei 10 job più vecchi (esclusi model_best.pth e video)."""
+    SKIP_EXTENSIONS = {".pth", ".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    jobs = (
+        db.query(models.Job)
+        .filter(models.Job.status == "completato")
+        .order_by(models.Job.created_at.asc())
+        .limit(10)
+        .all()
+    )
+    deleted_files = 0
+    freed_mb = 0.0
+    for j in jobs:
+        prefix = j.result_path or f"jobs/{j.id}"
+        try:
+            files = storage_utils.list_files(prefix)
+            paths_to_delete = []
+            for f in files:
+                fname = f.get("name", "")
+                ext = os.path.splitext(fname)[1].lower()
+                if ext in SKIP_EXTENSIONS:
+                    continue
+                paths_to_delete.append(f"{prefix}/{fname}")
+                freed_mb += f.get("size_mb", 0)
+            if paths_to_delete:
+                storage_utils.delete_files(paths_to_delete)
+                deleted_files += len(paths_to_delete)
+        except Exception:
+            pass
+    return {"deleted_files": deleted_files, "freed_mb": round(freed_mb, 2)}
