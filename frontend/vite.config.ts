@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/api':      'http://localhost:8000',
       '/auth':     'http://localhost:8000',
       '/missions': 'http://localhost:8000',
       '/payments': 'http://localhost:8000',
