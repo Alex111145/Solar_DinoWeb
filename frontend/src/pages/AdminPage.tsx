@@ -653,7 +653,7 @@ export default function AdminPage() {
         </motion.div>
 
         {/* Cost row — wide cards */}
-        <motion.div variants={cardAnim} className="flex gap-4 mb-4" style={{ flexWrap: 'wrap' }}>
+        <motion.div variants={cardAnim} className="flex gap-4 mb-4 justify-center" style={{ flexWrap: 'wrap' }}>
           {costCards.map((s, i) => (
             <motion.div
               key={s.label}
