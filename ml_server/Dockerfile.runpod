@@ -13,7 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ninja-build \
         gcc g++ \
         cuda-cudart-dev-12-9 \
+    && ln -sfn /usr/local/cuda-12.9 /usr/local/cuda \
     && rm -rf /var/lib/apt/lists/*
+
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=$CUDA_HOME/bin:$PATH
 
 WORKDIR /app
 

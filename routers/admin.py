@@ -16,8 +16,9 @@ from database import get_db
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-PRICE_PER_PANEL = float(os.getenv("PRICE_PER_PANEL", "0.01"))  # € per pannello rilevato
-UPLOAD_DIR      = os.getenv("UPLOAD_DIR", "elaborazioni")
+PRICE_PER_PANEL      = float(os.getenv("PRICE_PER_PANEL", "0.01"))      # € per pannello rilevato
+UPLOAD_DIR           = os.getenv("UPLOAD_DIR", "elaborazioni")
+RUNPOD_COST_PER_SEC  = float(os.getenv("RUNPOD_COST_PER_SEC", "0.000122"))  # € per secondo GPU (default RTX 3090 ~$0.44/h)
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +108,20 @@ def list_companies(
     all_ips = [c.last_ip for c in companies if c.last_ip and c.last_ip != "—" and c.is_active]
     duplicate_ips = {ip for ip in all_ips if all_ips.count(ip) > 1}
 
+    # Pre-calcola costo GPU per azienda
+    gpu_jobs = (
+        db.query(models.Job)
+        .filter(
+            models.Job.status == "completato",
+            models.Job.completed_at.isnot(None),
+        )
+        .all()
+    )
+    gpu_cost_map: dict = {}
+    for job in gpu_jobs:
+        seconds = max((job.completed_at - job.created_at).total_seconds(), 0.0)
+        gpu_cost_map[job.company_id] = gpu_cost_map.get(job.company_id, 0.0) + seconds
+
     result = []
     for c in companies:
         jobs_done = (
@@ -120,6 +135,7 @@ def list_companies(
             .scalar()
         ) or 0
         amount_owed = panels * PRICE_PER_PANEL
+        gpu_cost_eur = round(gpu_cost_map.get(c.id, 0.0) * RUNPOD_COST_PER_SEC, 4)
 
         result.append({
             "id":               c.id,
@@ -141,6 +157,7 @@ def list_companies(
             "subscription_plan":    c.subscription_plan,
             "subscription_start_date": c.subscription_start_date.strftime("%d/%m/%Y") if c.subscription_start_date else None,
             "subscription_end_date":   c.subscription_end_date.strftime("%d/%m/%Y") if c.subscription_end_date else None,
+            "gpu_cost_eur":            gpu_cost_eur,
         })
 
     return result
@@ -1055,3 +1072,53 @@ def reject_welcome_bonus(
     req.status = "rejected"
     db.commit()
     return {"message": "Richiesta rifiutata"}
+
+
+# ---------------------------------------------------------------------------
+# GPU costs
+# ---------------------------------------------------------------------------
+
+@router.get("/gpu-costs")
+def gpu_costs(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Costo GPU stimato per azienda basato sulla durata dei job completati."""
+    from collections import defaultdict
+
+    jobs = (
+        db.query(models.Job)
+        .filter(
+            models.Job.status == "completato",
+            models.Job.completed_at.isnot(None),
+        )
+        .all()
+    )
+
+    data: dict = defaultdict(lambda: {"job_count": 0, "total_seconds": 0.0})
+    for job in jobs:
+        seconds = (job.completed_at - job.created_at).total_seconds()
+        if seconds < 0:
+            seconds = 0.0
+        data[job.company_id]["job_count"] += 1
+        data[job.company_id]["total_seconds"] += seconds
+
+    company_ids = list(data.keys())
+    companies_map = {
+        c.id: c
+        for c in db.query(models.Company).filter(models.Company.id.in_(company_ids)).all()
+    }
+
+    rows = []
+    for company_id, d in data.items():
+        c = companies_map.get(company_id)
+        rows.append({
+            "company_name":  (c.ragione_sociale or c.name) if c else "N/A",
+            "company_email": c.email if c else "N/A",
+            "job_count":     d["job_count"],
+            "total_seconds": round(d["total_seconds"]),
+            "cost_eur":      round(d["total_seconds"] * RUNPOD_COST_PER_SEC, 4),
+        })
+
+    rows.sort(key=lambda r: r["cost_eur"], reverse=True)
+    return rows

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, LogOut, Users, BarChart2, Star,
   Check, X, TrendingUp, Building2, Euro,
-  FolderOpen, FileDown, ChevronRight, ChevronDown, MessageSquare,
+  FolderOpen, FileDown, ChevronRight, ChevronDown, MessageSquare, Zap,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -37,6 +37,7 @@ interface Company {
   subscription_plan?: string | null
   subscription_start_date?: string | null
   subscription_end_date?: string | null
+  gpu_cost_eur?: number
 }
 
 interface ReviewItem {
@@ -288,7 +289,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
 // ── Main Admin Page ────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'tickets' | 'uploads' | 'bonus'>('companies')
+  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'tickets' | 'uploads' | 'bonus' | 'gpu'>('companies')
 
   const [stats, setStats] = useState<Stats>({})
   const [companies, setCompanies] = useState<Company[]>([])
@@ -296,6 +297,15 @@ export default function AdminPage() {
   const [adminReviews, setAdminReviews] = useState<ReviewItem[]>([])
 
   const [uploads, setUploads] = useState<UploadCompany[]>([])
+
+  interface GpuCostItem {
+    company_name: string
+    company_email: string
+    job_count: number
+    total_seconds: number
+    cost_eur: number
+  }
+  const [gpuCosts, setGpuCosts] = useState<GpuCostItem[]>([])
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null)
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
 
@@ -363,6 +373,9 @@ export default function AdminPage() {
     }).catch(() => {})
     apiFetch('/admin/uploads').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setUploads(Array.isArray(d) ? d : [])
+    }).catch(() => {})
+    apiFetch('/admin/gpu-costs').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setGpuCosts(Array.isArray(d) ? d : [])
     }).catch(() => {})
     apiFetch('/admin/tickets').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) {
@@ -626,6 +639,7 @@ export default function AdminPage() {
               { key: 'reviews', label: 'Recensioni', icon: <Star size={14} />, badge: pendingReviews },
               { key: 'tickets', label: 'Segnalazioni', icon: <MessageSquare size={14} />, badge: pendingTickets },
               { key: 'uploads', label: 'Dati caricati', icon: <FolderOpen size={14} /> },
+              { key: 'gpu', label: 'Costi GPU', icon: <Zap size={14} /> },
             ].map((t) => (
               <button
                 key={t.key}
@@ -693,6 +707,7 @@ export default function AdminPage() {
                       <th>Ultimo accesso</th>
                       <th>IP</th>
                       <th>Stato</th>
+                      <th style={{ textAlign: 'right' }}>Costo GPU</th>
                       <th>Azioni</th>
                     </tr>
                   </thead>
@@ -780,6 +795,11 @@ export default function AdminPage() {
                             onClick={() => setConfirmToggle({ id: c.id, name: c.ragione_sociale || c.name || '', activate: !c.is_active })}
                           >
                             {c.is_active ? 'Attivo' : 'Disabilitato'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <span style={{ fontWeight: 700, color: (c.gpu_cost_eur ?? 0) > 0 ? '#f59e0b' : '#475569', fontSize: '0.8rem' }}>
+                            {(c.gpu_cost_eur ?? 0) > 0 ? `€ ${c.gpu_cost_eur!.toFixed(4)}` : '—'}
                           </span>
                         </td>
                         <td onClick={(e) => e.stopPropagation()}>
@@ -1425,6 +1445,101 @@ export default function AdminPage() {
                 </div>
                 )
               })()}
+            </motion.div>
+          )}
+          {tab === 'gpu' && (
+            <motion.div
+              key="gpu"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="card mt-4"
+            >
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '0.975rem', margin: 0 }}>
+                  Costi GPU stimati per azienda
+                </h3>
+                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  Durata job × <code style={{ color: '#f59e0b' }}>RUNPOD_COST_PER_SEC</code> (default RTX 3090 ≈ €0.000122/s)
+                </span>
+              </div>
+              {/* Spese fisse mensili */}
+              {(() => {
+                const fixedCosts = [
+                  { label: 'Dominio', eur: 1.00 },
+                  { label: 'Render', eur: 7.00 },
+                  { label: 'Supabase', eur: 0.00 },
+                ]
+                const totalFixed = fixedCosts.reduce((a, c) => a + c.eur, 0)
+                const totalGpu = gpuCosts.reduce((a, r) => a + r.cost_eur, 0)
+                return (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Spese fisse mensili</div>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                      {fixedCosts.map((c) => (
+                        <div key={c.label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '0.6rem 1rem', minWidth: 110 }}>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>{c.label}</div>
+                          <div style={{ fontWeight: 700, color: c.eur > 0 ? '#f59e0b' : '#475569', fontSize: '0.9rem' }}>
+                            {c.eur > 0 ? `€ ${c.eur.toFixed(2)}/mese` : 'Free'}
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '0.6rem 1rem', minWidth: 130 }}>
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>Totale mensile</div>
+                        <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '0.9rem' }}>€ {(totalFixed + totalGpu).toFixed(2)}/mese</div>
+                        <div style={{ fontSize: '0.68rem', color: '#475569', marginTop: 2 }}>fissi + GPU</div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Azienda</th>
+                      <th>Email</th>
+                      <th style={{ textAlign: 'right' }}>Job completati</th>
+                      <th style={{ textAlign: 'right' }}>Tempo GPU</th>
+                      <th style={{ textAlign: 'right' }}>Costo stimato</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gpuCosts.length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem' }}>Nessun job completato</td></tr>
+                    )}
+                    {gpuCosts.map((r, i) => {
+                      const h = Math.floor(r.total_seconds / 3600)
+                      const m = Math.floor((r.total_seconds % 3600) / 60)
+                      const s = r.total_seconds % 60
+                      const hms = `${h > 0 ? h + 'h ' : ''}${m > 0 ? m + 'm ' : ''}${s}s`
+                      return (
+                        <tr key={i}>
+                          <td>{r.company_name}</td>
+                          <td style={{ color: '#64748b' }}>{r.company_email}</td>
+                          <td style={{ textAlign: 'right' }}>{r.job_count}</td>
+                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{hms}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                            € {r.cost_eur.toFixed(4)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  {gpuCosts.length > 0 && (
+                    <tfoot>
+                      <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <td colSpan={4} style={{ color: '#94a3b8', fontWeight: 700, paddingTop: 8 }}>Totale</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#f59e0b', paddingTop: 8 }}>
+                          € {gpuCosts.reduce((acc, r) => acc + r.cost_eur, 0).toFixed(4)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
