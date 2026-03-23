@@ -116,6 +116,7 @@ export default function RegisterPage() {
       localStorage.setItem('email', data.email || data.user?.email || form.email)
       localStorage.setItem('credits', String(data.credits ?? data.user?.credits ?? 2))
       localStorage.setItem('is_admin', String(data.is_admin ?? data.user?.is_admin ?? false))
+      localStorage.setItem('ip_already_used', String(!!data.ip_already_used))
       navigate('/dashboard')
     } catch {
       setError('Errore di connessione al server')

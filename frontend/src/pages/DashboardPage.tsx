@@ -1097,6 +1097,7 @@ export default function DashboardPage() {
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
   const [subscriptionCancelled, setSubscriptionCancelled] = useState(false)
+  const [ipAlreadyUsed, setIpAlreadyUsed] = useState(localStorage.getItem('ip_already_used') === 'true')
 
   // Team modal (B)
   const [showTeamModal, setShowTeamModal] = useState(false)
@@ -1223,6 +1224,7 @@ export default function DashboardPage() {
         if (d.subscription_plan !== undefined) setSubscriptionPlan(d.subscription_plan ?? null)
         if (d.subscription_end_date !== undefined) setSubscriptionEndDate(d.subscription_end_date ?? null)
         if (d.subscription_cancelled !== undefined) setSubscriptionCancelled(!!d.subscription_cancelled)
+        if (d.ip_already_used !== undefined) setIpAlreadyUsed(!!d.ip_already_used)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
         localStorage.setItem('credits', String(c))
@@ -2106,6 +2108,14 @@ export default function DashboardPage() {
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Scegli il pacchetto più adatto alle tue esigenze</p>
             </div>
           </div>
+
+          {/* Banner IP duplicato */}
+          {ipAlreadyUsed && (
+            <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', fontSize: '0.85rem', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ flexShrink: 0, marginTop: 1 }}>⚠️</span>
+              <span>Questo indirizzo IP è già registrato ad un'altra azienda. Pertanto questo account non può avere il credito bonus.</span>
+            </div>
+          )}
 
           {/* Abbonamenti Mensili */}
           {subscribeError && (

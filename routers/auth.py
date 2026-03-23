@@ -236,7 +236,7 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/register")
-def register(req: RegisterRequest, response: Response, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, response: Response, request: Request, db: Session = Depends(get_db)):
     email  = req.email.lower().strip()
     domain = _domain(email)
 
@@ -342,16 +342,40 @@ def register(req: RegisterRequest, response: Response, db: Session = Depends(get
     ).first()
     inherited_credits = existing_vat.credits if existing_vat else 0
 
+    # Cattura IP di registrazione
+    forwarded = request.headers.get("x-forwarded-for")
+    reg_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
+
+    # Controlla se l'IP è già associato ad un'altra azienda attiva
+    ip_already_used = False
+    if reg_ip:
+        other_with_ip = db.query(models.Company).filter(
+            models.Company.last_ip == reg_ip,
+            models.Company.deleted_at.is_(None),
+            models.Company.is_active == True,
+        ).first()
+        if other_with_ip:
+            ip_already_used = True
+
+    # Bonus automatico: 1 credito se IP nuovo e nessuna P.IVA preesistente
+    bonus_credit = 0
+    bonus_used   = False
+    if not existing_vat and not ip_already_used:
+        bonus_credit = 1
+        bonus_used   = True
+
     company = models.Company(
-        email           = email,
-        name            = req.name.strip(),
-        ragione_sociale = rs,
-        vat_number      = vat,
-        pec             = pec,
-        password_hash   = auth_utils.hash_password(req.password),
-        credits         = inherited_credits,
-        is_active       = True,
-        is_manager      = True,   # primo account = manager dell'azienda
+        email                = email,
+        name                 = req.name.strip(),
+        ragione_sociale      = rs,
+        vat_number           = vat,
+        pec                  = pec,
+        password_hash        = auth_utils.hash_password(req.password),
+        credits              = inherited_credits + bonus_credit,
+        is_active            = True,
+        is_manager           = True,   # primo account = manager dell'azienda
+        last_ip              = reg_ip,
+        welcome_bonus_used   = bonus_used,
     )
     db.add(company)
     db.commit()
@@ -366,11 +390,12 @@ def register(req: RegisterRequest, response: Response, db: Session = Depends(get
     token = auth_utils.create_token({"sub": str(company.id)})
     _set_auth_cookie(response, token)
     return {
-        "token_type":   "bearer",
-        "name":         company.name,
-        "email":        company.email,
-        "credits":      company.credits,
-        "is_admin":     False,
+        "token_type":     "bearer",
+        "name":           company.name,
+        "email":          company.email,
+        "credits":        company.credits,
+        "is_admin":       False,
+        "ip_already_used": ip_already_used,
     }
 
 
@@ -576,6 +601,18 @@ def me(current: models.Company = Depends(auth_utils.get_current_company), db: Se
         )
         if mgr:
             manager = mgr
+    # Controlla se l'IP è già usato da un'altra azienda attiva
+    ip_already_used = False
+    if current.last_ip:
+        other_with_ip = db.query(models.Company).filter(
+            models.Company.last_ip == current.last_ip,
+            models.Company.id != current.id,
+            models.Company.deleted_at.is_(None),
+            models.Company.is_active == True,
+        ).first()
+        if other_with_ip:
+            ip_already_used = True
+
     return {
         "id":                    current.id,
         "email":                 current.email,
@@ -590,6 +627,7 @@ def me(current: models.Company = Depends(auth_utils.get_current_company), db: Se
         "subscription_end_date": manager.subscription_end_date.strftime("%d/%m/%Y") if manager.subscription_end_date else None,
         "subscription_cancelled":current.subscription_cancelled if hasattr(current, 'subscription_cancelled') else False,
         "welcome_bonus_requested":current.welcome_bonus_requested if hasattr(current, 'welcome_bonus_requested') else False,
+        "ip_already_used":       ip_already_used,
         "created_at":            current.created_at.isoformat(),
     }
 
