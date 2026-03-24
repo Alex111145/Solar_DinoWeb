@@ -18,6 +18,8 @@ import urllib.request as _urllib
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://solar-dinoweb.fly.dev")
+
 # Domini email personali/gratuiti — per questi si controlla solo l'email esatta
 _FREE_DOMAINS = {
     "gmail.com","yahoo.com","hotmail.com","outlook.com","live.com",
@@ -206,7 +208,7 @@ def _notify_admin_new_company(company: "models.Company", tipo: str) -> None:
               </td></tr>
             </table>
             <div style="margin-top:28px;text-align:center;">
-              <a href="https://solar-dinoweb.onrender.com/admin"
+              <a href="{FRONTEND_URL}/admin"
                  style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;font-weight:700;padding:13px 28px;border-radius:12px;text-decoration:none;font-size:14px;">
                 Vai all'admin
               </a>
@@ -561,7 +563,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     if not company.is_active:
         raise HTTPException(status_code=403, detail="Account disattivato. Contatta l'amministratore.")
 
-    # Salva IP (considera X-Forwarded-For per proxy/Render)
+    # Salva IP (considera X-Forwarded-For per proxy/reverse proxy)
     forwarded = request.headers.get("x-forwarded-for")
     company.last_ip       = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
     company.last_login_at = datetime.now(timezone.utc)

@@ -6,7 +6,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL non configurata — imposta la variabile d'ambiente nel file .env")
 
-# Render usa "postgres://" ma SQLAlchemy richiede "postgresql://"
+# Supabase/Fly.io espongono "postgres://" ma SQLAlchemy richiede "postgresql://"
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -32,9 +32,10 @@ def run_migrations(engine):
         for sql in ddl:
             try:
                 conn.execute(text(sql))
+                conn.commit()
             except Exception as e:
                 print(f"[MIGRATION] {e}")
-        conn.commit()
+                conn.rollback()
 
     # Popola welcome_bonus_requests per aziende con welcome_bonus_requested=True
     # ma senza record nella tabella (idempotente)

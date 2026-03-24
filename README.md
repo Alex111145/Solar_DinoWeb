@@ -44,7 +44,7 @@ SUPABASE_BUCKET=pth
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 
-ML_SERVER_URL=http://your-oracle-server:8001
+ML_SERVER_URL=https://api.runpod.ai/v2/{endpoint_id}/runsync
 ML_SERVER_SECRET=your_ml_secret
 
 ADMIN_EMAIL=admin@solardino.it
@@ -106,12 +106,12 @@ Crea 12 aziende demo con richieste bonus benvenuto ed elaborazioni di esempio.
 ## Architettura generale
 
 ```
-[React Frontend] ←──── HTTPS ────→ [FastAPI Backend su Render]
+[React Frontend] ←──── HTTPS ────→ [FastAPI Backend su Fly.io]
                                            │
                     ┌──────────────────────┼──────────────────┐
                     ▼                      ▼                  ▼
              [PostgreSQL            [Supabase Storage]   [ML Server su
-              su Supabase]           (file TIF/output)    Oracle Cloud]
+              su Supabase]           (file TIF/output)    RunPod Serverless]
                     │
               [Stripe API]
               [DJI FlightHub API]
@@ -128,16 +128,16 @@ Crea 12 aziende demo con richieste bonus benvenuto ed elaborazioni di esempio.
 | Frontend | React 18 + TypeScript + Vite |
 | Database | PostgreSQL su Supabase |
 | Storage file | Supabase Storage |
-| Hosting backend | Render |
+| Hosting backend | Fly.io |
 | Pagamenti | Stripe |
-| ML / AI | MaskDINO su Oracle Cloud (GPU) |
+| ML / AI | MaskDINO su RunPod Serverless (GPU) |
 | Drone integration | DJI FlightHub 2 Enterprise |
 
 ---
 
 ## 1. Server — `main.py`
 
-Il server è **FastAPI**, gira su **Render** (cloud hosting).
+Il server è **FastAPI**, gira su **Fly.io** (cloud hosting).
 
 Al **primo avvio** (`lifespan`) fa queste cose in sequenza:
 1. Crea tutte le tabelle del DB se non esistono (`Base.metadata.create_all`)
@@ -313,9 +313,9 @@ Tutti i file vanno su **Supabase Storage**.
 
 ---
 
-## 9. ML Server — Oracle Cloud
+## 9. ML Server — RunPod Serverless
 
-Server separato con GPU, non su Render.
+Server separato con GPU, non su Fly.io.
 
 Il backend lo chiama con:
 ```
@@ -343,7 +343,7 @@ Il ML server:
 | `SUPABASE_BUCKET` | Nome bucket storage (default: `pth`) |
 | `STRIPE_SECRET_KEY` | Chiave segreta Stripe |
 | `STRIPE_WEBHOOK_SECRET` | Segreto per validare i webhook Stripe |
-| `ML_SERVER_URL` | URL del server Oracle Cloud (es. `http://1.2.3.4:8001`) |
+| `ML_SERVER_URL` | URL RunPod Serverless endpoint |
 | `ML_SERVER_SECRET` | Segreto autenticazione ML server |
 | `ADMIN_EMAIL` | Email dell'account admin |
 | `ADMIN_PASSWORD` | Password dell'account admin |

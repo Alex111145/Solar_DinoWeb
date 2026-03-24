@@ -553,7 +553,7 @@ export default function AdminPage() {
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
-  const FIXED_MONTHLY_EUR = 1.00 + 7.00 + (supabasePlan === 'pro' ? 23.00 : 0) // dominio + render + supabase
+  const FIXED_MONTHLY_EUR = 1.00 + 0.00 + (supabasePlan === 'pro' ? 23.00 : 0) // dominio + fly.io (free) + supabase
   const gpuCostMonth = stats.gpu_cost_month_eur || 0
   const totalCostMonth = gpuCostMonth + FIXED_MONTHLY_EUR
 
@@ -1525,7 +1525,7 @@ export default function AdminPage() {
                 const dbPct           = Math.min((usedDbMb / dbLimitMb) * 100, 100)
                 const fixedCosts      = [
                   { label: 'Dominio', eur: 1.00 },
-                  { label: 'Render',  eur: 7.00 },
+                  { label: 'Fly.io',  eur: 0.00 },
                   { label: 'Supabase', eur: supabasePlan === 'pro' ? 23.00 : 0.00 },
                 ]
 

@@ -18,6 +18,8 @@ from email_utils import send_email
 
 router = APIRouter(prefix="/missions", tags=["Missions"])
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://solar-dinoweb.fly.dev")
+
 _LOCAL_TMP         = os.getenv("UPLOAD_DIR", "/tmp/elaborazioni")
 RUNPOD_API_KEY     = os.getenv("RUNPOD_API_KEY", "")
 RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID", "")
@@ -391,7 +393,7 @@ def request_trial(
               {"" if not message else f'<tr><td style="padding:12px 0;"><span style="color:#64748b;font-size:13px;">Messaggio</span><br><p style="color:#1e293b;font-size:14px;line-height:1.6;margin:6px 0 0;background:#f8fafc;border-left:3px solid #f59e0b;padding:12px;">{message}</p></td></tr>'}
             </table>
             <div style="margin-top:28px;text-align:center;">
-              <a href="https://solar-dinoweb.onrender.com/admin"
+              <a href="{FRONTEND_URL}/admin"
                  style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;font-weight:700;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:15px;">
                 Vai all'admin → aggiungi 1 credito
               </a>
