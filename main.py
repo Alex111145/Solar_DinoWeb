@@ -1,5 +1,5 @@
 import os
-import urllib.request
+import asyncio
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv(override=True)  # carica .env e sovrascrive variabili già esistenti
@@ -17,104 +17,81 @@ from database import Base, SessionLocal, engine, run_migrations
 from routers import admin, auth, flighthub, missions, payments, reviews
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Crea tutte le tabelle del database
+def _run_migrations_background():
+    """Esegue migrazioni DB in background — non blocca lo startup."""
     try:
         Base.metadata.create_all(bind=engine)
     except Exception as e:
-        print(f"[STARTUP] create_all ignorato (tabelle già esistenti): {e}")
+        print(f"[MIGRATION] create_all: {e}")
 
-    # Migrazione nuove colonne (subscription_cancelled, welcome_bonus_requested, welcome_bonus_requests)
     try:
         run_migrations(engine)
     except Exception as e:
-        print(f"[STARTUP] run_migrations ignorato: {e}")
+        print(f"[MIGRATION] run_migrations: {e}")
 
-    # Migrazione: aggiungi nuove colonne se non esistono (SQLite non supporta IF NOT EXISTS)
+    migrations = [
+        "ALTER TABLE companies ADD COLUMN ragione_sociale VARCHAR",
+        "ALTER TABLE companies ADD COLUMN vat_number VARCHAR",
+        "ALTER TABLE companies ADD COLUMN deleted_at TIMESTAMP",
+        "ALTER TABLE companies ADD COLUMN last_ip VARCHAR",
+        "ALTER TABLE companies ADD COLUMN pec VARCHAR",
+        "ALTER TABLE companies ADD COLUMN welcome_bonus_used BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE companies ADD COLUMN last_login_at TIMESTAMP",
+        "ALTER TABLE jobs ADD COLUMN panel_model VARCHAR",
+        "ALTER TABLE jobs ADD COLUMN panel_dimensions VARCHAR",
+        "ALTER TABLE jobs ADD COLUMN panel_efficiency FLOAT",
+        "ALTER TABLE jobs ADD COLUMN panel_temp_coeff FLOAT",
+        "CREATE TABLE IF NOT EXISTS reviews (id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id), stars INTEGER NOT NULL, comment TEXT, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
+        "ALTER TABLE flighthub_connections ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP",
+        "ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_email_key",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_email_vat ON companies (email, vat_number) WHERE deleted_at IS NULL",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'aperto'",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS reply TEXT",
+        "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_active BOOLEAN DEFAULT FALSE",
+        "CREATE TABLE IF NOT EXISTS ticket_messages (id SERIAL PRIMARY KEY, ticket_id INTEGER REFERENCES support_tickets(id) ON DELETE CASCADE, sender VARCHAR NOT NULL, text TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())",
+    ]
     with engine.connect() as conn:
-        for col_sql in [
-            "ALTER TABLE companies ADD COLUMN ragione_sociale VARCHAR",
-            "ALTER TABLE companies ADD COLUMN vat_number VARCHAR",
-            "ALTER TABLE companies ADD COLUMN deleted_at TIMESTAMP",
-            "ALTER TABLE companies ADD COLUMN last_ip VARCHAR",
-            "ALTER TABLE companies ADD COLUMN pec VARCHAR",
-            "ALTER TABLE companies ADD COLUMN welcome_bonus_used BOOLEAN DEFAULT FALSE",
-            "ALTER TABLE companies ADD COLUMN last_login_at TIMESTAMP",
-            "ALTER TABLE jobs ADD COLUMN panel_model VARCHAR",
-            "ALTER TABLE jobs ADD COLUMN panel_dimensions VARCHAR",
-            "ALTER TABLE jobs ADD COLUMN panel_efficiency FLOAT",
-            "ALTER TABLE jobs ADD COLUMN panel_temp_coeff FLOAT",
-            "CREATE TABLE IF NOT EXISTS reviews (id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id), stars INTEGER NOT NULL, comment TEXT, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
-            # FlightHub 2 tables (idempotenti — create_all le crea, le ALTER sono no-op se esistono)
-            "ALTER TABLE flighthub_connections ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP",
-            # Permetti email duplicate tra aziende diverse: rimuovi unique su email, aggiungi composite su (email, vat_number)
-            "ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_email_key",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_email_vat ON companies (email, vat_number) WHERE deleted_at IS NULL",
-            # Nuove colonne manager/slave e ticket status
-            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
-            "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'aperto'",
-            # Nuove colonne sessione 3-4
-            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE",
-            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
-            "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS reply TEXT",
-            "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP",
-            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_active BOOLEAN DEFAULT FALSE",
-            # Tabella messaggi ticket (sistema conversazione)
-            "CREATE TABLE IF NOT EXISTS ticket_messages (id SERIAL PRIMARY KEY, ticket_id INTEGER REFERENCES support_tickets(id) ON DELETE CASCADE, sender VARCHAR NOT NULL, text TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())",
-        ]:
+        for sql in migrations:
             try:
-                conn.execute(text(col_sql))
+                conn.execute(text(sql))
                 conn.commit()
             except Exception:
-                conn.rollback()  # reset transazione abortita (necessario su PostgreSQL)
+                conn.rollback()
 
     # Crea l'utente admin se non esiste
     db = SessionLocal()
     try:
         admin_email    = os.getenv("ADMIN_EMAIL",    "admin@solardino.it")
         admin_password = os.getenv("ADMIN_PASSWORD", "changeme123")
-
         existing_admin = db.query(models.Company).filter(models.Company.email == admin_email).first()
         if not existing_admin:
-            admin_user = models.Company(
-                email         = admin_email,
-                name          = "Admin",
-                password_hash = auth_utils.hash_password(admin_password),
-                credits       = 9999,
-                is_active     = True,
-                is_admin      = True,
-            )
-            db.add(admin_user)
+            db.add(models.Company(
+                email=admin_email, name="Admin",
+                password_hash=auth_utils.hash_password(admin_password),
+                credits=9999, is_active=True, is_admin=True,
+            ))
             db.commit()
-            print(f"[STARTUP] Admin creato: {admin_email}")
+            print(f"[MIGRATION] Admin creato: {admin_email}")
         else:
-            # Assicura is_admin=True su account esistente (migrazione)
             if not existing_admin.is_admin:
                 existing_admin.is_admin = True
                 db.commit()
-            print(f"[STARTUP] Admin esistente: {admin_email}")
+            print(f"[MIGRATION] Admin esistente: {admin_email}")
     finally:
         db.close()
 
-    # Scarica model_best.pth dal URL configurato (solo se non già presente su disco)
-    model_url = os.getenv("MODEL_PTH_URL", "")
-    upload_dir = os.getenv("UPLOAD_DIR", "elaborazioni")
-    model_path = os.path.join(upload_dir, "model_best.pth")
-    try:
-        if model_url and not os.path.exists(model_path):
-            print(f"[STARTUP] Download model_best.pth → {model_path} ...")
-            os.makedirs(upload_dir, exist_ok=True)
-            urllib.request.urlretrieve(model_url, model_path)
-            print(f"[STARTUP] Modello scaricato ({os.path.getsize(model_path) // 1024 // 1024} MB)")
-        elif os.path.exists(model_path):
-            print(f"[STARTUP] Modello già presente: {model_path}")
-        else:
-            print("[STARTUP] MODEL_PTH_URL non configurato — modello non scaricato")
-    except Exception as e:
-        print(f"[STARTUP] Download modello fallito (non bloccante): {e}")
+    print("[MIGRATION] Completate.")
 
-    yield  # server running
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Migrazioni in background — il server parte subito
+    asyncio.get_event_loop().run_in_executor(None, _run_migrations_background)
+    yield
 
 
 app = FastAPI(
@@ -146,6 +123,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Serve React app (built frontend)
 if os.path.isdir("static/app"):
     app.mount("/app", StaticFiles(directory="static/app", html=True), name="app")
+
+if os.path.isdir("static/app/assets"):
+    app.mount("/assets", StaticFiles(directory="static/app/assets"), name="app-assets")
 
 @app.get("/", include_in_schema=False)
 def root():
@@ -180,6 +160,10 @@ def get_presentation_video():
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return Response(content=b"", media_type="image/x-icon")
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa_catch_all(full_path: str):
+    return FileResponse("static/app/index.html")
 
 
 @app.get("/health")

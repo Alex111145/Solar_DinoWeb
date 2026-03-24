@@ -3,6 +3,12 @@ SolarDino — Modal Serverless Handler
 Deploy: modal deploy ml_server/modal_handler.py
 """
 import modal
+from pydantic import BaseModel
+
+class JobInput(BaseModel):
+    job_id: str
+    tif_storage_path: str
+    tfw_storage_path: str = ""
 
 # ── Image (Modal la builda sui suoi server, niente Docker locale) ─────────────
 cuda_image = (
@@ -28,15 +34,15 @@ cuda_image = (
         "fastapi", "pydantic",
     ])
     # Copia il codice sorgente nell'immagine per compilare detectron2/maskdino
-    .copy_local_dir("core", "/app/core")
-    .copy_local_dir("ml_server", "/app/ml_server")
-    .copy_local_file("models.py", "/app/models.py")
-    .copy_local_file("storage_utils.py", "/app/storage_utils.py")
+    .add_local_dir("core", remote_path="/app/core", copy=True)
+    .add_local_dir("ml_server", remote_path="/app/ml_server", copy=True)
+    .add_local_file("models.py", remote_path="/app/models.py", copy=True)
+    .add_local_file("storage_utils.py", remote_path="/app/storage_utils.py", copy=True)
     .run_commands(
         # Installa detectron2 da sorgente locale
         "pip install --no-cache-dir --no-build-isolation -e /app/core/libs/detectron2",
-        # Compila MultiScaleDeformableAttention (MaskDINO)
-        "cd /app/core/libs/maskdino/modeling/pixel_decoder/ops && python setup.py build_ext --inplace",
+        # Compila MultiScaleDeformableAttention (MaskDINO) — FORCE_CUDA forza CUDAExtension anche senza GPU nel build container
+        "cd /app/core/libs/maskdino/modeling/pixel_decoder/ops && FORCE_CUDA=1 TORCH_CUDA_ARCH_LIST='8.6' python setup.py build_ext --inplace",
     )
 )
 
@@ -52,21 +58,13 @@ secrets = [modal.Secret.from_name("solardino-ml")]
     gpu="A10G",
     timeout=3600,
     secrets=secrets,
-    allow_concurrent_inputs=1,
 )
 @modal.web_endpoint(method="POST")
-def run(data: dict, x_secret: str = modal.parameter()):
+def run(item: JobInput) -> dict:
     import os, sys, json, shutil, subprocess, urllib.request
-    from pathlib import Path
     from datetime import datetime, timezone
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-
-    # Verifica secret
-    expected = os.getenv("MODAL_WEBHOOK_SECRET", "")
-    if expected and x_secret != expected:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
     sys.path.insert(0, "/app")
     import models
@@ -83,9 +81,9 @@ def run(data: dict, x_secret: str = modal.parameter()):
     engine  = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=2, max_overflow=3)
     Session = sessionmaker(bind=engine)
 
-    job_id           = data["job_id"]
-    tif_storage_path = data["tif_storage_path"]
-    tfw_storage_path = data.get("tfw_storage_path", "")
+    job_id           = item.job_id
+    tif_storage_path = item.tif_storage_path
+    tfw_storage_path = item.tfw_storage_path
 
     import httpx
     def _download(storage_path, local_path):

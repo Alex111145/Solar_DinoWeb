@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 from dateutil.relativedelta import relativedelta
 
 import stripe
@@ -59,7 +60,7 @@ CREDIT_PRICE_BY_PLAN: dict[str, float] = {
     "medium":  10.99,
 }
 
-def credit_unit_price(qty: int, subscription_plan: str | None = None) -> float:
+def credit_unit_price(qty: int, subscription_plan: Optional[str] = None) -> float:
     """Return the per-credit price.
 
     Active Starter/Medium subscribers get a flat loyalty rate.
