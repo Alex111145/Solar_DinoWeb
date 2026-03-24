@@ -21,8 +21,8 @@ router = APIRouter(prefix="/missions", tags=["Missions"])
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://solar-dinoweb.fly.dev")
 
 _LOCAL_TMP         = os.getenv("UPLOAD_DIR", "/tmp/elaborazioni")
-RUNPOD_API_KEY     = os.getenv("RUNPOD_API_KEY", "")
-RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID", "")
+MODAL_ENDPOINT_URL  = os.getenv("MODAL_ENDPOINT_URL", "")
+MODAL_WEBHOOK_SECRET = os.getenv("MODAL_WEBHOOK_SECRET", "")
 
 os.makedirs(_LOCAL_TMP, exist_ok=True)
 
@@ -73,18 +73,22 @@ def _upload_and_dispatch(job_id: str, job_dir: str, tif_name: str, tfw_name: str
             elif fname == tfw_name:
                 tfw_storage_path = spath
 
-        # Invia job a RunPod Serverless
-        if not RUNPOD_API_KEY or not RUNPOD_ENDPOINT_ID:
-            raise RuntimeError("RUNPOD_API_KEY / RUNPOD_ENDPOINT_ID non configurati")
+        # Invia job a Modal Serverless
+        if not MODAL_ENDPOINT_URL:
+            raise RuntimeError("MODAL_ENDPOINT_URL non configurato")
+
+        headers = {"Content-Type": "application/json"}
+        if MODAL_WEBHOOK_SECRET:
+            headers["x-secret"] = MODAL_WEBHOOK_SECRET
 
         resp = httpx.post(
-            f"https://api.runpod.io/v2/{RUNPOD_ENDPOINT_ID}/run",
-            json={"input": {
+            MODAL_ENDPOINT_URL,
+            json={
                 "job_id":           job_id,
                 "tif_storage_path": tif_storage_path,
                 "tfw_storage_path": tfw_storage_path,
-            }},
-            headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
+            },
+            headers=headers,
             timeout=30,
         )
         resp.raise_for_status()
@@ -93,7 +97,7 @@ def _upload_and_dispatch(job_id: str, job_dir: str, tif_name: str, tfw_name: str
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
         if job:
             job.status = "errore"
-            job.log    = f"Dispatch RunPod fallito: {exc}"
+            job.log    = f"Dispatch Modal fallito: {exc}"
             db.commit()
     finally:
         db.close()
