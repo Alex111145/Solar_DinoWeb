@@ -263,22 +263,10 @@ export default function LoginPage() {
         </div>
       </nav>
 
-      {/* ── Video presentazione ─────────────────────────────────── */}
-      {videoUrl && (
-        <section className="relative z-10 px-6 pt-24 pb-8" style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6 }}
-            style={{ borderRadius: 20, overflow: 'hidden', border: `1px solid ${t.cardBorder}`, boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
-          >
-            <video src={videoUrl} controls playsInline style={{ width: '100%', display: 'block', background: '#000' }} />
-          </motion.div>
-        </section>
-      )}
-
       {/* ── Hero ────────────────────────────────────────────────── */}
       <motion.section
         variants={stagger} initial="hidden" animate="show"
-        className="relative z-10 flex flex-col items-center text-center px-6 pt-10 pb-20"
+        className="relative z-10 flex flex-col items-center text-center px-6 pt-40 pb-20"
         style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}
       >
         <motion.h1
@@ -331,6 +319,17 @@ export default function LoginPage() {
         </motion.div>
       </motion.section>
 
+      {/* ── Video presentazione ─────────────────────────────────── */}
+      {videoUrl && (
+        <section className="relative z-10 px-6 pt-8 pb-8" style={{ maxWidth: 900, margin: '0 auto', width: '100%' }}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.6 }}
+            style={{ borderRadius: 20, overflow: 'hidden', border: `1px solid ${t.cardBorder}`, boxShadow: '0 24px 64px rgba(0,0,0,0.4)' }}
+          >
+            <video src={videoUrl} controls playsInline style={{ width: '100%', display: 'block', background: '#000' }} />
+          </motion.div>
+        </section>
+      )}
 
       {/* ── Method panels ───────────────────────────────────────── */}
       <section className="relative z-10 px-6 lg:px-12 pb-20" style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>
