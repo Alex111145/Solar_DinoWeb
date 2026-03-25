@@ -29,11 +29,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>('loading')
 
   useEffect(() => {
-    fetch('/auth/me', { credentials: 'include' })
-      .then(async (r) => {
-        if (!r.ok) { setState('unauth'); return }
-        const data = await r.json()
-        setState(data.is_admin ? 'ok' : 'not_admin')
+    fetch('/auth/admin-check', { credentials: 'include' })
+      .then((r) => {
+        if (r.ok) { setState('ok'); return }
+        setState(r.status === 403 ? 'not_admin' : 'unauth')
       })
       .catch(() => setState('unauth'))
   }, [])

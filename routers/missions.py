@@ -133,9 +133,25 @@ async def upload_mission(
     job_dir = os.path.join(_LOCAL_TMP, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
+    _ALLOWED_TIF = {".tif", ".tiff"}
+    _ALLOWED_TFW = {".tfw", ".tifw", ".wld"}
+
     def _norm(filename: str) -> str:
         name, ext = os.path.splitext(filename.strip())
         return name.strip() + ext.lower()
+
+    def _check_ext(filename: str, allowed: set) -> None:
+        _, ext = os.path.splitext(filename.strip())
+        if ext.lower() not in allowed:
+            raise HTTPException(status_code=400, detail=f"Formato file non supportato: {ext or '(nessuna estensione)'}")
+
+    _check_ext(tif_termico.filename, _ALLOWED_TIF)
+    if tfw_termico and tfw_termico.filename:
+        _check_ext(tfw_termico.filename, _ALLOWED_TFW)
+    if tif_rgb and tif_rgb.filename:
+        _check_ext(tif_rgb.filename, _ALLOWED_TIF)
+    if tfw_rgb and tfw_rgb.filename:
+        _check_ext(tfw_rgb.filename, _ALLOWED_TFW)
 
     # Salva file localmente (temp, vengono caricati su Supabase in background)
     tif_fname = "termico_" + _norm(tif_termico.filename)

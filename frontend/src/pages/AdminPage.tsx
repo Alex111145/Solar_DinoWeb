@@ -15,6 +15,7 @@ interface Stats {
   total_revenue_eur?: number
   revenue_month_eur?: number
   gpu_cost_month_eur?: number
+  total_gpu_cost_eur?: number
 }
 
 interface Company {
@@ -299,15 +300,45 @@ export default function AdminPage() {
 
   const [uploads, setUploads] = useState<UploadCompany[]>([])
 
+  interface GpuJobDetail {
+    job_id: string
+    created_at: string
+    seconds: number
+    cost_eur: number
+  }
   interface GpuCostItem {
+    company_id?: number
     company_name: string
     company_email: string
     job_count: number
     total_seconds: number
     cost_eur: number
+    jobs: GpuJobDetail[]
+  }
+  interface MonthlyStatItem {
+    label: string
+    year: number
+    month: number
+    revenue: number
+    gpu_cost: number
   }
   const [gpuCosts, setGpuCosts] = useState<GpuCostItem[]>([])
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStatItem[]>([])
+  const [showPLChart, setShowPLChart] = useState(false)
+  const [expandedGpuCompany, setExpandedGpuCompany] = useState<string | null>(null)
   const [supabasePlan, setSupabasePlan] = useState<'free' | 'pro'>('free')
+  const [domainCostActive, setDomainCostActive] = useState(true)
+  const [domainCostEur, setDomainCostEur] = useState(1.00)
+  const [editingDomainCost, setEditingDomainCost] = useState(false)
+  const [domainCostInput, setDomainCostInput] = useState('1.00')
+  const [startDate, setStartDate] = useState(() => {
+    const saved = localStorage.getItem('solardino_start_date')
+    return saved || '2025-01-01'
+  })
+  const [taxRate, setTaxRate] = useState(22)
+  const [editingTaxRate, setEditingTaxRate] = useState(false)
+  const [monthlyChartData, setMonthlyChartData] = useState<Array<{month:string;label:string;revenue_eur:number;gpu_cost_eur:number}>>([])
+  const [chartLoading, setChartLoading] = useState(false)
   const [storageInfo, setStorageInfo] = useState<{ used_mb: number; file_count: number } | null>(null)
   const [dbInfo, setDbInfo] = useState<{ used_mb: number } | null>(null)
   const [cleanupLoading, setCleanupLoading] = useState(false)
@@ -394,6 +425,9 @@ export default function AdminPage() {
     }).catch(() => {})
     apiFetch('/admin/gpu-costs').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setGpuCosts(Array.isArray(d) ? d : [])
+    }).catch(() => {})
+    apiFetch('/admin/monthly-stats').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (d) setMonthlyStats(Array.isArray(d) ? d : [])
     }).catch(() => {})
     apiFetch('/admin/supabase-storage').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setStorageInfo(d)
@@ -565,23 +599,76 @@ export default function AdminPage() {
     setAdminReplyLoading(false)
   }
 
+  async function loadProfitChart() {
+    setShowPLChart(true)
+    if (monthlyChartData.length === 0) {
+      setChartLoading(true)
+      try {
+        const r = await apiFetch('/admin/monthly-summary')
+        if (r.ok) setMonthlyChartData(await r.json())
+      } catch {}
+      setChartLoading(false)
+    }
+  }
+
   const cardAnim = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
   const containerAnim = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
-  const FIXED_MONTHLY_EUR = 1.00 + 0.00 + (supabasePlan === 'pro' ? 23.00 : 0) // dominio + fly.io (free) + supabase
-  const gpuCostMonth = stats.gpu_cost_month_eur || 0
-  const totalCostMonth = gpuCostMonth + FIXED_MONTHLY_EUR
+  const FIXED_MONTHLY_EUR  = (domainCostActive ? domainCostEur : 0.00) + 0.00 + (supabasePlan === 'pro' ? 23.00 : 0)
+  const gpuCostMonth      = stats.gpu_cost_month_eur || 0
+  const totalCostMonth    = gpuCostMonth + FIXED_MONTHLY_EUR
+
+  // P&L mensile — tutto sullo stesso orizzonte temporale (mese corrente)
+  const fatturatoLordo   = stats.revenue_month_eur || 0
+  const fatturatoNetto   = fatturatoLordo * (1 - taxRate / 100)
+  const utile            = fatturatoNetto - totalCostMonth
+
+  const totalGpuAllTime  = stats.total_gpu_cost_eur || 0
+  const mesiDallInizio   = Math.max(1, Math.round((Date.now() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
+  const speseDallInizio  = totalGpuAllTime + (mesiDallInizio * FIXED_MONTHLY_EUR)
 
   const statCards = [
-    { icon: <Building2 size={18} />, label: 'Aziende attive', value: stats.active_companies || 0, prefix: '' },
-    { icon: <BarChart2 size={18} />, label: 'Pannelli rilevati Totali', value: stats.total_panels_detected || 0, prefix: '' },
-    { icon: <TrendingUp size={18} />, label: 'Fatturato mese corrente', value: stats.revenue_month_eur || 0, prefix: '€' },
-    { icon: <Euro size={18} />, label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
+    { icon: <Building2 size={18} />, label: 'Aziende attive',  value: stats.active_companies  || 0, prefix: '' },
+    { icon: <Euro size={18} />,      label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
   ]
 
   const costCards = [
-    { icon: <Zap size={18} />, label: 'Costo GPU ultimo mese', value: gpuCostMonth, prefix: '€', decimals: 4 },
-    { icon: <Euro size={18} />, label: 'Spese totali ultimo mese', value: totalCostMonth, prefix: '€', decimals: 2, sub: `GPU €${gpuCostMonth.toFixed(4)} + fissi €${FIXED_MONTHLY_EUR.toFixed(2)}` },
+    { icon: <Zap size={18} />,  label: 'Costo GPU ultimo mese',   value: gpuCostMonth,    prefix: '€', decimals: 4, sub: '' },
+    { icon: <Euro size={18} />, label: 'Spese totali ultimo mese', value: totalCostMonth,  prefix: '€', decimals: 4, sub: `GPU €${gpuCostMonth.toFixed(4)} + fissi €${FIXED_MONTHLY_EUR.toFixed(2)}` },
+    { icon: <Euro size={18} />, label: 'Spese dall\'inizio',       value: speseDallInizio, prefix: '€', decimals: 4, sub: `GPU €${totalGpuAllTime.toFixed(4)} + fissi €${(mesiDallInizio * FIXED_MONTHLY_EUR).toFixed(2)} (${mesiDallInizio} mes${mesiDallInizio === 1 ? 'e' : 'i'})` },
+  ]
+
+  const plCards = [
+    {
+      icon: <TrendingUp size={18} />,
+      label: 'Fatturato lordo (mese)',
+      value: fatturatoLordo,
+      prefix: '€',
+      decimals: 2,
+      sub: 'entrate mese corrente',
+      color: '#f59e0b',
+      editTax: false,
+    },
+    {
+      icon: <Euro size={18} />,
+      label: `Fatturato netto (lordo −${taxRate}%)`,
+      value: fatturatoNetto,
+      prefix: '€',
+      decimals: 2,
+      sub: `€${fatturatoLordo.toFixed(2)} × ${(1 - taxRate / 100).toFixed(2)}`,
+      color: '#22c55e',
+      editTax: true,
+    },
+    {
+      icon: <TrendingUp size={18} />,
+      label: 'Utile (netto − spese)',
+      value: utile,
+      prefix: '€',
+      decimals: 2,
+      sub: `€${fatturatoNetto.toFixed(2)} − spese €${totalCostMonth.toFixed(4)}`,
+      color: utile >= 0 ? '#22c55e' : '#ef4444',
+      editTax: false,
+    },
   ]
 
   return (
@@ -734,29 +821,98 @@ export default function AdminPage() {
           ))}
         </motion.div>
 
-        {/* Cost row — wide cards */}
-        <motion.div variants={cardAnim} className="flex gap-4 mb-4 justify-center" style={{ flexWrap: 'wrap' }}>
+        {/* Cost row */}
+        <motion.div variants={cardAnim} className="flex gap-3 mb-3 justify-center" style={{ flexWrap: 'wrap' }}>
           {costCards.map((s, i) => (
             <motion.div
               key={s.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.32 + i * 0.08, duration: 0.5 }}
-              className="card flex items-center gap-5"
-              style={{ flex: '1 1 200px', maxWidth: 260 }}
+              className="card flex items-center gap-4"
+              style={{ flex: '1 1 180px', maxWidth: 240 }}
             >
-              <div style={{ width: 40, height: 40, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
+              <div style={{ width: 38, height: 38, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
                 {s.icon}
               </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 2 }}>{s.label}</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.03em' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 2 }}>{s.label}</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.03em' }}>
                   <AnimatedNumber value={s.value} prefix={s.prefix} decimals={(s as any).decimals} />
                 </div>
-                {(s as any).sub && <div style={{ fontSize: '0.7rem', color: '#475569', marginTop: 2 }}>{(s as any).sub}</div>}
+                {(s as any).sub && <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 2 }}>{(s as any).sub}</div>}
+                {/* Date picker for "Spese dall'inizio" */}
+                {s.label === "Spese dall'inizio" && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                    <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Dal:</span>
+                    <input
+                      type="date" value={startDate}
+                      onChange={e => {
+                        setStartDate(e.target.value)
+                        localStorage.setItem('solardino_start_date', e.target.value)
+                      }}
+                      style={{ padding: '1px 4px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#f1f5f9', fontSize: '0.65rem', colorScheme: 'dark' }}
+                    />
+                  </div>
+                )}
               </div>
             </motion.div>
           ))}
+        </motion.div>
+
+        {/* P&L row — Fatturato lordo / netto / Utile + Chart button */}
+        <motion.div variants={cardAnim} className="flex gap-3 mb-4 justify-center" style={{ flexWrap: 'wrap' }}>
+          {plCards.map((s, i) => (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.56 + i * 0.08, duration: 0.5 }}
+              className="card flex items-center gap-4"
+              style={{ flex: '1 1 180px', maxWidth: 260 }}
+            >
+              <div style={{ width: 38, height: 38, background: `${s.color}18`, border: `1px solid ${s.color}40`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0 }}>
+                {s.icon}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
+                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{s.label}</span>
+                  {s.editTax && (
+                    editingTaxRate ? (
+                      <input
+                        type="number" min={0} max={99} value={taxRate}
+                        onChange={e => setTaxRate(Math.max(0, Math.min(99, parseInt(e.target.value) || 0)))}
+                        onBlur={() => setEditingTaxRate(false)}
+                        onKeyDown={e => e.key === 'Enter' && setEditingTaxRate(false)}
+                        autoFocus
+                        style={{ width: 44, padding: '1px 4px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(34,197,94,0.3)', color: '#f1f5f9', fontSize: '0.72rem', textAlign: 'center' }}
+                      />
+                    ) : (
+                      <button onClick={() => setEditingTaxRate(true)}
+                        style={{ padding: '1px 6px', borderRadius: 5, fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(34,197,94,0.25)', background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>
+                        modifica %
+                      </button>
+                    )
+                  )}
+                </div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: s.color, letterSpacing: '-0.03em' }}>
+                  € {s.value.toFixed(s.decimals)}
+                </div>
+                <div style={{ fontSize: '0.62rem', color: '#475569', marginTop: 2 }}>{s.sub}</div>
+              </div>
+            </motion.div>
+          ))}
+
+          {/* P&L chart button */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.5 }}
+            className="card flex items-center justify-center" style={{ flex: '0 0 auto', minWidth: 120 }}>
+            <button onClick={loadProfitChart}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid rgba(245,158,11,0.25)', background: 'rgba(245,158,11,0.08)', color: '#f59e0b', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>
+              <BarChart2 size={22} />
+              Grafico P&L
+            </button>
+          </motion.div>
+
         </motion.div>
 
         {/* Tabs */}
@@ -926,8 +1082,8 @@ export default function AdminPage() {
                             {c.is_active ? 'Attivo' : 'Disabilitato'}
                           </span>
                         </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <span style={{ fontWeight: 700, color: (c.gpu_cost_eur ?? 0) > 0 ? '#f59e0b' : '#475569', fontSize: '0.8rem' }}>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontWeight: 700, color: (c.gpu_cost_eur ?? 0) > 0 ? '#f59e0b' : '#475569', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                             {(c.gpu_cost_eur ?? 0) > 0 ? `€ ${c.gpu_cost_eur!.toFixed(4)}` : '—'}
                           </span>
                         </td>
@@ -1590,7 +1746,7 @@ export default function AdminPage() {
                   Costi GPU stimati per azienda
                 </h3>
                 <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                  Durata job × <code style={{ color: '#f59e0b' }}>RUNPOD_COST_PER_SEC</code> (default RTX 3090 ≈ €0.000122/s)
+                  Durata job × <code style={{ color: '#f59e0b' }}>RUNPOD_COST_PER_SEC</code> (default NVIDIA A10 ≈ €0.000306/s)
                 </span>
               </div>
               {/* Supabase plan selector + storage + cleanup */}
@@ -1606,9 +1762,9 @@ export default function AdminPage() {
                 const storagePct      = Math.min((usedStorageMb / storageLimitMb) * 100, 100)
                 const dbPct           = Math.min((usedDbMb / dbLimitMb) * 100, 100)
                 const fixedCosts      = [
-                  { label: 'Dominio', eur: 1.00 },
-                  { label: 'Fly.io',  eur: 0.00 },
-                  { label: 'Supabase', eur: supabasePlan === 'pro' ? 23.00 : 0.00 },
+                  { label: 'Dominio', eur: domainCostActive ? domainCostEur : 0.00, toggle: () => setDomainCostActive((v) => !v), active: domainCostActive, editable: true },
+                  { label: 'Fly.io',  eur: 0.00, editable: false },
+                  { label: 'Supabase', eur: supabasePlan === 'pro' ? 23.00 : 0.00, editable: false },
                 ]
 
                 function fmtMb(mb: number, limitMb: number) {
@@ -1705,11 +1861,45 @@ export default function AdminPage() {
                       <div style={{ color: '#94a3b8', fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>Spese fisse mensili</div>
                       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                         {fixedCosts.map((c) => (
-                          <div key={c.label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '0.6rem 1.2rem', textAlign: 'center' }}>
+                          <div key={c.label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${'toggle' in c && !(c as any).active ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, padding: '0.6rem 1.2rem', textAlign: 'center', opacity: 'toggle' in c && !(c as any).active ? 0.5 : 1 }}>
                             <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>{c.label}</div>
-                            <div style={{ fontWeight: 700, color: c.eur > 0 ? '#f59e0b' : '#475569', fontSize: '0.9rem' }}>
-                              {c.eur > 0 ? `€ ${c.eur.toFixed(2)}/mese` : 'Free'}
-                            </div>
+                            {(c as any).editable ? (
+                              editingDomainCost ? (
+                                <div className="flex items-center gap-1 justify-center" style={{ marginBottom: 4 }}>
+                                  <span style={{ fontSize: '0.8rem', color: '#64748b' }}>€</span>
+                                  <input
+                                    type="number" min={0} step={0.01}
+                                    value={domainCostInput}
+                                    onChange={(e) => setDomainCostInput(e.target.value)}
+                                    onBlur={() => { const v = parseFloat(domainCostInput); if (!isNaN(v) && v >= 0) setDomainCostEur(v); setEditingDomainCost(false) }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { const v = parseFloat(domainCostInput); if (!isNaN(v) && v >= 0) setDomainCostEur(v); setEditingDomainCost(false) } }}
+                                    autoFocus
+                                    style={{ width: 64, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '1px 6px', color: '#f1f5f9', fontSize: '0.8rem' }}
+                                  />
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>/mese</span>
+                                </div>
+                              ) : (
+                                <div
+                                  style={{ fontWeight: 700, color: c.eur > 0 ? '#f59e0b' : '#475569', fontSize: '0.9rem', cursor: 'pointer', marginBottom: 2 }}
+                                  onClick={() => { setDomainCostInput(domainCostEur.toFixed(2)); setEditingDomainCost(true) }}
+                                  title="Clicca per modificare il prezzo"
+                                >
+                                  {(c as any).active ? `€ ${c.eur.toFixed(2)}/mese ✏️` : '€ 0.00 (off)'}
+                                </div>
+                              )
+                            ) : (
+                              <div style={{ fontWeight: 700, color: c.eur > 0 ? '#f59e0b' : '#475569', fontSize: '0.9rem' }}>
+                                {c.eur > 0 ? `€ ${c.eur.toFixed(2)}/mese` : 'Free'}
+                              </div>
+                            )}
+                            {'toggle' in c && (
+                              <button
+                                onClick={(c as any).toggle}
+                                style={{ marginTop: 6, padding: '0.2rem 0.7rem', borderRadius: 6, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: (c as any).active ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: (c as any).active ? '#22c55e' : '#ef4444' }}
+                              >
+                                {(c as any).active ? 'Attivo' : 'Spento'}
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1738,16 +1928,48 @@ export default function AdminPage() {
                       const m = Math.floor((r.total_seconds % 3600) / 60)
                       const s = r.total_seconds % 60
                       const hms = `${h > 0 ? h + 'h ' : ''}${m > 0 ? m + 'm ' : ''}${s}s`
+                      const isOpen = expandedGpuCompany === r.company_name
+                      const detailJobs = r.jobs
                       return (
-                        <tr key={i}>
-                          <td>{r.company_name}</td>
-                          <td style={{ color: '#64748b' }}>{r.company_email}</td>
-                          <td style={{ textAlign: 'right' }}>{r.job_count}</td>
-                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{hms}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
-                            € {r.cost_eur.toFixed(4)}
-                          </td>
-                        </tr>
+                        <>
+                          <tr
+                            key={i}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setExpandedGpuCompany(isOpen ? null : r.company_name)}
+                          >
+                            <td>
+                              <div className="flex items-center gap-2">
+                                {isOpen ? <ChevronDown size={13} style={{ color: '#f59e0b', flexShrink: 0 }} /> : <ChevronRight size={13} style={{ color: '#64748b', flexShrink: 0 }} />}
+                                {r.company_name}
+                              </div>
+                            </td>
+                            <td style={{ color: '#64748b' }}>{r.company_email}</td>
+                            <td style={{ textAlign: 'right' }}>{r.job_count}</td>
+                            <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{hms}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                              € {r.cost_eur.toFixed(4)}
+                            </td>
+                          </tr>
+                          {isOpen && detailJobs && detailJobs.map((j, ji) => {
+                            const jh = Math.floor(j.seconds / 3600)
+                            const jm = Math.floor((j.seconds % 3600) / 60)
+                            const js2 = j.seconds % 60
+                            const jhms = `${jh > 0 ? jh + 'h ' : ''}${jm > 0 ? jm + 'm ' : ''}${js2}s`
+                            return (
+                              <tr key={`${i}-${ji}`} style={{ background: 'rgba(245,158,11,0.03)' }}>
+                                <td colSpan={2} style={{ paddingLeft: '2.5rem', fontSize: '0.78rem', color: '#94a3b8' }}>
+                                  <span style={{ fontFamily: 'monospace', color: '#64748b', marginRight: 8 }}>#{j.job_id}</span>
+                                  {new Date(j.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                </td>
+                                <td style={{ textAlign: 'right', fontSize: '0.78rem', color: '#64748b' }}>1</td>
+                                <td style={{ textAlign: 'right', fontSize: '0.78rem', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{jhms}</td>
+                                <td style={{ textAlign: 'right', fontSize: '0.78rem', fontWeight: 600, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                                  € {j.cost_eur.toFixed(4)}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </>
                       )
                     })}
                   </tbody>
@@ -1771,6 +1993,145 @@ export default function AdminPage() {
       <AnimatePresence>
         {selectedCompany && (
           <CompanyModal company={selectedCompany} onClose={() => setSelectedCompany(null)} />
+        )}
+      </AnimatePresence>
+
+      {/* P&L Chart modal */}
+      <AnimatePresence>
+        {showPLChart && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+            onClick={() => setShowPLChart(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              transition={{ duration: 0.22 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, width: '100%', maxWidth: 720, padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 style={{ color: '#f1f5f9', fontWeight: 700, fontSize: '1rem', margin: 0 }}>Grafico P&amp;L mensile</h3>
+                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 3 }}>Utile (fatturato−{taxRate}% tasse) e spese per mese</div>
+                </div>
+                <button onClick={() => setShowPLChart(false)} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+              </div>
+
+              {chartLoading ? (
+                <div style={{ textAlign: 'center', color: '#475569', padding: '2rem' }}>Caricamento...</div>
+              ) : monthlyChartData.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#475569', padding: '2rem' }}>Nessun dato disponibile</div>
+              ) : (() => {
+                const bars = monthlyChartData.map((ms) => {
+                  const lordo  = ms.revenue_eur
+                  const netto  = lordo * (1 - taxRate / 100)
+                  const spese  = ms.gpu_cost_eur + FIXED_MONTHLY_EUR
+                  const utileM = netto - spese
+                  return { label: ms.label, netto, spese, utile: utileM }
+                })
+
+                const allVals = bars.flatMap((b) => [b.utile, b.spese, b.netto])
+                const maxAbs = Math.max(...allVals.map(Math.abs), 0.01)
+                const chartH = 160
+                const zeroY = chartH / 2
+
+                return (
+                  <div>
+                    {/* Legend */}
+                    <div className="flex gap-4 mb-4 flex-wrap" style={{ justifyContent: 'center' }}>
+                      {[
+                        { color: '#22c55e', label: 'Utile (fatturato−tasse)' },
+                        { color: '#ef4444', label: 'Spese totali' },
+                        { color: '#f59e0b', label: 'Utile netto' },
+                      ].map((l) => (
+                        <div key={l.label} className="flex items-center gap-1.5">
+                          <div style={{ width: 10, height: 10, borderRadius: 3, background: l.color }} />
+                          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{l.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <svg width="100%" height={chartH + 40} style={{ overflow: 'visible' }}>
+                      {/* Zero line */}
+                      <line x1="0%" y1={zeroY} x2="100%" y2={zeroY} stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
+
+                      {bars.map((b, i) => {
+                        const n = bars.length
+                        const groupW = 100 / n
+                        const barW = groupW * 0.22
+                        const gapX = groupW * i
+
+                        const toY = (v: number) => zeroY - (v / maxAbs) * (chartH / 2)
+                        const barRect = (v: number, offsetPct: number, color: string) => {
+                          const y1 = toY(v)
+                          const y2 = zeroY
+                          const top = Math.min(y1, y2)
+                          const h = Math.abs(y1 - y2)
+                          return (
+                            <rect
+                              x={`${gapX + offsetPct}%`}
+                              y={top}
+                              width={`${barW}%`}
+                              height={Math.max(h, 1.5)}
+                              rx={2}
+                              fill={color}
+                              opacity={0.85}
+                            />
+                          )
+                        }
+
+                        return (
+                          <g key={i}>
+                            {barRect(b.utile,  groupW * 0.05, '#22c55e')}
+                            {barRect(b.spese > 0 ? -b.spese : 0, groupW * 0.29, '#ef4444')}
+                            {barRect(b.netto,  groupW * 0.53, '#f59e0b')}
+                            <text
+                              x={`${gapX + groupW * 0.39}%`}
+                              y={chartH + 16}
+                              textAnchor="middle"
+                              fill="#475569"
+                              fontSize={9}
+                            >
+                              {b.label.slice(0, 6)}
+                            </text>
+                          </g>
+                        )
+                      })}
+                    </svg>
+
+                    {/* Table summary */}
+                    <div style={{ marginTop: '1rem', overflowX: 'auto' }}>
+                      <table className="data-table" style={{ fontSize: '0.78rem' }}>
+                        <thead>
+                          <tr>
+                            <th>Mese</th>
+                            <th style={{ textAlign: 'right', color: '#22c55e' }}>Utile</th>
+                            <th style={{ textAlign: 'right', color: '#ef4444' }}>Spese</th>
+                            <th style={{ textAlign: 'right', color: '#f59e0b' }}>Utile netto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bars.map((b, i) => (
+                            <tr key={i}>
+                              <td style={{ color: '#94a3b8' }}>{monthlyChartData[i].label}</td>
+                              <td style={{ textAlign: 'right', color: b.utile >= 0 ? '#22c55e' : '#ef4444' }}>€ {b.utile.toFixed(2)}</td>
+                              <td style={{ textAlign: 'right', color: '#ef4444' }}>€ {b.spese.toFixed(4)}</td>
+                              <td style={{ textAlign: 'right', fontWeight: 700, color: b.netto >= 0 ? '#f59e0b' : '#ef4444' }}>€ {b.netto.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -2202,6 +2563,7 @@ export default function AdminPage() {
           </div>
         )}
       </AnimatePresence>
+
     </div>
   )
 }

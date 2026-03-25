@@ -1,7 +1,10 @@
+import collections
 import html
 import os
 import re
 import secrets
+import threading
+import time
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
@@ -19,6 +22,12 @@ from email_utils import send_email
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://solar-dinoweb.fly.dev")
+
+# ── Login brute-force protection ───────────────────────────────────────────
+_LOGIN_FAILURES: dict[str, list[float]] = collections.defaultdict(list)
+_LOGIN_LOCK = threading.Lock()
+_MAX_FAILURES   = 10
+_WINDOW_SECONDS = 600  # 10 minuti
 
 
 def _extract_ipv4(request: Request) -> Optional[str]:
@@ -267,11 +276,24 @@ def _set_auth_cookie(response: Response, token: str) -> None:
 
 @router.post("/login")
 def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    # Rate limiting: max _MAX_FAILURES falliti per IP in _WINDOW_SECONDS
+    client_ip = (
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+    now = time.time()
+    with _LOGIN_LOCK:
+        _LOGIN_FAILURES[client_ip] = [t for t in _LOGIN_FAILURES[client_ip] if now - t < _WINDOW_SECONDS]
+        if len(_LOGIN_FAILURES[client_ip]) >= _MAX_FAILURES:
+            raise HTTPException(status_code=429, detail="Troppi tentativi falliti. Riprova tra 10 minuti.")
+
     company = db.query(models.Company).filter(
         models.Company.email == req.email.lower().strip()
     ).first()
 
     if not company or not auth_utils.verify_password(req.password, company.password_hash):
+        with _LOGIN_LOCK:
+            _LOGIN_FAILURES[client_ip].append(time.time())
         raise HTTPException(status_code=401, detail="Email o password errati")
 
     if not company.is_active:
@@ -344,6 +366,14 @@ def me(current: models.Company = Depends(auth_utils.get_current_company), db: Se
         "ip_already_used":        ip_already_used,
         "created_at":             current.created_at.isoformat(),
     }
+
+
+@router.get("/admin-check", status_code=200)
+def admin_check(current: models.Company = Depends(auth_utils.get_current_company)):
+    """Ritorna 200 se l'utente è admin, 403 altrimenti. Nessun campo is_admin nel body."""
+    if not current.is_admin:
+        raise HTTPException(status_code=403, detail="Accesso negato")
+    return {}
 
 
 @router.post("/support", status_code=201)
@@ -691,8 +721,8 @@ h1{{color:{color};margin-top:0;}}a{{color:#f59e0b;}}
 </style></head>
 <body><div class="card">
 <div style="font-size:48px;">{icon}</div>
-<h1>{title}</h1>
-<p style="color:#94a3b8;">{message}</p>
+<h1>{html.escape(title)}</h1>
+<p style="color:#94a3b8;">{html.escape(message)}</p>
 <a href="/" style="display:inline-block;margin-top:24px;padding:12px 24px;background:#f59e0b;color:#0f172a;font-weight:700;border-radius:10px;text-decoration:none;">
   Vai alla dashboard
 </a>

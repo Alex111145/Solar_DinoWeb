@@ -18,7 +18,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 PRICE_PER_PANEL      = float(os.getenv("PRICE_PER_PANEL", "0.01"))      # € per pannello rilevato
 UPLOAD_DIR           = os.getenv("UPLOAD_DIR", "elaborazioni")
-RUNPOD_COST_PER_SEC  = float(os.getenv("RUNPOD_COST_PER_SEC", "0.000122"))  # € per secondo GPU (default RTX 3090 ~$0.44/h)
+RUNPOD_COST_PER_SEC  = float(os.getenv("RUNPOD_COST_PER_SEC", "0.000306"))  # € per secondo GPU (default NVIDIA A10 ~$0.000306/s)
 
 
 # ---------------------------------------------------------------------------
@@ -63,16 +63,21 @@ def get_stats(
     ) or 0
     total_revenue = total_stripe + total_bonif
 
-    # Fatturato mese corrente = solo abbonamenti attivati negli ultimi 30 gg
-    SUBSCRIPTION_PACKAGES = ('starter', 'medium', 'unlimited', 'unlimited_annual')
-    revenue_current_month = (
+    # Fatturato mese corrente = tutti i pagamenti Stripe + bonifica approvati negli ultimi 30 gg
+    revenue_stripe_month = (
         db.query(func.sum(models.StripePayment.amount_eur))
+        .filter(models.StripePayment.created_at >= last_30_days)
+        .scalar()
+    ) or 0
+    revenue_bonif_month = (
+        db.query(func.sum(models.BonificoRequest.amount_eur))
         .filter(
-            models.StripePayment.created_at >= last_30_days,
-            models.StripePayment.package.in_(SUBSCRIPTION_PACKAGES),
+            models.BonificoRequest.status == "approved",
+            models.BonificoRequest.approved_at >= last_30_days,
         )
         .scalar()
     ) or 0
+    revenue_current_month = revenue_stripe_month + revenue_bonif_month
 
     # Costo GPU ultimo mese = job completati negli ultimi 30 gg
     jobs_last_month = (
@@ -89,6 +94,17 @@ def get_stats(
         for j in jobs_last_month
     )
 
+    # Costo GPU totale dall'inizio (tutti i job completati)
+    all_jobs = (
+        db.query(models.Job)
+        .filter(models.Job.status == "completato", models.Job.completed_at.isnot(None))
+        .all()
+    )
+    total_gpu_cost = sum(
+        max((j.completed_at - j.created_at).total_seconds(), 0.0) * RUNPOD_COST_PER_SEC
+        for j in all_jobs
+    )
+
     return {
         "active_companies":        total_companies,
         "total_jobs":              total_jobs,
@@ -97,6 +113,7 @@ def get_stats(
         "total_revenue_eur":       round(total_revenue, 2),
         "revenue_month_eur":       round(revenue_current_month, 2),
         "gpu_cost_month_eur":      round(gpu_cost_month, 4),
+        "total_gpu_cost_eur":      round(total_gpu_cost, 4),
         "price_per_panel":         PRICE_PER_PANEL,
     }
 
@@ -1113,13 +1130,17 @@ def gpu_costs(
         .all()
     )
 
-    data: dict = defaultdict(lambda: {"job_count": 0, "total_seconds": 0.0})
+    data: dict = defaultdict(lambda: {"job_count": 0, "total_seconds": 0.0, "jobs": []})
     for job in jobs:
-        seconds = (job.completed_at - job.created_at).total_seconds()
-        if seconds < 0:
-            seconds = 0.0
+        seconds = max((job.completed_at - job.created_at).total_seconds(), 0.0)
         data[job.company_id]["job_count"] += 1
         data[job.company_id]["total_seconds"] += seconds
+        data[job.company_id]["jobs"].append({
+            "job_id":     job.id[:8] if job.id else "—",
+            "created_at": job.created_at.isoformat(),
+            "seconds":    round(seconds),
+            "cost_eur":   round(seconds * RUNPOD_COST_PER_SEC, 4),
+        })
 
     company_ids = list(data.keys())
     companies_map = {
@@ -1130,16 +1151,172 @@ def gpu_costs(
     rows = []
     for company_id, d in data.items():
         c = companies_map.get(company_id)
+        jobs_sorted = sorted(d["jobs"], key=lambda j: j["created_at"], reverse=True)
         rows.append({
+            "company_id":    company_id,
             "company_name":  (c.ragione_sociale or c.name) if c else "N/A",
             "company_email": c.email if c else "N/A",
             "job_count":     d["job_count"],
             "total_seconds": round(d["total_seconds"]),
             "cost_eur":      round(d["total_seconds"] * RUNPOD_COST_PER_SEC, 4),
+            "jobs":          jobs_sorted,
         })
 
     rows.sort(key=lambda r: r["cost_eur"], reverse=True)
     return rows
+
+
+@router.get("/gpu-costs/{company_id}")
+def gpu_cost_detail(
+    company_id: int,
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Dettaglio job GPU per singola azienda."""
+    jobs = (
+        db.query(models.Job)
+        .filter(
+            models.Job.company_id == company_id,
+            models.Job.status == "completato",
+            models.Job.completed_at.isnot(None),
+        )
+        .order_by(models.Job.completed_at.desc())
+        .all()
+    )
+    return [
+        {
+            "job_id":       str(j.id),
+            "created_at":   j.created_at.isoformat(),
+            "completed_at": j.completed_at.isoformat(),
+            "seconds":      round(max((j.completed_at - j.created_at).total_seconds(), 0.0), 1),
+            "cost_eur":     round(max((j.completed_at - j.created_at).total_seconds(), 0.0) * RUNPOD_COST_PER_SEC, 6),
+        }
+        for j in jobs
+    ]
+
+
+@router.get("/monthly-summary")
+def monthly_summary(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Riepilogo mensile (ultimi 12 mesi): fatturato + costo GPU."""
+    from dateutil.relativedelta import relativedelta
+    now = datetime.now(timezone.utc)
+    result = []
+    for i in range(11, -1, -1):
+        month_start = (now - relativedelta(months=i)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_end   = month_start + relativedelta(months=1)
+
+        stripe_rev = (
+            db.query(func.sum(models.StripePayment.amount_eur))
+            .filter(
+                models.StripePayment.created_at >= month_start,
+                models.StripePayment.created_at < month_end,
+            )
+            .scalar()
+        ) or 0
+        bonif_rev = (
+            db.query(func.sum(models.BonificoRequest.amount_eur))
+            .filter(
+                models.BonificoRequest.status == "approved",
+                models.BonificoRequest.created_at >= month_start,
+                models.BonificoRequest.created_at < month_end,
+            )
+            .scalar()
+        ) or 0
+
+        month_jobs = (
+            db.query(models.Job)
+            .filter(
+                models.Job.status == "completato",
+                models.Job.completed_at.isnot(None),
+                models.Job.completed_at >= month_start,
+                models.Job.completed_at < month_end,
+            )
+            .all()
+        )
+        gpu_cost = sum(
+            max((j.completed_at - j.created_at).total_seconds(), 0.0) * RUNPOD_COST_PER_SEC
+            for j in month_jobs
+        )
+
+        result.append({
+            "month":       month_start.strftime("%Y-%m"),
+            "label":       month_start.strftime("%b %y"),
+            "revenue_eur": round(float(stripe_rev + bonif_rev), 2),
+            "gpu_cost_eur": round(gpu_cost, 4),
+        })
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Monthly P&L stats (per grafico)
+# ---------------------------------------------------------------------------
+
+@router.get("/monthly-stats")
+def monthly_stats(
+    db: Session = Depends(get_db),
+    _: models.Company = Depends(auth_utils.require_admin),
+):
+    """Revenue e costo GPU mensili (ultimi 12 mesi) per grafico P&L."""
+    now = datetime.now(timezone.utc)
+    result = []
+    for i in range(11, -1, -1):
+        year  = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year  -= 1
+        if month == 12:
+            next_y, next_m = year + 1, 1
+        else:
+            next_y, next_m = year, month + 1
+        month_start = datetime(year, month, 1, tzinfo=timezone.utc)
+        month_end   = datetime(next_y, next_m, 1, tzinfo=timezone.utc)
+
+        stripe_rev = (
+            db.query(func.sum(models.StripePayment.amount_eur))
+            .filter(
+                models.StripePayment.created_at >= month_start,
+                models.StripePayment.created_at <  month_end,
+            )
+            .scalar()
+        ) or 0.0
+
+        bonif_rev = (
+            db.query(func.sum(models.BonificoRequest.amount_eur))
+            .filter(
+                models.BonificoRequest.status == "approved",
+                models.BonificoRequest.approved_at >= month_start,
+                models.BonificoRequest.approved_at <  month_end,
+            )
+            .scalar()
+        ) or 0.0
+
+        gpu_jobs = (
+            db.query(models.Job)
+            .filter(
+                models.Job.status == "completato",
+                models.Job.completed_at >= month_start,
+                models.Job.completed_at <  month_end,
+            )
+            .all()
+        )
+        gpu_cost = sum(
+            max((j.completed_at - j.created_at).total_seconds(), 0.0) * RUNPOD_COST_PER_SEC
+            for j in gpu_jobs
+        )
+
+        result.append({
+            "label":    month_start.strftime("%b %Y"),
+            "year":     year,
+            "month":    month,
+            "revenue":  round(stripe_rev + bonif_rev, 2),
+            "gpu_cost": round(gpu_cost, 4),
+        })
+
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -471,7 +471,7 @@ export default function LoginPage() {
               step: '2',
               icon: <span style={{ fontSize: 24 }}>👥</span>,
               title: 'Collaboratori inclusi',
-              desc: 'Ogni collaboratore si registra con la propria email e la stessa ragione sociale. I crediti vengono condivisi automaticamente — nessuna configurazione.',
+              desc: 'Ogni collaboratore si registra con la propria email e la stessa ragione sociale. I crediti vengono condivisi nella stessa azienda automaticamente.',
               highlight: false,
             },
             {
