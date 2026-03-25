@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -5,18 +6,41 @@ import DashboardPage from './pages/DashboardPage'
 import AdminPage from './pages/AdminPage'
 import CookieBanner from './components/CookieBanner'
 
-// Auth check: il token è nel cookie HttpOnly, usiamo 'email' come indicatore di sessione attiva
+type AuthState = 'loading' | 'ok' | 'unauth' | 'not_admin'
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const loggedIn = !!localStorage.getItem('email')
-  if (!loggedIn) return <Navigate to="/login" replace />
+  const [state, setState] = useState<AuthState>('loading')
+
+  useEffect(() => {
+    fetch('/auth/me', { credentials: 'include' })
+      .then((r) => {
+        if (!r.ok) { setState('unauth'); return }
+        setState('ok')
+      })
+      .catch(() => setState('unauth'))
+  }, [])
+
+  if (state === 'loading') return null
+  if (state === 'unauth') return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const loggedIn = !!localStorage.getItem('email')
-  const isAdmin = localStorage.getItem('is_admin') === 'true'
-  if (!loggedIn) return <Navigate to="/login" replace />
-  if (!isAdmin) return <Navigate to="/dashboard" replace />
+  const [state, setState] = useState<AuthState>('loading')
+
+  useEffect(() => {
+    fetch('/auth/me', { credentials: 'include' })
+      .then(async (r) => {
+        if (!r.ok) { setState('unauth'); return }
+        const data = await r.json()
+        setState(data.is_admin ? 'ok' : 'not_admin')
+      })
+      .catch(() => setState('unauth'))
+  }, [])
+
+  if (state === 'loading') return null
+  if (state === 'unauth') return <Navigate to="/login" replace />
+  if (state === 'not_admin') return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 

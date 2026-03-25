@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, LogOut, Users, BarChart2, Star,
   Check, X, TrendingUp, Building2, Euro,
-  FolderOpen, FileDown, ChevronRight, ChevronDown, MessageSquare, Zap,
+  FolderOpen, FileDown, ChevronRight, ChevronDown, MessageSquare, Zap, Bell,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -199,7 +199,6 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
           {[
             { label: 'Tipologia cliente', value: 'Normal' },
             { label: 'Ragione sociale', value: company.ragione_sociale || '—' },
-            { label: 'Partita IVA', value: company.vat_number || '—' },
             { label: 'Nome', value: company.name || '—' },
             { label: 'Email', value: company.email || '—' },
             { label: 'Crediti residui', value: String(company.credits ?? 0) },
@@ -328,6 +327,8 @@ export default function AdminPage() {
   const [pendingReviews, setPendingReviews] = useState(0)
   const [tickets, setTickets] = useState<AdminTicket[]>([])
   const [pendingTickets, setPendingTickets] = useState(0)
+  const [showBellDropdown, setShowBellDropdown] = useState(false)
+  const bellRef = useRef<HTMLDivElement>(null)
 
   // Admin ticket chat modal
   const [adminTicketDetail, setAdminTicketDetail] = useState<AdminTicketDetail | null>(null)
@@ -361,6 +362,16 @@ export default function AdminPage() {
     document.addEventListener('click', close)
     return () => document.removeEventListener('click', close)
   }, [openDropdown])
+
+  // Chiudi campanella al click fuori
+  useEffect(() => {
+    if (!showBellDropdown) return
+    const close = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setShowBellDropdown(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [showBellDropdown])
 
   // ── Load data ────────────────────────────────────────────────────────
   function loadData() {
@@ -467,6 +478,10 @@ export default function AdminPage() {
         setCompanies((prev) => prev.filter((c) => c.id !== id))
         setMsg('Azienda eliminata')
         setTimeout(() => setMsg(''), 3000)
+        // Reload from server to keep state consistent
+        apiFetch('/admin/companies').then((r) => r.ok ? r.json() : null).then((d) => {
+          if (d) setCompanies(Array.isArray(d) ? d : d.companies || [])
+        }).catch(() => {})
       }
     } catch { }
     setConfirmDeleteId(null)
@@ -586,13 +601,80 @@ export default function AdminPage() {
             <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#f1f5f9', letterSpacing: '-0.02em' }}>SolarDino</span>
             <span className="badge badge-amber ml-1">Admin</span>
           </div>
-          <button
-            className="btn-ghost flex items-center gap-2"
-            style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
-            onClick={async () => { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {}); localStorage.clear(); navigate('/login') }}
-          >
-            <LogOut size={15} /> Esci
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Campanella segnalazioni */}
+            <div ref={bellRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowBellDropdown((v) => !v)}
+                className="btn-ghost flex items-center justify-center"
+                style={{ width: 36, height: 36, padding: 0, position: 'relative' }}
+                title="Segnalazioni aperte"
+              >
+                <Bell size={17} />
+                {pendingTickets > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: '#ef4444', color: '#fff',
+                    fontSize: '0.6rem', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '2px solid #060912',
+                  }}>
+                    {pendingTickets}
+                  </span>
+                )}
+              </button>
+              <AnimatePresence>
+                {showBellDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    style={{
+                      position: 'absolute', top: '110%', right: 0, zIndex: 100,
+                      background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 14, minWidth: 300, maxWidth: 360,
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f1f5f9' }}>
+                        Segnalazioni aperte {pendingTickets > 0 && `(${pendingTickets})`}
+                      </span>
+                    </div>
+                    {tickets.filter((t) => t.status === 'in_elaborazione').length === 0 ? (
+                      <div style={{ padding: '1rem', fontSize: '0.82rem', color: '#64748b', textAlign: 'center' }}>
+                        Nessuna segnalazione aperta
+                      </div>
+                    ) : (
+                      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                        {tickets.filter((t) => t.status === 'in_elaborazione').map((t) => (
+                          <div
+                            key={t.id}
+                            style={{ padding: '0.7rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}
+                            onClick={() => { setTab('tickets'); setShowBellDropdown(false) }}
+                          >
+                            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#f1f5f9', marginBottom: 2 }}>{t.subject}</div>
+                            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 2 }}>{t.company_name || t.company_email || '—'}</div>
+                            <div style={{ fontSize: '0.68rem', color: '#475569' }}>{new Date(t.created_at).toLocaleDateString('it-IT')}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <button
+              className="btn-ghost flex items-center gap-2"
+              style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.25)' }}
+              onClick={async () => { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {}); localStorage.clear(); navigate('/login') }}
+            >
+              <LogOut size={15} /> Esci
+            </button>
+          </div>
         </div>
       </nav>
 

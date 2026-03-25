@@ -24,19 +24,19 @@ FRONTEND_URL   = os.getenv("FRONTEND_URL", "http://localhost:8000")
 SUBSCRIPTION_PLANS = {
     "starter": {
         "credits":   10,
-        "price_id":  os.getenv("STRIPE_PRICE_STARTER_SUB", ""),
+        "price_id":  os.getenv("STRIPE_PRICE_STARTER_SUB", "price_1TEmrTRo7NIommh07gLRy4ft"),
         "label":     "Starter",
         "price_eur": 149.99,
     },
     "medium": {
         "credits":   20,
-        "price_id":  os.getenv("STRIPE_PRICE_MEDIUM_SUB", ""),
+        "price_id":  os.getenv("STRIPE_PRICE_MEDIUM_SUB", "price_1TEmrkRo7NIommh0zLsp40xU"),
         "label":     "Medium",
         "price_eur": 249.99,
     },
     "unlimited": {
         "credits":   None,
-        "price_id":  os.getenv("STRIPE_PRICE_UNLIMITED_SUB", ""),
+        "price_id":  os.getenv("STRIPE_PRICE_UNLIMITED_SUB", "price_1TEms2Ro7NIommh0BtR2APdZ"),
         "label":     "Unlimited",
         "price_eur": 449.99,
     },
@@ -56,8 +56,14 @@ CREDIT_TIERS: list[tuple[int, float]] = [
 
 # Flat per-credit price for active subscribers (cheaper than regular tiers)
 CREDIT_PRICE_BY_PLAN: dict[str, float] = {
-    "starter": 13.99,
-    "medium":  10.99,
+    "starter": 12.99,
+    "medium":  9.99,
+}
+
+# Fixed Stripe Price IDs for subscriber loyalty credit packs (per unit)
+CREDIT_PRICE_ID_BY_PLAN: dict[str, str] = {
+    "starter": os.getenv("STRIPE_PRICE_CREDITS_STARTER", "price_1TEmvdRo7NIommh0yKlFT3qq"),  # €12.99/cad
+    "medium":  os.getenv("STRIPE_PRICE_CREDITS_MEDIUM",  "price_1TEmw3Ro7NIommh0KEmEiw0c"),  # €9.99/cad
 }
 
 def credit_unit_price(qty: int, subscription_plan: Optional[str] = None) -> float:
@@ -120,7 +126,7 @@ async def stripe_webhook(
                             company.subscription_end_date = now + relativedelta(years=1)
                         else:
                             company.subscription_end_date = now + relativedelta(months=1)
-                    sync_credits_by_vat(db, company.vat_number, company.credits)
+                    sync_credits_by_vat(db, None, company.credits, company.ragione_sociale)
                     amount_eur = (sess.get("amount_total") or 0) / 100
                     existing = db.query(models.StripePayment).filter(
                         models.StripePayment.stripe_session == sess.get("id")
@@ -199,8 +205,6 @@ def create_subscription_checkout(
     try:
         session = stripe.checkout.Session.create(
             customer=current.stripe_customer_id,
-            # Abilita tutti i metodi di pagamento supportati da Stripe (carta, SEPA/IBAN, Link, ecc.)
-            automatic_payment_methods={"enabled": True, "allow_redirects": "always"},
             line_items=[{"price": plan["price_id"], "quantity": 1}],
             mode="subscription",
             success_url=f"{FRONTEND_URL}/dashboard?payment=success",
@@ -210,7 +214,7 @@ def create_subscription_checkout(
                 "plan":       body.package,
                 "credits":    str(plan["credits"] or 9999),
             },
-            locale="it",  # interfaccia Stripe in italiano
+            locale="it",
         )
         return {"checkout_url": session.url}
     except stripe.error.StripeError as exc:
@@ -248,20 +252,7 @@ def cancel_subscription(
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
-    # Risolvi il manager (uno slave usa il manager della stessa P.IVA)
     manager = current
-    if not current.is_manager and current.vat_number:
-        mgr = (
-            db.query(models.Company)
-            .filter(
-                models.Company.vat_number == current.vat_number,
-                models.Company.is_manager == True,
-                models.Company.deleted_at.is_(None),
-            )
-            .first()
-        )
-        if mgr:
-            manager = mgr
 
     if not manager.subscription_active:
         raise HTTPException(status_code=400, detail="Nessun abbonamento attivo da cancellare.")
@@ -315,21 +306,28 @@ def buy_credits_checkout(
         current.stripe_customer_id = customer.id
         db.commit()
 
+    # Use a fixed Stripe Price ID for subscriber loyalty rates, price_data for everyone else
+    subscriber_price_id = CREDIT_PRICE_ID_BY_PLAN.get(active_plan) if active_plan else None
+
+    if subscriber_price_id:
+        line_item = {"price": subscriber_price_id, "quantity": qty}
+    else:
+        line_item = {
+            "price_data": {
+                "currency": "eur",
+                "unit_amount": unit_cents,
+                "product_data": {
+                    "name": f"SolarDino — {qty} elaborazion{'e' if qty == 1 else 'i'}",
+                    "description": f"Crediti una-tantum · €{unit_price:.2f}/cad · nessuna scadenza",
+                },
+            },
+            "quantity": qty,
+        }
+
     try:
         session = stripe.checkout.Session.create(
             customer=current.stripe_customer_id,
-            automatic_payment_methods={"enabled": True, "allow_redirects": "always"},
-            line_items=[{
-                "price_data": {
-                    "currency": "eur",
-                    "unit_amount": unit_cents,
-                    "product_data": {
-                        "name": f"SolarDino — {qty} elaborazion{'e' if qty == 1 else 'i'}",
-                        "description": f"Crediti una-tantum · €{unit_price:.2f}/cad · nessuna scadenza",
-                    },
-                },
-                "quantity": qty,
-            }],
+            line_items=[line_item],
             mode="payment",
             success_url=f"{FRONTEND_URL}/dashboard?payment=success",
             cancel_url=f"{FRONTEND_URL}/dashboard?payment=cancelled",

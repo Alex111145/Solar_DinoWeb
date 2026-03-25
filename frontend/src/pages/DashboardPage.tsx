@@ -4,7 +4,7 @@ import {
   Sun, Upload, CreditCard, History, Star, LogOut,
   X, FileDown, Check, AlertTriangle, Trash2,
   Mail, Lock, Building2, ChevronRight, Zap, Moon,
-  Wifi, WifiOff, RefreshCw, Radio, Users, UserPlus, Bell,
+  Wifi, WifiOff, RefreshCw, Radio, Bell,
 } from 'lucide-react'
 import { apiFetch } from '../api'
 
@@ -19,8 +19,8 @@ const CREDIT_TIERS = [
 ]
 // Flat loyalty rates for active subscribers (mirrors backend CREDIT_PRICE_BY_PLAN)
 const CREDIT_PRICE_BY_PLAN: Record<string, number> = {
-  starter: 13.99,
-  medium:  10.99,
+  starter: 12.99,
+  medium:   9.99,
 }
 function getCreditUnitPrice(qty: number, plan: string | null = null): { price: number; discount: number; isFlat: boolean } {
   if (plan && CREDIT_PRICE_BY_PLAN[plan] !== undefined) {
@@ -197,7 +197,7 @@ function EnterpriseConsentModal({ onConfirm, onClose }: { onConfirm: () => void;
           Gli ortomosaici elaborati verranno conservati da SolarDino e potranno essere utilizzati — in forma anonima
           e aggregata — per migliorare e riaddestrare il modello AI. I dati non verranno condivisi con terze parti.
           Puoi richiedere la cancellazione in qualsiasi momento scrivendo a{' '}
-          <a href="mailto:support@solardino.it" style={{ color: '#f59e0b' }}>support@solardino.it</a>.
+          <a href="mailto:agervasini1@gmail.com" style={{ color: '#f59e0b' }}>agervasini1@gmail.com</a>.
           Il trattamento è effettuato nel rispetto del Regolamento (UE) 2016/679 (GDPR).
         </p>
         <label className="flex items-start gap-3 cursor-pointer mb-6">
@@ -256,17 +256,217 @@ function ConsentModal({ onConfirm, onClose }: { onConfirm: () => void; onClose: 
   )
 }
 
+// ── Change Password Modal ──────────────────────────────────────────────────
+function ChangeEmailModal({ onClose }: { onClose: () => void }) {
+  const [newEmail, setNewEmail] = useState('')
+  const [pwd, setPwd] = useState('')
+  const [msg, setMsg] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  async function changeEmail() {
+    try {
+      const res = await apiFetch('/auth/change-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_email: newEmail, password: pwd }),
+      })
+      if (res.ok) {
+        setSuccess(true)
+        setMsg('Email di verifica inviata. Controlla la nuova casella e clicca il link.')
+        setTimeout(() => onClose(), 3000)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setMsg(err.detail || 'Errore aggiornamento email')
+      }
+    } catch { setMsg('Errore di connessione') }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+        className="card"
+        style={{ maxWidth: 420, width: '100%', padding: '2rem', borderRadius: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 style={{ color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Mail size={18} style={{ color: '#f59e0b' }} /> Cambia email
+          </h3>
+          <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+        </div>
+
+        {success ? (
+          <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)' }}>
+            <Check size={32} style={{ color: '#34d399', margin: '0 auto 8px' }} />
+            <p style={{ color: '#34d399', fontWeight: 600 }}>{msg}</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {msg && (
+              <div className="rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '0.875rem' }}>
+                {msg}
+              </div>
+            )}
+            <input className="form-input" type="email" placeholder="Nuova email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+            <input className="form-input" type="password" placeholder="Password attuale (conferma)" value={pwd} onChange={(e) => setPwd(e.target.value)} />
+            <button className="btn-amber w-full mt-1" style={{ padding: '0.7rem' }} onClick={changeEmail}>
+              Invia email di verifica
+            </button>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  )
+}
+
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [oldPwd, setOldPwd] = useState('')
+  const [newPwd, setNewPwd] = useState('')
+  const [confirm, setConfirm] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  async function changePassword() {
+    try {
+      const res = await apiFetch('/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
+      })
+      if (res.ok) {
+        setSuccess(true)
+        setMsg('Password aggiornata con successo!')
+        setTimeout(() => onClose(), 2000)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setMsg(err.detail || 'Errore aggiornamento password')
+        setConfirm(false)
+      }
+    } catch { setMsg('Errore di connessione') }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+        className="card"
+        style={{ maxWidth: 420, width: '100%', padding: '2rem', borderRadius: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h3 style={{ color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Lock size={18} style={{ color: '#f59e0b' }} /> Cambia password
+          </h3>
+          <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+        </div>
+
+        {success ? (
+          <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)' }}>
+            <Check size={32} style={{ color: '#34d399', margin: '0 auto 8px' }} />
+            <p style={{ color: '#34d399', fontWeight: 600 }}>{msg}</p>
+          </div>
+        ) : msg && !confirm ? (
+          <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '0.875rem' }}>
+            {msg}
+          </div>
+        ) : null}
+
+        {!success && !confirm && (
+          <div className="flex flex-col gap-3">
+            <input
+              className="form-input"
+              type="password"
+              placeholder="Password attuale"
+              value={oldPwd}
+              onChange={(e) => setOldPwd(e.target.value)}
+            />
+            <input
+              className="form-input"
+              type="password"
+              placeholder="Nuova password (min. 8 caratteri)"
+              value={newPwd}
+              onChange={(e) => setNewPwd(e.target.value)}
+            />
+            <button
+              className="btn-amber w-full mt-1"
+              style={{ padding: '0.7rem' }}
+              onClick={() => { if (oldPwd && newPwd.length >= 8) setConfirm(true) }}
+            >
+              Aggiorna password
+            </button>
+          </div>
+        )}
+
+        {!success && confirm && (
+          <div className="rounded-xl p-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 }}>Sei sicuro di voler cambiare la password?</p>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              Questa operazione è irreversibile.
+            </p>
+            <div className="flex gap-2">
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setConfirm(false)}>Annulla</button>
+              <button className="btn-amber" style={{ flex: 1 }} onClick={changePassword}>Confermo</button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  )
+}
+
+// ── IP Warning Modal ────────────────────────────────────────────────────────
+function IpWarningModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+        className="card"
+        style={{ maxWidth: 440, width: '100%', padding: '2rem', borderRadius: 20 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 style={{ color: '#ef4444', fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertTriangle size={20} style={{ color: '#ef4444' }} /> Accesso limitato
+          </h3>
+          <button onClick={onClose} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+        </div>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '1rem' }}>
+          Il tuo indirizzo IP è già associato ad un altro account su SolarDino.
+          Per questo motivo il tuo account non ha diritto a:
+        </p>
+        <ul style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', paddingLeft: '1.25rem', marginBottom: '1.25rem', lineHeight: 2 }}>
+          <li>Crediti bonus di benvenuto</li>
+          <li>Nessun abbonamento ereditato</li>
+          <li>Nessun bonus promozionale</li>
+        </ul>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+          Se pensi sia un errore, contatta <a href="mailto:agervasini1@gmail.com" style={{ color: '#f59e0b' }}>agervasini1@gmail.com</a>.
+        </p>
+        <button className="btn-amber w-full" onClick={onClose}>Ho capito</button>
+      </motion.div>
+    </div>
+  )
+}
+
 // ── Info Modal ─────────────────────────────────────────────────────────────
 // ── Profile Sidebar ────────────────────────────────────────────────────────
-interface SlaveAccount { id: number; name: string; email: string; is_active: boolean }
 
 function ProfileSidebar({
-  name, email, ragioneSociale, vatNumber, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete, subscriptionActive, subscriptionPlan, subscriptionEndDate, subscriptionCancelled, isManager,
+  name, email, ragioneSociale, history, downloadFile, myReview, onReviewUpdate, onClose, isDark, onToggleTheme, onRequestDelete, subscriptionActive, subscriptionPlan, subscriptionEndDate, subscriptionCancelled, onChangePassword, onChangeEmail,
 }: {
   name: string
   email: string
   ragioneSociale: string
-  vatNumber: string
   history: Job[]
   downloadFile: (jobId: string, format: string) => void
   myReview: Review | null
@@ -279,18 +479,14 @@ function ProfileSidebar({
   subscriptionPlan: string | null
   subscriptionEndDate: string | null
   subscriptionCancelled: boolean
-  isManager: boolean
+  onChangePassword: () => void
+  onChangeEmail: () => void
 }) {
   const [openSection, setOpenSection] = useState<string | null>(null)
   const [selectedHistoryJob, setSelectedHistoryJob] = useState<Job | null>(null)
   const [inputFiles, setInputFiles] = useState<{name: string; url: string; size_mb: number}[] | null>(null)
   const [inputFilesLoading, setInputFilesLoading] = useState(false)
-  const [newEmail, setNewEmail] = useState('')
-  const [emailPwd, setEmailPwd] = useState('')
-  const [oldPwd, setOldPwd] = useState('')
-  const [newPwd, setNewPwd] = useState('')
-  const [pwdConfirm, setPwdConfirm] = useState(false)
-  const [msg, setMsg] = useState('')
+  const [msg] = useState('')
   const [editStars, setEditStars] = useState(myReview?.stars ?? 0)
   const [editComment, setEditComment] = useState(myReview?.comment ?? '')
   const [reviewMsg, setReviewMsg] = useState('')
@@ -339,35 +535,6 @@ function ProfileSidebar({
     } catch { setReviewMsg('Errore') }
   }
 
-  async function changeEmail() {
-    try {
-      const res = await apiFetch('/auth/change-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ new_email: newEmail, password: emailPwd }),
-      })
-      if (res.ok) {
-        setMsg('Email di verifica inviata. Controlla la casella della nuova email e clicca il link per confermare.')
-        setNewEmail('')
-        setEmailPwd('')
-      } else {
-        const err = await res.json().catch(() => ({}))
-        setMsg(err.detail || 'Errore aggiornamento email')
-      }
-    } catch { setMsg('Errore') }
-  }
-
-  async function changePassword() {
-    try {
-      const res = await apiFetch('/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ old_password: oldPwd, new_password: newPwd }),
-      })
-      if (res.ok) { setMsg('Password aggiornata con successo'); setPwdConfirm(false) }
-      else setMsg('Errore: password attuale errata')
-    } catch { setMsg('Errore') }
-  }
 
   async function cancelSubscription() {
     setShowCancelSubModal(false)
@@ -496,7 +663,6 @@ function ProfileSidebar({
                 <div className="flex flex-col gap-2" style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
                   {[
                     { label: 'Ragione sociale', value: ragioneSociale || '—' },
-                    { label: 'Partita IVA', value: vatNumber || '—' },
                     { label: 'Nome', value: name || '—' },
                     { label: 'Email', value: email || '—' },
                     { label: 'Password', value: '••••••••' },
@@ -510,15 +676,13 @@ function ProfileSidebar({
                 <p style={{ fontSize: '0.75rem', color: st.textMuted, marginBottom: '0.75rem' }}>
                   Per modificare email o password usa le sezioni dedicate. Per altri dati contatta il supporto.
                 </p>
-                {isManager && (
-                  <button
-                    className="flex items-center gap-2"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}
-                    onClick={() => { onClose(); onRequestDelete() }}
-                  >
-                    <Trash2 size={13} /> Elimina account
-                  </button>
-                )}
+                <button
+                  className="flex items-center gap-2"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.8rem', fontWeight: 600 }}
+                  onClick={() => { onClose(); onRequestDelete() }}
+                >
+                  <Trash2 size={13} /> Elimina account
+                </button>
               </div>
             )}
           </div>
@@ -528,34 +692,11 @@ function ProfileSidebar({
             <button
               className="w-full flex items-center justify-between p-4"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
-              onClick={() => toggle('email')}
+              onClick={onChangeEmail}
             >
               <span className="flex items-center gap-2 text-sm font-medium"><Mail size={15} /> Cambia email</span>
-              <ChevronRight size={15} style={{ transform: openSection === 'email' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
+              <ChevronRight size={15} style={{ color: st.textMuted }} />
             </button>
-            {openSection === 'email' && (
-              <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
-                <input
-                  className="form-input mt-3"
-                  type="email"
-                  placeholder="Nuova email"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  style={{ fontSize: '0.85rem' }}
-                />
-                <input
-                  className="form-input mt-2"
-                  type="password"
-                  placeholder="Password attuale (per conferma)"
-                  value={emailPwd}
-                  onChange={(e) => setEmailPwd(e.target.value)}
-                  style={{ fontSize: '0.85rem' }}
-                />
-                <button className="btn-amber w-full mt-3" style={{ fontSize: '0.85rem', padding: '0.6rem' }} onClick={changeEmail}>
-                  Invia email di verifica
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Cambia password */}
@@ -563,65 +704,11 @@ function ProfileSidebar({
             <button
               className="w-full flex items-center justify-between p-4"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: st.text }}
-              onClick={() => toggle('pwd')}
+              onClick={onChangePassword}
             >
               <span className="flex items-center gap-2 text-sm font-medium"><Lock size={15} /> Cambia password</span>
-              <ChevronRight size={15} style={{ transform: openSection === 'pwd' ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: st.textMuted }} />
+              <ChevronRight size={15} style={{ color: st.textMuted }} />
             </button>
-            {openSection === 'pwd' && (
-              <div style={{ padding: '0 1rem 1rem', borderTop: `1px solid ${st.borderSub}` }}>
-                {!pwdConfirm ? (
-                  <>
-                    <input
-                      className="form-input mt-3"
-                      type="password"
-                      placeholder="Password attuale"
-                      value={oldPwd}
-                      onChange={(e) => setOldPwd(e.target.value)}
-                      style={{ fontSize: '0.85rem', marginBottom: 8 }}
-                    />
-                    <input
-                      className="form-input"
-                      type="password"
-                      placeholder="Nuova password"
-                      value={newPwd}
-                      onChange={(e) => setNewPwd(e.target.value)}
-                      style={{ fontSize: '0.85rem' }}
-                    />
-                    <button
-                      className="btn-amber w-full mt-3"
-                      style={{ fontSize: '0.85rem', padding: '0.6rem' }}
-                      onClick={() => { if (oldPwd && newPwd) setPwdConfirm(true) }}
-                    >
-                      Aggiorna password
-                    </button>
-                  </>
-                ) : (
-                  <div className="mt-3 rounded-xl p-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                    <p style={{ fontSize: '0.82rem', color: st.text, fontWeight: 600, marginBottom: 4 }}>Sei sicuro di voler cambiare la password?</p>
-                    <p style={{ fontSize: '0.78rem', color: st.textSec, marginBottom: 12, lineHeight: 1.5 }}>
-                      Questa operazione è irreversibile. Potrai cambiarla di nuovo al massimo una volta a settimana.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        className="btn-ghost"
-                        style={{ flex: 1, fontSize: '0.8rem', padding: '0.45rem' }}
-                        onClick={() => setPwdConfirm(false)}
-                      >
-                        Annulla
-                      </button>
-                      <button
-                        className="btn-amber"
-                        style={{ flex: 1, fontSize: '0.8rem', padding: '0.45rem' }}
-                        onClick={changePassword}
-                      >
-                        Confermo
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Storico elaborazioni */}
@@ -1091,22 +1178,10 @@ export default function DashboardPage() {
   const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '')
   const [credits, setCredits] = useState(parseInt(localStorage.getItem('credits') || '0'))
   const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
-  const [vatNumber, setVatNumber] = useState(localStorage.getItem('vat_number') || '')
-  const [isManager, setIsManager] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState(false)
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
   const [subscriptionCancelled, setSubscriptionCancelled] = useState(false)
-  const [ipAlreadyUsed, setIpAlreadyUsed] = useState(localStorage.getItem('ip_already_used') === 'true')
-
-  // Team modal (B)
-  const [showTeamModal, setShowTeamModal] = useState(false)
-  const [teamSlaves, setTeamSlaves] = useState<SlaveAccount[]>([])
-  const [teamSlavesLoaded, setTeamSlavesLoaded] = useState(false)
-  const [teamSlaveForm, setTeamSlaveForm] = useState({ email: '', password: '' })
-  const [teamSlaveMsg, setTeamSlaveMsg] = useState('')
-  const [teamSlaveLoading, setTeamSlaveLoading] = useState(false)
-
   // Bell notifications (C)
   const [notifications, setNotifications] = useState<{id: number; title: string; message: string; is_read: boolean; ticket_id: number | null; created_at: string}[]>([])
   const [showBellDropdown, setShowBellDropdown] = useState(false)
@@ -1125,8 +1200,15 @@ export default function DashboardPage() {
 
   // Delete account confirm modal (E)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  // Hard-delete team confirm modal (F)
-  const [showDeleteTeamModal, setShowDeleteTeamModal] = useState(false)
+  // Change password modal
+  const [showChangePwdModal, setShowChangePwdModal] = useState(false)
+  const [showChangeEmailModal, setShowChangeEmailModal] = useState(false)
+  // IP warning modal — show once on load if ip is flagged
+  const [showIpModal, setShowIpModal] = useState(() => {
+    const v = localStorage.getItem('show_ip_warning') === 'true'
+    if (v) localStorage.removeItem('show_ip_warning')
+    return v
+  })
 
   // Theme state
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light')
@@ -1218,13 +1300,10 @@ export default function DashboardPage() {
         const c = d.credits ?? d.user?.credits ?? credits
         setCredits(c)
         if (d.ragione_sociale) { setRagioneSociale(d.ragione_sociale); localStorage.setItem('ragione_sociale', d.ragione_sociale) }
-        if (d.vat_number) { setVatNumber(d.vat_number); localStorage.setItem('vat_number', d.vat_number) }
-        if (d.is_manager !== undefined) setIsManager(!!d.is_manager)
         if (d.subscription_active !== undefined) setSubscriptionActive(!!d.subscription_active)
         if (d.subscription_plan !== undefined) setSubscriptionPlan(d.subscription_plan ?? null)
         if (d.subscription_end_date !== undefined) setSubscriptionEndDate(d.subscription_end_date ?? null)
         if (d.subscription_cancelled !== undefined) setSubscriptionCancelled(!!d.subscription_cancelled)
-        if (d.ip_already_used !== undefined) setIpAlreadyUsed(!!d.ip_already_used)
         localStorage.setItem('name', d.name || d.user?.name || userName)
         localStorage.setItem('email', d.email || d.user?.email || userEmail)
         localStorage.setItem('credits', String(c))
@@ -1518,64 +1597,12 @@ export default function DashboardPage() {
     } catch { }
   }
 
-  // ── Team modal helpers (B) ─────────────────────────────────────────────
-  async function loadTeamSlaves() {
-    try {
-      const res = await apiFetch('/auth/slaves')
-      if (res.ok) { setTeamSlaves(await res.json()); setTeamSlavesLoaded(true) }
-    } catch { /* noop */ }
-  }
-
-  async function createTeamSlave() {
-    if (!teamSlaveForm.email || !teamSlaveForm.password) {
-      setTeamSlaveMsg('Compila tutti i campi'); return
-    }
-    setTeamSlaveLoading(true)
-    setTeamSlaveMsg('')
-    try {
-      const res = await apiFetch('/auth/create-slave', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: teamSlaveForm.email,
-          password: teamSlaveForm.password,
-        }),
-      })
-      if (res.ok) {
-        setTeamSlaveForm({ email: '', password: '' })
-        setTeamSlaveMsg('Account creato con successo!')
-        await loadTeamSlaves()
-      } else {
-        const err = await res.json().catch(() => ({}))
-        setTeamSlaveMsg(err.detail || 'Errore creazione account')
-      }
-    } catch { setTeamSlaveMsg('Errore di rete') }
-    setTeamSlaveLoading(false)
-  }
-
-  async function deleteTeamSlave(id: number) {
-    try {
-      const res = await apiFetch(`/auth/slaves/${id}`, { method: 'DELETE' })
-      if (res.ok) setTeamSlaves((prev) => prev.filter((s) => s.id !== id))
-    } catch { /* noop */ }
-  }
-
   // ── Delete account (E) ─────────────────────────────────────────────────
   async function deleteAccountFromMain() {
     try {
       await apiFetch('/auth/me', { method: 'DELETE' })
       localStorage.clear()
       window.location.href = '/login'
-    } catch { /* noop */ }
-  }
-
-  // ── Hard-delete intero team (F) ─────────────────────────────────────────
-  async function deleteTeamFromMain() {
-    try {
-      await apiFetch('/auth/team/hard', { method: 'DELETE' })
-      setTeamSlaves([])
-      setShowDeleteTeamModal(false)
-      setShowTeamModal(false)
     } catch { /* noop */ }
   }
 
@@ -1617,12 +1644,21 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div
-              className="badge badge-amber"
-              style={{ cursor: 'default' }}
-            >
+            <div className="badge badge-amber" style={{ cursor: 'default' }}>
               {credits} elaborazioni rimaste
             </div>
+            {subscriptionActive && subscriptionEndDate && (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center',
+                padding: '0.2rem 0.65rem', borderRadius: 9999,
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.35)',
+                color: '#ef4444', fontSize: '0.72rem', fontWeight: 700,
+                cursor: 'default', whiteSpace: 'nowrap',
+              }}>
+                scade {new Date(subscriptionEndDate).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+              </div>
+            )}
 
             {/* Bell icon (C) */}
             <div ref={bellRef} style={{ position: 'relative' }}>
@@ -1703,16 +1739,6 @@ export default function DashboardPage() {
               </AnimatePresence>
             </div>
 
-            {/* Team button — only for manager */}
-            {isManager && (
-              <button
-                onClick={() => { setShowTeamModal(true); if (!teamSlavesLoaded) loadTeamSlaves() }}
-                className="btn-ghost flex items-center gap-1.5"
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', fontWeight: 600 }}
-              >
-                <Users size={15} /> Gestione Team
-              </button>
-            )}
 
             <button
               onClick={() => setShowProfile(true)}
@@ -2108,14 +2134,6 @@ export default function DashboardPage() {
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>Scegli il pacchetto più adatto alle tue esigenze</p>
             </div>
           </div>
-
-          {/* Banner IP duplicato */}
-          {ipAlreadyUsed && (
-            <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', fontSize: '0.85rem', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <span style={{ flexShrink: 0, marginTop: 1 }}>⚠️</span>
-              <span>Questo indirizzo IP è già registrato ad un'altra azienda. Pertanto questo account non può avere il credito bonus.</span>
-            </div>
-          )}
 
           {/* Abbonamenti Mensili */}
           {subscribeError && (
@@ -2519,7 +2537,6 @@ export default function DashboardPage() {
             name={userName}
             email={userEmail}
             ragioneSociale={ragioneSociale}
-            vatNumber={vatNumber}
             history={history}
             downloadFile={downloadFile}
             myReview={myReview}
@@ -2527,14 +2544,27 @@ export default function DashboardPage() {
             onClose={() => setShowProfile(false)}
             isDark={isDark}
             onToggleTheme={toggleTheme}
-            isManager={isManager}
             subscriptionActive={subscriptionActive}
             subscriptionPlan={subscriptionPlan}
             subscriptionEndDate={subscriptionEndDate}
             subscriptionCancelled={subscriptionCancelled}
             onRequestDelete={() => setShowDeleteModal(true)}
+            onChangePassword={() => { setShowProfile(false); setShowChangePwdModal(true) }}
+            onChangeEmail={() => { setShowProfile(false); setShowChangeEmailModal(true) }}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showChangePwdModal && <ChangePasswordModal onClose={() => setShowChangePwdModal(false)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showChangeEmailModal && <ChangeEmailModal onClose={() => setShowChangeEmailModal(false)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showIpModal && <IpWarningModal onClose={() => setShowIpModal(false)} />}
       </AnimatePresence>
 
       {/* ── Floating elaboration popup ────────────────────────────────── */}
@@ -2664,7 +2694,7 @@ export default function DashboardPage() {
                     `Stato:     errore`,
                     `Dettaglio: ${activeJob.error_message || 'Nessun dettaglio disponibile'}`,
                     '',
-                    'Per assistenza contatta support@solardino.it',
+                    'Per assistenza contatta agervasini1@gmail.com',
                   ]
                   const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
                   const url = URL.createObjectURL(blob)
@@ -2684,74 +2714,6 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ── Team Modal (B) ─────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {showTeamModal && (
-          <div className="modal-overlay" onClick={() => setShowTeamModal(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-              className="card"
-              style={{ maxWidth: 500, width: '100%', padding: '2rem', borderRadius: 20, maxHeight: '85vh', overflowY: 'auto' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <Users size={18} style={{ color: '#f59e0b' }} />
-                  <h3 style={{ color: 'var(--text-primary)', fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Gestione Team</h3>
-                </div>
-                <button onClick={() => setShowTeamModal(false)} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
-              </div>
-
-              {/* Existing slaves */}
-              {teamSlavesLoaded && teamSlaves.length === 0 && (
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.5rem 0 1rem' }}>Nessun account secondario.</p>
-              )}
-              {teamSlaves.length > 0 && (
-                <div className="flex flex-col gap-2 mb-5">
-                  {teamSlaves.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between rounded-xl px-4 py-2.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>{s.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.email}</div>
-                      </div>
-                      <button
-                        onClick={() => deleteTeamSlave(s.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex' }}
-                        title="Rimuovi"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add slave form */}
-              <div style={{ borderTop: teamSlaves.length > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none', paddingTop: teamSlaves.length > 0 ? '1rem' : 0 }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <UserPlus size={14} style={{ color: '#f59e0b' }} />
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Nuovo account dipendente</span>
-                </div>
-                <input className="form-input mb-2" type="email" placeholder="Email dipendente" value={teamSlaveForm.email} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, email: e.target.value }))} style={{ fontSize: '0.85rem' }} />
-                <input className="form-input mb-3" type="password" placeholder="Password temporanea" value={teamSlaveForm.password} onChange={(e) => setTeamSlaveForm((f) => ({ ...f, password: e.target.value }))} style={{ fontSize: '0.85rem' }} />
-                {teamSlaveMsg && (
-                  <div className="rounded-xl p-2 mb-3" style={{ background: teamSlaveMsg.includes('successo') ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${teamSlaveMsg.includes('successo') ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`, color: teamSlaveMsg.includes('successo') ? '#22c55e' : '#ef4444', fontSize: '0.8rem' }}>
-                    {teamSlaveMsg}
-                  </div>
-                )}
-                <button className="btn-amber w-full" style={{ fontSize: '0.85rem', padding: '0.6rem' }} disabled={teamSlaveLoading} onClick={createTeamSlave}>
-                  <UserPlus size={14} /> {teamSlaveLoading ? 'Creazione...' : 'Crea account'}
-                </button>
-              </div>
-
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* ── Delete Account Confirm Modal (E) ────────────────────────────── */}
       <AnimatePresence>
         {showDeleteModal && (
@@ -2762,60 +2724,55 @@ export default function DashboardPage() {
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2 }}
               className="card"
-              style={{ maxWidth: 420, width: '100%', padding: '2rem', borderRadius: 20, border: '1px solid rgba(239,68,68,0.3)', textAlign: 'center' }}
+              style={{ maxWidth: 460, width: '100%', padding: '2rem', borderRadius: 20, border: '1px solid rgba(239,68,68,0.3)' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-              <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Eliminare l'account?</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: 24 }}>
-                Sei sicuro di voler eliminare l'account? Questa operazione è irreversibile.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button className="btn-ghost" style={{ padding: '0.6rem 1.4rem' }} onClick={() => setShowDeleteModal(false)}>Annulla</button>
+              <div className="flex items-center justify-between mb-4">
+                <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.1rem' }}>Elimina account</h3>
+                <button onClick={() => setShowDeleteModal(false)} className="btn-ghost" style={{ padding: '0.3rem' }}><X size={18} /></button>
+              </div>
+
+              {/* Opzione 1 — solo il mio account */}
+              <div className="rounded-xl p-4 mb-3" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)' }}>
+                <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.9rem', marginBottom: 6 }}>Elimina il mio account</div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
+                  Elimina solo il tuo profilo personale. Gli altri account aziendali rimangono attivi.
+                </p>
                 <button
-                  style={{ padding: '0.6rem 1.4rem', background: '#ef4444', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+                  style={{ width: '100%', padding: '0.55rem', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 10, color: '#ef4444', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
                   onClick={deleteAccountFromMain}
                 >
-                  Elimina definitivamente
+                  Elimina il mio account
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
-
-      {/* ── Delete Team Confirm Modal (F) ────────────────────────────────── */}
-      <AnimatePresence>
-        {showDeleteTeamModal && (
-          <div className="modal-overlay" onClick={() => setShowDeleteTeamModal(false)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-              className="card"
-              style={{ maxWidth: 420, width: '100%', padding: '2rem', borderRadius: 20, border: '1px solid rgba(239,68,68,0.3)', textAlign: 'center' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-              <h3 style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>Eliminare tutto il team?</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7, marginBottom: 24 }}>
-                Tutti gli account secondari del team verranno <strong>rimossi definitivamente dal database</strong>. Il tuo account manager rimarrà attivo. Questa operazione è irreversibile.
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button className="btn-ghost" style={{ padding: '0.6rem 1.4rem' }} onClick={() => setShowDeleteTeamModal(false)}>Annulla</button>
+              {/* Opzione 2 — tutto l'account aziendale */}
+              <div className="rounded-xl p-4" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)' }}>
+                <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.9rem', marginBottom: 6 }}>Elimina account aziendale</div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
+                  Elimina <strong>tutti</strong> gli account con la stessa ragione sociale, annulla gli abbonamenti e azzera i crediti.
+                  La ragione sociale rimane nel sistema: eventuali nuove registrazioni <strong>non avranno diritto al bonus di benvenuto</strong>.
+                </p>
                 <button
-                  style={{ padding: '0.6rem 1.4rem', background: '#ef4444', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer' }}
-                  onClick={deleteTeamFromMain}
+                  style={{ width: '100%', padding: '0.55rem', background: '#ef4444', border: 'none', borderRadius: 10, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+                  onClick={async () => {
+                    try {
+                      await apiFetch('/auth/me/company', { method: 'DELETE' })
+                      localStorage.clear()
+                      window.location.href = '/login'
+                    } catch { /* noop */ }
+                  }}
                 >
-                  Elimina definitivamente
+                  Elimina tutto l'account aziendale
                 </button>
               </div>
+
+              <button className="btn-ghost w-full mt-3" onClick={() => setShowDeleteModal(false)}>Annulla</button>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
 
       {/* ── Ticket Conversation Modal ─────────────────────────────────── */}
       <AnimatePresence>

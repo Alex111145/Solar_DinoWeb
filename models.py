@@ -16,7 +16,6 @@ class Company(Base):
     email              = Column(String, unique=True, index=True, nullable=False)
     name               = Column(String, nullable=False)
     ragione_sociale    = Column(String, nullable=True)
-    vat_number         = Column(String, nullable=True, index=True)   # Partita IVA
     password_hash      = Column(String, nullable=False)
     stripe_customer_id = Column(String, nullable=True)
     credits            = Column(Integer, default=1)
@@ -30,17 +29,14 @@ class Company(Base):
     subscription_end_date   = Column(DateTime, nullable=True)          # Data scadenza abbonamento corrente
     deleted_at             = Column(DateTime, nullable=True, index=True) # Soft delete — usato in quasi ogni query
     last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
-    pec                  = Column(String, nullable=True)
-    welcome_bonus_used   = Column(Boolean, default=False)
+    welcome_bonus_used      = Column(Boolean, default=False)
     welcome_bonus_requested = Column(Boolean, default=False)    # True dopo aver richiesto il bonus di benvenuto
+    bonus_credits           = Column(Integer, default=0)        # Crediti di benvenuto ancora disponibili (0 o 1)
     subscription_cancelled  = Column(Boolean, default=False)    # True dopo cancellazione abbonamento (stop rinnovo)
     last_login_at        = Column(DateTime, nullable=True)
     created_at           = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    __table_args__ = (
-        # Indice composito per la query più frequente: aziende attive per P.IVA
-        Index("ix_companies_vat_deleted", "vat_number", "deleted_at"),
-    )
+    __table_args__ = ()
 
     jobs               = relationship("Job", back_populates="company", cascade="all, delete")
     usage_logs         = relationship("UsageLog", back_populates="company", cascade="all, delete")
@@ -60,6 +56,7 @@ class Job(Base):
     hotspot_count   = Column(Integer, nullable=True, default=0)
     degraded_count  = Column(Integer, nullable=True, default=0)
     log             = Column(Text, nullable=True)
+    is_bonus_job    = Column(Boolean, default=False)            # True se elaborato con credito di benvenuto
     # Dati opzionali impianto
     panel_model     = Column(String, nullable=True)   # Marca e modello
     panel_dimensions= Column(String, nullable=True)   # Dimensioni fisiche (LxH mm)

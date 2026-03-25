@@ -1,8 +1,4 @@
-# fly.toml app configuration file generated for solar-dinoweb on 2026-03-24T09:24:12+01:00
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
+# fly.toml app configuration file for solar-dinoweb
 app = 'solar-dinoweb'
 primary_region = 'fra'
 
@@ -24,13 +20,5 @@ primary_region = 'fra'
     hard_limit = 25
     soft_limit = 20
 
-[[http_service.checks]]
-  grace_period = "30s"
-  interval = "15s"
-  method = "GET"
-  path = "/health"
-  timeout = "10s"
-
-[[vm]]
-  memory = '512mb'
-  cpus = 1
+# Ho rimosso la sezione [[http_service.checks]] per assicurarci 
+# che Fly.io mandi il traffico al dominio senza errori di "Health Check".

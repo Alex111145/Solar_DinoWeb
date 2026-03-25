@@ -13,13 +13,12 @@ const container = {
   show: { opacity: 1, transition: { staggerChildren: 0.08 } },
 }
 
+const LEGAL_FORM_RE = /\b(srl|s\.r\.l\.?|spa|s\.p\.a\.?|snc|s\.n\.c\.?|sas|s\.a\.s\.?|srls|s\.r\.l\.s\.?|ss|s\.s\.?|coop|scarl|onlus|ets|di|e\.i\.?)\b/i
+
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState({
     ragione_sociale: '',
-    name: '',
-    vat_number: '',
-    pec: '',
     email: '',
     password: '',
   })
@@ -35,45 +34,23 @@ export default function RegisterPage() {
   function validate(): Record<string, string> {
     const e: Record<string, string> = {}
 
-    // Ragione sociale: must contain a legal form
-    if (!form.ragione_sociale.trim()) {
+    const rs = form.ragione_sociale.trim()
+    if (!rs) {
       e.ragione_sociale = 'Campo obbligatorio'
-    } else if (!/\b(srl|s\.r\.l|spa|s\.p\.a|snc|s\.n\.c|sas|s\.a\.s|srls|s\.r\.l\.s|ss|s\.s|soc\.|societa)\b/i.test(form.ragione_sociale)) {
-      e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc...)'
+    } else if (rs.length < 3) {
+      e.ragione_sociale = 'Minimo 3 caratteri'
+    } else if (rs.length > 150) {
+      e.ragione_sociale = 'Massimo 150 caratteri'
+    } else if (!LEGAL_FORM_RE.test(rs)) {
+      e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc, Sas...)'
     }
 
-    // Nome referente: first name ≥2 chars, last name ≥2 chars
-    const parts = form.name.trim().split(/\s+/)
-    if (!form.name.trim()) {
-      e.name = 'Campo obbligatorio'
-    } else if (parts.length < 2 || parts[0].length < 2 || parts[parts.length - 1].length < 2) {
-      e.name = 'Inserire nome e cognome (min. 2 lettere ciascuno)'
-    }
-
-    // Partita IVA: exactly 11 digits, no IT prefix
-    if (!form.vat_number.trim()) {
-      e.vat_number = 'Partita IVA obbligatoria'
-    } else if (/^it/i.test(form.vat_number.trim())) {
-      e.vat_number = 'Inserire solo le 11 cifre numeriche, senza prefisso IT'
-    } else if (!/^\d{11}$/.test(form.vat_number.trim())) {
-      e.vat_number = 'La Partita IVA deve contenere esattamente 11 cifre'
-    }
-
-    // PEC: required + valid email format
-    if (!form.pec.trim()) {
-      e.pec = 'PEC aziendale obbligatoria'
-    } else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(form.pec)) {
-      e.pec = 'Formato PEC non valido (es. nome@arubapec.it)'
-    }
-
-    // Email: must have @ and a domain with at least one dot + 2-char TLD
     if (!form.email.trim()) {
       e.email = 'Email obbligatoria'
     } else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(form.email)) {
       e.email = 'Email non valida (es. nome@azienda.it)'
     }
 
-    // Password: 8+ chars, uppercase, number, special char
     if (!form.password) {
       e.password = 'Password obbligatoria'
     } else if (form.password.length < 8) {
@@ -112,11 +89,11 @@ export default function RegisterPage() {
       }
       const data = await res.json()
       localStorage.setItem('token', data.access_token || data.token || '')
-      localStorage.setItem('name', data.name || data.user?.name || form.name)
-      localStorage.setItem('email', data.email || data.user?.email || form.email)
-      localStorage.setItem('credits', String(data.credits ?? data.user?.credits ?? 2))
-      localStorage.setItem('is_admin', String(data.is_admin ?? data.user?.is_admin ?? false))
-      localStorage.setItem('ip_already_used', String(!!data.ip_already_used))
+      localStorage.setItem('name', data.name || form.ragione_sociale)
+      localStorage.setItem('email', data.email || form.email)
+      localStorage.setItem('credits', String(data.credits ?? 0))
+      localStorage.setItem('is_admin', String(data.is_admin ?? false))
+      if (data.ip_already_used) localStorage.setItem('show_ip_warning', 'true')
       navigate('/dashboard')
     } catch {
       setError('Errore di connessione al server')
@@ -143,27 +120,17 @@ export default function RegisterPage() {
       <div
         className="absolute pointer-events-none"
         style={{
-          width: '700px',
-          height: '700px',
-          top: '-200px',
-          right: '-100px',
+          width: '700px', height: '700px', top: '-200px', right: '-100px',
           background: 'radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)',
-          borderRadius: '50%',
-          filter: 'blur(60px)',
-          animation: 'aurora 22s ease-in-out infinite',
+          borderRadius: '50%', filter: 'blur(60px)', animation: 'aurora 22s ease-in-out infinite',
         }}
       />
       <div
         className="absolute pointer-events-none"
         style={{
-          width: '500px',
-          height: '500px',
-          bottom: '-100px',
-          left: '5%',
+          width: '500px', height: '500px', bottom: '-100px', left: '5%',
           background: 'radial-gradient(circle, rgba(249,115,22,0.08) 0%, transparent 70%)',
-          borderRadius: '50%',
-          filter: 'blur(50px)',
-          animation: 'aurora 30s ease-in-out infinite reverse',
+          borderRadius: '50%', filter: 'blur(50px)', animation: 'aurora 30s ease-in-out infinite reverse',
         }}
       />
 
@@ -171,7 +138,7 @@ export default function RegisterPage() {
         variants={container}
         initial="hidden"
         animate="show"
-        style={{ width: '100%', maxWidth: 520, position: 'relative', zIndex: 10 }}
+        style={{ width: '100%', maxWidth: 480, position: 'relative', zIndex: 10 }}
       >
         {/* Logo */}
         <motion.div variants={item} className="flex items-center justify-center gap-3 mb-6">
@@ -187,19 +154,13 @@ export default function RegisterPage() {
         </motion.div>
 
         {/* Card */}
-        <motion.div
-          variants={item}
-          className="card"
-          style={{ padding: '2.25rem', borderRadius: 24 }}
-        >
+        <motion.div variants={item} className="card" style={{ padding: '2.25rem', borderRadius: 24 }}>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
             Crea il tuo account
           </h2>
           <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1.75rem' }}>
             Hai già un account?{' '}
-            <Link to="/login" style={{ color: '#f59e0b', fontWeight: 600 }}>
-              Accedi
-            </Link>
+            <Link to="/login" style={{ color: '#f59e0b', fontWeight: 600 }}>Accedi</Link>
           </p>
 
           {error && (
@@ -207,12 +168,7 @@ export default function RegisterPage() {
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               className="rounded-xl p-3.5 mb-4"
-              style={{
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                color: '#ef4444',
-                fontSize: '0.875rem',
-              }}
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: '0.875rem' }}
             >
               {error}
             </motion.div>
@@ -230,47 +186,7 @@ export default function RegisterPage() {
                 style={errors.ragione_sociale ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
               />
               {errors.ragione_sociale && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.ragione_sociale}</p>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="form-label">Cognome e Nome</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="Mario Rossi"
-                  value={form.name}
-                  onChange={(e) => update('name', e.target.value)}
-                  style={errors.name ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
-                />
-                {errors.name && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.name}</p>}
-              </div>
-              <div>
-                <label className="form-label">Partita IVA</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder="12345678901"
-                  value={form.vat_number}
-                  onChange={(e) => update('vat_number', e.target.value)}
-                  style={errors.vat_number ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
-                />
-                {errors.vat_number && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.vat_number}</p>}
-              </div>
-            </div>
-
-            <div>
-              <label className="form-label">PEC aziendale</label>
-              <input
-                className="form-input"
-                type="email"
-                placeholder="nome@arubapec.it"
-                value={form.pec}
-                onChange={(e) => update('pec', e.target.value)}
-                style={errors.pec ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.15)' } : {}}
-              />
-              {errors.pec && <p style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: 4 }}>{errors.pec}</p>}
-              <p style={{ color: '#475569', fontSize: '0.72rem', marginTop: 4 }}>La PEC è obbligatoria per le aziende italiane (es. arubapec.it, legalmail.it)</p>
+              <p style={{ color: '#475569', fontSize: '0.72rem', marginTop: 4 }}>Includi la forma giuridica (es. Srl, Spa, Snc, Sas...)</p>
             </div>
 
             <div>

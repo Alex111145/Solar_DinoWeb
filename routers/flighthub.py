@@ -656,7 +656,7 @@ def avvia_inferenza_enterprise(
         company_id      = current.id,
         company_name    = current.ragione_sociale or current.name,
         company_email   = current.email,
-        vat_number      = current.vat_number,
+        vat_number      = None,
         fh_workspace_id = conn.workspace_id if conn else None,
         data_consent    = True,
     )

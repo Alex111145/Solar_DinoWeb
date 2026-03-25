@@ -120,50 +120,51 @@ def list_companies(
         .all()
     )
 
-    # Trova IP duplicati SOLO tra aziende attive (disabilitate non contano)
+    # Trova IP duplicati in memoria (no query extra)
     all_ips = [c.last_ip for c in companies if c.last_ip and c.last_ip != "—" and c.is_active]
-    duplicate_ips = {ip for ip in all_ips if all_ips.count(ip) > 1}
+    from collections import Counter
+    ip_counts = Counter(all_ips)
+    duplicate_ips = {ip for ip, cnt in ip_counts.items() if cnt > 1}
 
-    # Pre-calcola costo GPU per azienda
-    gpu_jobs = (
-        db.query(models.Job)
-        .filter(
-            models.Job.status == "completato",
-            models.Job.completed_at.isnot(None),
+    # Aggrega jobs/panels/gpu in 3 query totali invece di N*2
+    job_stats = (
+        db.query(
+            models.Job.company_id,
+            func.count(models.Job.id).label("jobs_done"),
+            func.coalesce(func.sum(models.Job.panels_detected), 0).label("panels"),
         )
+        .filter(models.Job.status == "completato")
+        .group_by(models.Job.company_id)
+        .all()
+    )
+    jobs_map    = {r.company_id: r.jobs_done for r in job_stats}
+    panels_map  = {r.company_id: r.panels    for r in job_stats}
+
+    gpu_jobs = (
+        db.query(models.Job.company_id, models.Job.created_at, models.Job.completed_at)
+        .filter(models.Job.status == "completato", models.Job.completed_at.isnot(None))
         .all()
     )
     gpu_cost_map: dict = {}
-    for job in gpu_jobs:
-        seconds = max((job.completed_at - job.created_at).total_seconds(), 0.0)
-        gpu_cost_map[job.company_id] = gpu_cost_map.get(job.company_id, 0.0) + seconds
+    for j in gpu_jobs:
+        secs = max((j.completed_at - j.created_at).total_seconds(), 0.0)
+        gpu_cost_map[j.company_id] = gpu_cost_map.get(j.company_id, 0.0) + secs
 
     result = []
     for c in companies:
-        jobs_done = (
-            db.query(func.count(models.Job.id))
-            .filter(models.Job.company_id == c.id, models.Job.status == "completato")
-            .scalar()
-        )
-        panels = (
-            db.query(func.sum(models.Job.panels_detected))
-            .filter(models.Job.company_id == c.id, models.Job.status == "completato")
-            .scalar()
-        ) or 0
-        amount_owed = panels * PRICE_PER_PANEL
+        panels       = panels_map.get(c.id, 0)
         gpu_cost_eur = round(gpu_cost_map.get(c.id, 0.0) * RUNPOD_COST_PER_SEC, 4)
-
         result.append({
             "id":               c.id,
             "name":             c.name,
             "ragione_sociale":  c.ragione_sociale or "",
-            "vat_number":       c.vat_number or "",
+            "vat_number":       "",
             "email":            c.email,
             "credits":          c.credits,
             "is_active":        c.is_active,
-            "jobs_completed":   jobs_done,
+            "jobs_completed":   jobs_map.get(c.id, 0),
             "panels_detected":  panels,
-            "amount_owed_eur":  round(amount_owed, 2),
+            "amount_owed_eur":  round(panels * PRICE_PER_PANEL, 2),
             "last_ip":              c.last_ip or "—",
             "ip_status":            "warning" if c.is_active and c.last_ip and c.last_ip in duplicate_ips else "ok",
             "welcome_bonus_used":   bool(c.welcome_bonus_used),
@@ -228,7 +229,7 @@ def update_company(
         company.is_active = body.is_active
     if body.credits is not None:
         company.credits = body.credits
-        sync_credits_by_vat(db, company.vat_number, body.credits)
+        sync_credits_by_vat(db, None, body.credits, company.ragione_sociale)
     if body.name:
         company.name = body.name.strip()
 
@@ -275,7 +276,7 @@ def add_credit(
         raise HTTPException(status_code=404, detail="Azienda non trovata")
     company.credits += 1
     company.welcome_bonus_used = True
-    sync_credits_by_vat(db, company.vat_number, company.credits)
+    sync_credits_by_vat(db, company.vat_number, company.credits, company.ragione_sociale)
     db.commit()
     return {"message": f"+1 credito aggiunto a {company.name}", "credits": company.credits}
 
@@ -292,7 +293,8 @@ def delete_company(
     if company.is_admin:
         raise HTTPException(status_code=403, detail="L'account amministratore non può essere eliminato.")
 
-    db.delete(company)
+    company.deleted_at = datetime.now(timezone.utc)
+    company.is_active  = False
     db.commit()
     return {"message": "Azienda eliminata definitivamente"}
 
@@ -415,15 +417,15 @@ def billing_report(
         .all()
     )
 
-    # Raggruppa per vat_number (o per id se vat_number assente)
+    # Raggruppa per ragione sociale (o per id se assente)
     groups: dict[str, dict] = {}
     for c in companies:
-        key = c.vat_number or str(c.id)
+        key = (c.ragione_sociale or "").strip().lower() or str(c.id)
         if key not in groups:
             groups[key] = {
                 "id":             c.id,
                 "name":           c.ragione_sociale or c.name,
-                "vat_number":     c.vat_number or "",
+                "vat_number":     "",
                 "credits":        0,
                 "jobs_completed": 0,
                 "total_paid":     0.0,
@@ -582,7 +584,7 @@ def approve_bonifico(
     company = db.query(models.Company).filter(models.Company.id == req.company_id).first()
     if company:
         company.credits += req.credits
-        sync_credits_by_vat(db, company.vat_number, company.credits)
+        sync_credits_by_vat(db, None, company.credits, company.ragione_sociale)
 
     req.status      = "approved"
     req.approved_at = datetime.now(timezone.utc)
@@ -1037,7 +1039,7 @@ def list_welcome_bonus_requests(
             "company_id":            c.id,
             "company_name":          c.ragione_sociale or c.name,
             "company_email":         c.email,
-            "vat_number":            c.vat_number or "",
+            "vat_number":            "",
             "status":                r.status,
             "ip":                    req_ip,
             "ip_status":             "warning" if is_warning else "ok",

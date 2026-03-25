@@ -81,14 +81,14 @@ def get_current_company(
     return company
 
 
-def sync_credits_by_vat(db: Session, vat_number: str, new_credits: int) -> None:
-    """Allinea i crediti di tutti gli account con la stessa Partita IVA."""
-    if not vat_number:
-        return
-    db.query(models.Company).filter(
-        models.Company.vat_number == vat_number,
-        models.Company.deleted_at.is_(None),
-    ).update({"credits": new_credits})
+def sync_credits_by_vat(db: Session, vat_number: str, new_credits: int, ragione_sociale: str = None) -> None:
+    """Allinea i crediti per ragione sociale (tutti gli account della stessa azienda)."""
+    if ragione_sociale:
+        from sqlalchemy import func
+        db.query(models.Company).filter(
+            func.lower(func.trim(models.Company.ragione_sociale)) == ragione_sociale.strip().lower(),
+            models.Company.deleted_at.is_(None),
+        ).update({"credits": new_credits}, synchronize_session=False)
 
 
 def require_admin(

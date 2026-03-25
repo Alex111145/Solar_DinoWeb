@@ -1,3 +1,4 @@
+import html as html_mod
 import os
 import shutil
 import uuid
@@ -47,7 +48,7 @@ STATUS_PROGRESS = {
 # Background task — upload su Supabase poi avvia ML server
 # ---------------------------------------------------------------------------
 
-def _upload_and_dispatch(job_id: str, job_dir: str, tif_name: str, tfw_name: str):
+def _upload_and_dispatch(job_id: str, job_dir: str, tif_name: str, tfw_name: str, is_bonus: bool = False):
     """Carica i file su Supabase e chiama il ML server."""
     from database import DATABASE_URL
     from sqlalchemy import create_engine
@@ -87,6 +88,7 @@ def _upload_and_dispatch(job_id: str, job_dir: str, tif_name: str, tfw_name: str
                 "job_id":           job_id,
                 "tif_storage_path": tif_storage_path,
                 "tfw_storage_path": tfw_storage_path,
+                "watermark":        is_bonus,   # True = aggiungi watermark alle immagini di output
             },
             headers=headers,
             timeout=30,
@@ -154,9 +156,14 @@ async def upload_mission(
         with open(os.path.join(job_dir, "rgb_" + _norm(tfw_rgb.filename)), "wb") as f:
             shutil.copyfileobj(tfw_rgb.file, f)
 
+    # ── Determina se è un job bonus (usa il credito di benvenuto) ────────────
+    is_bonus = bool(current.bonus_credits and current.bonus_credits > 0)
+    if is_bonus:
+        current.bonus_credits -= 1
+
     # Scala credito
     current.credits -= 1
-    sync_credits_by_vat(db, current.vat_number, current.credits)
+    sync_credits_by_vat(db, None, current.credits, current.ragione_sociale)
 
     job = models.Job(
         id               = job_id,
@@ -167,12 +174,13 @@ async def upload_mission(
         panel_dimensions = panel_dimensions or None,
         panel_efficiency = panel_efficiency,
         panel_temp_coeff = panel_temp_coeff,
+        is_bonus_job     = is_bonus,
     )
     db.add(job)
     db.commit()
 
     # Upload su Supabase + dispatch al ML server (in background)
-    background_tasks.add_task(_upload_and_dispatch, job_id, job_dir, tif_fname, tfw_fname)
+    background_tasks.add_task(_upload_and_dispatch, job_id, job_dir, tif_fname, tfw_fname, is_bonus)
 
     return {
         "job_id":          job_id,
@@ -242,6 +250,11 @@ def download_result(
         raise HTTPException(status_code=403, detail="Accesso negato")
     if job.status != "completato":
         raise HTTPException(status_code=400, detail="Analisi non ancora completata")
+    if job.is_bonus_job and not current.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="I file di output non sono scaricabili con il credito di benvenuto. Acquista crediti per sbloccare i download.",
+        )
 
     FILE_MAP = {
         "json":    "Rilevamenti_Pannelli.json",
@@ -315,11 +328,12 @@ def trial_status(
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
-    # Controlla se qualcuno della stessa azienda (stessa P.IVA) ha già richiesto il trial
-    if current.vat_number:
+    # Controlla se qualcuno della stessa azienda (stessa ragione sociale) ha già richiesto il trial
+    if current.ragione_sociale:
+        from sqlalchemy import func as sqlfunc
         company_ids = [
             c.id for c in db.query(models.Company).filter(
-                models.Company.vat_number == current.vat_number,
+                sqlfunc.lower(sqlfunc.trim(models.Company.ragione_sociale)) == current.ragione_sociale.strip().lower(),
                 models.Company.deleted_at.is_(None),
             ).all()
         ]
@@ -343,11 +357,12 @@ def request_trial(
     forwarded = request.headers.get("x-forwarded-for")
     ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
 
-    # Blocco per azienda (stessa P.IVA), non solo per IP
-    if current.vat_number:
+    # Blocco per azienda (stessa ragione sociale)
+    if current.ragione_sociale:
+        from sqlalchemy import func as sqlfunc
         company_ids = [
             c.id for c in db.query(models.Company).filter(
-                models.Company.vat_number == current.vat_number,
+                sqlfunc.lower(sqlfunc.trim(models.Company.ragione_sociale)) == current.ragione_sociale.strip().lower(),
                 models.Company.deleted_at.is_(None),
             ).all()
         ]
@@ -358,9 +373,15 @@ def request_trial(
     elif db.query(models.TrialRequest).filter(models.TrialRequest.company_id == current.id).first():
         raise HTTPException(status_code=400, detail="Hai già inviato una richiesta di prova.")
 
-    message = (body.get("message") or "").strip()
+    message = (body.get("message") or "").strip()[:1000]  # limite lunghezza
     db.add(models.TrialRequest(company_id=current.id, ip=ip, message=message))
     db.commit()
+
+    # Escape user content before inserting into HTML email
+    rs_safe  = html_mod.escape(current.ragione_sociale or current.name or "—")
+    em_safe  = html_mod.escape(current.email or "—")
+    ip_safe  = html_mod.escape(ip)
+    msg_safe = html_mod.escape(message)
 
     html = f"""<!DOCTYPE html>
 <html lang="it">
@@ -380,21 +401,17 @@ def request_trial(
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
                 <span style="color:#64748b;font-size:13px;">Azienda</span><br>
-                <strong style="color:#0f172a;font-size:15px;">{current.ragione_sociale or current.name}</strong>
+                <strong style="color:#0f172a;font-size:15px;">{rs_safe}</strong>
               </td></tr>
               <tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
                 <span style="color:#64748b;font-size:13px;">Email</span><br>
-                <strong style="color:#0f172a;">{current.email}</strong>
-              </td></tr>
-              <tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
-                <span style="color:#64748b;font-size:13px;">P.IVA</span><br>
-                <strong style="color:#0f172a;">{current.vat_number or "—"}</strong>
+                <strong style="color:#0f172a;">{em_safe}</strong>
               </td></tr>
               <tr><td style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
                 <span style="color:#64748b;font-size:13px;">IP</span><br>
-                <strong style="color:#0f172a;">{ip}</strong>
+                <strong style="color:#0f172a;">{ip_safe}</strong>
               </td></tr>
-              {"" if not message else f'<tr><td style="padding:12px 0;"><span style="color:#64748b;font-size:13px;">Messaggio</span><br><p style="color:#1e293b;font-size:14px;line-height:1.6;margin:6px 0 0;background:#f8fafc;border-left:3px solid #f59e0b;padding:12px;">{message}</p></td></tr>'}
+              {"" if not message else f'<tr><td style="padding:12px 0;"><span style="color:#64748b;font-size:13px;">Messaggio</span><br><p style="color:#1e293b;font-size:14px;line-height:1.6;margin:6px 0 0;background:#f8fafc;border-left:3px solid #f59e0b;padding:12px;">{msg_safe}</p></td></tr>'}
             </table>
             <div style="margin-top:28px;text-align:center;">
               <a href="{FRONTEND_URL}/admin"
@@ -428,6 +445,7 @@ def _job_dict(j: models.Job) -> dict:
         "degraded_count":  j.degraded_count,
         "created_at":      j.created_at.isoformat(),
         "completed_at":    j.completed_at.isoformat() if j.completed_at else None,
+        "is_bonus_job":    bool(j.is_bonus_job),
     }
     if j.status == "errore":
         d["log"] = j.log or "Nessun dettaglio disponibile."

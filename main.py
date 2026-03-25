@@ -1,68 +1,24 @@
 import os
-import asyncio
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-load_dotenv(override=True)  # carica .env e sovrascrive variabili già esistenti
+load_dotenv(override=True)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 import auth_utils
 import models
 import storage_utils
-from sqlalchemy import text
-from database import Base, SessionLocal, engine, run_migrations
+from database import SessionLocal
 from routers import admin, auth, flighthub, missions, payments, reviews
 
 
-def _run_migrations_background():
-    """Esegue migrazioni DB in background — non blocca lo startup."""
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        print(f"[MIGRATION] create_all: {e}")
-
-    try:
-        run_migrations(engine)
-    except Exception as e:
-        print(f"[MIGRATION] run_migrations: {e}")
-
-    migrations = [
-        "ALTER TABLE companies ADD COLUMN ragione_sociale VARCHAR",
-        "ALTER TABLE companies ADD COLUMN vat_number VARCHAR",
-        "ALTER TABLE companies ADD COLUMN deleted_at TIMESTAMP",
-        "ALTER TABLE companies ADD COLUMN last_ip VARCHAR",
-        "ALTER TABLE companies ADD COLUMN pec VARCHAR",
-        "ALTER TABLE companies ADD COLUMN welcome_bonus_used BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE companies ADD COLUMN last_login_at TIMESTAMP",
-        "ALTER TABLE jobs ADD COLUMN panel_model VARCHAR",
-        "ALTER TABLE jobs ADD COLUMN panel_dimensions VARCHAR",
-        "ALTER TABLE jobs ADD COLUMN panel_efficiency FLOAT",
-        "ALTER TABLE jobs ADD COLUMN panel_temp_coeff FLOAT",
-        "CREATE TABLE IF NOT EXISTS reviews (id SERIAL PRIMARY KEY, company_id INTEGER REFERENCES companies(id), stars INTEGER NOT NULL, comment TEXT, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
-        "ALTER TABLE flighthub_connections ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMP",
-        "ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_email_key",
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_email_vat ON companies (email, vat_number) WHERE deleted_at IS NULL",
-        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'aperto'",
-        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS reply TEXT",
-        "ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP",
-        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS subscription_active BOOLEAN DEFAULT FALSE",
-        "CREATE TABLE IF NOT EXISTS ticket_messages (id SERIAL PRIMARY KEY, ticket_id INTEGER REFERENCES support_tickets(id) ON DELETE CASCADE, sender VARCHAR NOT NULL, text TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW())",
-    ]
-    with engine.connect() as conn:
-        for sql in migrations:
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-            except Exception:
-                conn.rollback()
-
-    # Crea l'utente admin se non esiste
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Assicura che l'admin esista
     db = SessionLocal()
     try:
         admin_email    = os.getenv("ADMIN_EMAIL",    "admin@solardino.it")
@@ -75,22 +31,13 @@ def _run_migrations_background():
                 credits=9999, is_active=True, is_admin=True,
             ))
             db.commit()
-            print(f"[MIGRATION] Admin creato: {admin_email}")
+            print(f"[STARTUP] Admin creato: {admin_email}")
         else:
-            if not existing_admin.is_admin:
-                existing_admin.is_admin = True
-                db.commit()
-            print(f"[MIGRATION] Admin esistente: {admin_email}")
+            print(f"[STARTUP] Admin esistente: {admin_email}")
+    except Exception as e:
+        print(f"[STARTUP] Admin check fallito (non bloccante): {e}")
     finally:
         db.close()
-
-    print("[MIGRATION] Completate.")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Migrazioni in background — il server parte subito
-    asyncio.get_event_loop().run_in_executor(None, _run_migrations_background)
     yield
 
 
@@ -101,13 +48,31 @@ app = FastAPI(
     lifespan    = lifespan,
 )
 
+_ALLOWED_ORIGINS = [
+    "https://solar-dinoweb.fly.dev",
+    "http://localhost:5173",
+    "http://localhost:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins     = ["*"],
+    allow_origins     = _ALLOWED_ORIGINS,
     allow_credentials = True,
-    allow_methods     = ["*"],
-    allow_headers     = ["*"],
+    allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers     = ["Content-Type", "Authorization", "stripe-signature"],
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"]        = "DENY"
+        response.headers["X-XSS-Protection"]       = "1; mode=block"
+        response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # API routes
 app.include_router(auth.router)

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun, Zap, MapPin, FileDown, Eye, EyeOff, Star, Moon,
-  Upload, Radio, Check, X, Shield, Clock, BarChart2, Users, KeyRound,
+  Upload, Radio, Check, X, Shield, Clock, BarChart2,
 } from 'lucide-react'
 
 interface Review { id: string; company?: string; stars: number; comment?: string }
@@ -85,10 +85,15 @@ export default function LoginPage() {
   const [regConsent, setRegConsent] = useState(false)
 
   // Register form state
-  const [regForm, setRegForm] = useState({ ragione_sociale: '', name: '', vat_number: '', pec: '', email: '', password: '' })
+  const [regForm, setRegForm] = useState({ ragione_sociale: '', email: '', password: '' })
   const [regLoading, setRegLoading] = useState(false)
   const [regError, setRegError] = useState('')
   const [regErrors, setRegErrors] = useState<Record<string, string>>({})
+
+  // IP warning popup (shown after login/register when same IP used by different company)
+  const [showIpWarning, setShowIpWarning] = useState(false)
+
+  const LEGAL_FORM_RE = /\b(srl|s\.r\.l\.?|spa|s\.p\.a\.?|snc|s\.n\.c\.?|sas|s\.a\.s\.?|srls|s\.r\.l\.s\.?|ss|s\.s\.?|coop|scarl|onlus|ets|di|e\.i\.?)\b/i
 
   function updateReg(k: string, v: string) {
     setRegForm((f) => ({ ...f, [k]: v }))
@@ -97,13 +102,11 @@ export default function LoginPage() {
 
   function validateReg(): Record<string, string> {
     const e: Record<string, string> = {}
-    if (!regForm.ragione_sociale.trim()) e.ragione_sociale = 'Campo obbligatorio'
-    else if (!/\b(srl|s\.r\.l|spa|s\.p\.a|snc|s\.n\.c|sas|s\.a\.s|srls|ss|soc\.)\b/i.test(regForm.ragione_sociale)) e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc...)'
-    if (!regForm.vat_number.trim()) e.vat_number = 'Obbligatoria'
-    else if (/^it/i.test(regForm.vat_number.trim())) e.vat_number = 'Solo 11 cifre, senza IT'
-    else if (!/^\d{11}$/.test(regForm.vat_number.trim())) e.vat_number = 'Esattamente 11 cifre'
-    if (!regForm.pec.trim()) e.pec = 'PEC obbligatoria'
-    else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(regForm.pec)) e.pec = 'Formato PEC non valido'
+    const rs = regForm.ragione_sociale.trim()
+    if (!rs) e.ragione_sociale = 'Campo obbligatorio'
+    else if (rs.length < 3) e.ragione_sociale = 'Minimo 3 caratteri'
+    else if (rs.length > 150) e.ragione_sociale = 'Massimo 150 caratteri'
+    else if (!LEGAL_FORM_RE.test(rs)) e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc...)'
     if (!regForm.email.trim()) e.email = 'Obbligatoria'
     else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(regForm.email)) e.email = 'Email non valida'
     if (!regForm.password) e.password = 'Obbligatoria'
@@ -128,11 +131,12 @@ export default function LoginPage() {
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setRegError(d.detail || 'Errore durante la registrazione'); setRegLoading(false); return }
       const data = await res.json()
-
-      localStorage.setItem('name', data.name || '')
+      localStorage.setItem('name', data.name || regForm.ragione_sociale)
       localStorage.setItem('email', data.email || regForm.email)
       localStorage.setItem('credits', String(data.credits ?? 0))
       localStorage.setItem('is_admin', 'false')
+      localStorage.setItem('ip_already_used', String(!!data.ip_already_used))
+      setShowRegister(false)
       window.scrollTo(0, 0)
       navigate('/dashboard')
     } catch { setRegError('Errore di connessione'); setRegLoading(false) }
@@ -185,7 +189,6 @@ export default function LoginPage() {
       setLoading(false)
       window.scrollTo(0, 0)
       if (data.is_admin || data.user?.is_admin) { navigate('/admin'); return }
-      if (data.must_change_password) { setForceChangePwd(true); return }
       navigate('/dashboard')
     } catch (err) {
       setError('Errore di connessione al server')
@@ -447,10 +450,10 @@ export default function LoginPage() {
         >
           <div style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Inizia gratis</div>
           <h2 style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', fontWeight: 800, color: t.text, letterSpacing: '-0.03em' }}>
-            Un account aziendale, tutto il tuo team
+            Registrazione semplice, accesso immediato
           </h2>
           <p style={{ color: t.textMuted, fontSize: '0.95rem', marginTop: 10, maxWidth: 600, margin: '10px auto 0' }}>
-            Registra la tua azienda una sola volta. L'account che si iscrive diventa <strong style={{ color: t.text }}>Manager</strong> e può aggiungere tutti i collaboratori dal proprio profilo.
+            Bastano ragione sociale, email e password. Nessuna P.IVA, nessuna PEC, nessuna attesa.
           </p>
         </motion.div>
 
@@ -461,21 +464,21 @@ export default function LoginPage() {
               step: '1',
               icon: <span style={{ fontSize: 24 }}>🏢</span>,
               title: 'Registra la tua azienda',
-              desc: "Compila il form con ragione sociale, P.IVA e PEC. L'email usata diventa l'account Manager principale.",
+              desc: 'Inserisci ragione sociale, email aziendale e password. In 30 secondi sei operativo con 1 credito di prova incluso.',
               highlight: true,
             },
             {
               step: '2',
-              icon: <Users size={22} color="#f59e0b" />,
-              title: 'Aggiungi il tuo team',
-              desc: "Dal profilo Manager trovi il Gestionale Team: inserisci email e password per ogni collaboratore. Gli account vengono creati istantaneamente.",
+              icon: <span style={{ fontSize: 24 }}>👥</span>,
+              title: 'Collaboratori inclusi',
+              desc: 'Ogni collaboratore si registra con la propria email e la stessa ragione sociale. I crediti vengono condivisi automaticamente — nessuna configurazione.',
               highlight: false,
             },
             {
               step: '3',
-              icon: <KeyRound size={22} color="#f59e0b" />,
-              title: 'Crediti condivisi',
-              desc: "Tutti gli account sotto la stessa Partita IVA condividono lo stesso pool di crediti. Un acquisto vale per tutto il team.",
+              icon: <span style={{ fontSize: 24 }}>⚡</span>,
+              title: 'Acquista crediti quando vuoi',
+              desc: "Esaurito il credito di prova, acquista pacchetti singoli o attiva un abbonamento mensile. Un credito = un'elaborazione completa.",
               highlight: false,
             },
           ].map((item) => (
@@ -714,21 +717,7 @@ export default function LoginPage() {
                 </div>
 
                 <div>
-                  <label className="form-label" style={{ color: t.textMuted }}>Partita IVA</label>
-                  <input className="form-input" type="text" placeholder="12345678901" value={regForm.vat_number} onChange={(e) => updateReg('vat_number', e.target.value)}
-                    style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text, ...(regErrors.vat_number ? { borderColor: '#ef4444' } : {}) }} />
-                  {regErrors.vat_number && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 3 }}>{regErrors.vat_number}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label" style={{ color: t.textMuted }}>PEC aziendale</label>
-                  <input className="form-input" type="email" placeholder="nome@arubapec.it" value={regForm.pec} onChange={(e) => updateReg('pec', e.target.value)}
-                    style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text, ...(regErrors.pec ? { borderColor: '#ef4444' } : {}) }} />
-                  {regErrors.pec && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 3 }}>{regErrors.pec}</p>}
-                </div>
-
-                <div>
-                  <label className="form-label" style={{ color: t.textMuted }}>Email </label>
+                  <label className="form-label" style={{ color: t.textMuted }}>Email aziendale</label>
                   <input className="form-input" type="email" placeholder="nome@azienda.it" value={regForm.email} onChange={(e) => updateReg('email', e.target.value)} autoComplete="email"
                     style={{ background: isDark ? '#161b27' : '#f8fafc', color: t.text, ...(regErrors.email ? { borderColor: '#ef4444' } : {}) }} />
                   {regErrors.email && <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: 3 }}>{regErrors.email}</p>}
@@ -874,6 +863,42 @@ export default function LoginPage() {
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.textMuted, fontSize: '0.85rem' }}
               >
                 Chiudi
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {/* IP duplicato — popup obbligatorio al login */}
+        {showIpWarning && (
+          <div className="modal-overlay">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{
+                background: isDark ? '#0d1117' : '#fff',
+                border: '1px solid rgba(245,158,11,0.35)',
+                borderRadius: 20,
+                padding: '2rem',
+                maxWidth: 420,
+                width: '90%',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+              <h3 style={{ color: '#f59e0b', fontWeight: 700, fontSize: '1.1rem', marginBottom: 8 }}>
+                Accesso rilevato da IP già registrato
+              </h3>
+              <p style={{ color: t.textSec, fontSize: '0.85rem', lineHeight: 1.6, marginBottom: 20 }}>
+                L'indirizzo IP di questo dispositivo è già associato ad un'altra azienda su SolarDino.<br /><br />
+                <strong style={{ color: t.text }}>Questo account ha 0 crediti e nessun abbonamento attivo.</strong>
+              </p>
+              <button
+                className="btn-amber w-full"
+                style={{ padding: '0.75rem', fontSize: '0.9rem' }}
+                onClick={() => { setShowIpWarning(false); navigate('/dashboard') }}
+              >
+                Ho capito, continua
               </button>
             </motion.div>
           </div>
