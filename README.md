@@ -1,3 +1,12 @@
+
+cd frontend && npm run build && cd ..
+git add static/app && git commit -m "Build frontend" && git push
+fly deploy
+
+
+
+
+
 # SolarDino — Backend & API Documentation
 
 Piattaforma AI per il rilevamento e l'analisi di pannelli solari tramite immagini termiche da drone.
