@@ -205,6 +205,7 @@ def create_subscription_checkout(
     try:
         session = stripe.checkout.Session.create(
             customer=current.stripe_customer_id,
+            payment_method_types=["card", "sepa_debit"],
             line_items=[{"price": plan["price_id"], "quantity": 1}],
             mode="subscription",
             success_url=f"{FRONTEND_URL}/dashboard?payment=success",
@@ -327,6 +328,7 @@ def buy_credits_checkout(
     try:
         session = stripe.checkout.Session.create(
             customer=current.stripe_customer_id,
+            payment_method_types=["card", "sepa_debit"],
             line_items=[line_item],
             mode="payment",
             success_url=f"{FRONTEND_URL}/dashboard?payment=success",
