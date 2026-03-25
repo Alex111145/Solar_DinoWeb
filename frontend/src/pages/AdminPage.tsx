@@ -315,15 +315,7 @@ export default function AdminPage() {
     cost_eur: number
     jobs: GpuJobDetail[]
   }
-  interface MonthlyStatItem {
-    label: string
-    year: number
-    month: number
-    revenue: number
-    gpu_cost: number
-  }
   const [gpuCosts, setGpuCosts] = useState<GpuCostItem[]>([])
-  const [monthlyStats, setMonthlyStats] = useState<MonthlyStatItem[]>([])
   const [showPLChart, setShowPLChart] = useState(false)
   const [expandedGpuCompany, setExpandedGpuCompany] = useState<string | null>(null)
   const [supabasePlan, setSupabasePlan] = useState<'free' | 'pro'>('free')
@@ -425,9 +417,6 @@ export default function AdminPage() {
     }).catch(() => {})
     apiFetch('/admin/gpu-costs').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setGpuCosts(Array.isArray(d) ? d : [])
-    }).catch(() => {})
-    apiFetch('/admin/monthly-stats').then((r) => r.ok ? r.json() : null).then((d) => {
-      if (d) setMonthlyStats(Array.isArray(d) ? d : [])
     }).catch(() => {})
     apiFetch('/admin/supabase-storage').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setStorageInfo(d)
@@ -1764,7 +1753,7 @@ export default function AdminPage() {
                 const fixedCosts      = [
                   { label: 'Dominio', eur: domainCostActive ? domainCostEur : 0.00, toggle: () => setDomainCostActive((v) => !v), active: domainCostActive, editable: true },
                   { label: 'Fly.io',  eur: 0.00, editable: false },
-                  { label: 'Supabase', eur: supabasePlan === 'pro' ? 23.00 : 0.00, editable: false },
+                  { label: 'Supabase', eur: supabasePlan === 'pro' ? 23.00 : 0.00, editable: false, planToggle: true },
                 ]
 
                 function fmtMb(mb: number, limitMb: number) {
@@ -1827,24 +1816,8 @@ export default function AdminPage() {
 
                 return (
                   <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {/* Riga 1: Piano + Utilizzo full width */}
+                    {/* Utilizzo Storage + DB + cleanup */}
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                      {/* Piano Supabase */}
-                      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '1rem', flex: '1 1 0' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.75rem', textAlign: 'center' }}>Piano Supabase</div>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', justifyContent: 'center' }}>
-                          {(['free', 'pro'] as const).map((p) => (
-                            <button key={p} onClick={() => setSupabasePlan(p)} style={{ padding: '0.35rem 1.1rem', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: supabasePlan === p ? (p === 'pro' ? 'rgba(139,92,246,0.25)' : 'rgba(245,158,11,0.2)') : 'rgba(255,255,255,0.04)', color: supabasePlan === p ? (p === 'pro' ? '#a78bfa' : '#f59e0b') : '#475569' }}>
-                              {p === 'free' ? 'Free' : 'Pro $25/mese'}
-                            </button>
-                          ))}
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.6, textAlign: 'center' }}>
-                          {supabasePlan === 'free' ? '500 MB DB · 1 GB storage · 2 GB bandwidth · Free' : '8 GB DB · 100 GB storage · 250 GB bandwidth · ~€23/mese'}
-                        </div>
-                      </div>
-
-                      {/* Utilizzo Storage + DB + cleanup */}
                       <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '1rem', flex: '1 1 0' }}>
                         <UsageBar label="Storage file" pct={storagePct} info={fmtMb(usedStorageMb, storageLimitMb)} />
                         <UsageBar label="Database"     pct={dbPct}      info={fmtMb(usedDbMb, dbLimitMb)} />
@@ -1863,7 +1836,20 @@ export default function AdminPage() {
                         {fixedCosts.map((c) => (
                           <div key={c.label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${'toggle' in c && !(c as any).active ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 10, padding: '0.6rem 1.2rem', textAlign: 'center', opacity: 'toggle' in c && !(c as any).active ? 0.5 : 1 }}>
                             <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 3 }}>{c.label}</div>
-                            {(c as any).editable ? (
+                            {(c as any).planToggle ? (
+                              <>
+                                <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center', marginBottom: 4 }}>
+                                  {(['free', 'pro'] as const).map((p) => (
+                                    <button key={p} onClick={() => setSupabasePlan(p)} style={{ padding: '0.2rem 0.7rem', borderRadius: 6, fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: supabasePlan === p ? (p === 'pro' ? 'rgba(139,92,246,0.25)' : 'rgba(245,158,11,0.2)') : 'rgba(255,255,255,0.04)', color: supabasePlan === p ? (p === 'pro' ? '#a78bfa' : '#f59e0b') : '#475569' }}>
+                                      {p === 'free' ? 'Free' : 'Pro'}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div style={{ fontWeight: 700, color: c.eur > 0 ? '#a78bfa' : '#475569', fontSize: '0.9rem' }}>
+                                  {c.eur > 0 ? `€ ${c.eur.toFixed(2)}/mese` : 'Free'}
+                                </div>
+                              </>
+                            ) : (c as any).editable ? (
                               editingDomainCost ? (
                                 <div className="flex items-center gap-1 justify-center" style={{ marginBottom: 4 }}>
                                   <span style={{ fontSize: '0.8rem', color: '#64748b' }}>€</span>
@@ -2121,7 +2107,7 @@ export default function AdminPage() {
                               <td style={{ color: '#94a3b8' }}>{monthlyChartData[i].label}</td>
                               <td style={{ textAlign: 'right', color: b.utile >= 0 ? '#22c55e' : '#ef4444' }}>€ {b.utile.toFixed(2)}</td>
                               <td style={{ textAlign: 'right', color: '#ef4444' }}>€ {b.spese.toFixed(4)}</td>
-                              <td style={{ textAlign: 'right', fontWeight: 700, color: b.netto >= 0 ? '#f59e0b' : '#ef4444' }}>€ {b.netto.toFixed(2)}</td>
+                              <td style={{ textAlign: 'right', fontWeight: 700, color: b.netto > 0 ? '#22c55e' : b.netto < 0 ? '#ef4444' : '#f59e0b' }}>€ {b.netto.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
