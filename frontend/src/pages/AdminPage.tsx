@@ -318,6 +318,7 @@ export default function AdminPage() {
   const [gpuCosts, setGpuCosts] = useState<GpuCostItem[]>([])
   const [showPLChart, setShowPLChart] = useState(false)
   const [expandedGpuCompany, setExpandedGpuCompany] = useState<string | null>(null)
+  const [gpuMonthFilter, setGpuMonthFilter] = useState<string>('all')
   const [supabasePlan, setSupabasePlan] = useState<'free' | 'pro'>('free')
   const [domainCostActive, setDomainCostActive] = useState(true)
   const [domainCostEur, setDomainCostEur] = useState(1.00)
@@ -616,13 +617,24 @@ export default function AdminPage() {
   const mesiDallInizio   = Math.max(1, Math.round((Date.now() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
   const speseDallInizio  = totalGpuAllTime + (mesiDallInizio * FIXED_MONTHLY_EUR)
 
+  // GPU table: available months + filtered rows
+  const gpuMonths: string[] = Array.from(new Set(
+    gpuCosts.flatMap(r => (r.jobs || []).map(j => j.created_at.slice(0, 7)))
+  )).sort().reverse()
+
+  const filteredGpuCosts = gpuCosts.map(r => {
+    const jobs = gpuMonthFilter === 'all' ? (r.jobs || []) : (r.jobs || []).filter(j => j.created_at.slice(0, 7) === gpuMonthFilter)
+    const total_seconds = jobs.reduce((a, j) => a + j.seconds, 0)
+    const cost_eur = jobs.reduce((a, j) => a + j.cost_eur, 0)
+    return { ...r, jobs, job_count: jobs.length, total_seconds, cost_eur }
+  }).filter(r => r.job_count > 0)
+
   const statCards = [
     { icon: <Building2 size={18} />, label: 'Aziende attive',  value: stats.active_companies  || 0, prefix: '' },
     { icon: <Euro size={18} />,      label: 'Fatturato totale', value: stats.total_revenue_eur || 0, prefix: '€' },
   ]
 
   const costCards = [
-    { icon: <Zap size={18} />,  label: 'Costo GPU ultimo mese',   value: gpuCostMonth,    prefix: '€', decimals: 4, sub: '' },
     { icon: <Euro size={18} />, label: 'Spese totali ultimo mese', value: totalCostMonth,  prefix: '€', decimals: 4, sub: `GPU €${gpuCostMonth.toFixed(4)} + fissi €${FIXED_MONTHLY_EUR.toFixed(2)}` },
     { icon: <Euro size={18} />, label: 'Spese dall\'inizio',       value: speseDallInizio, prefix: '€', decimals: 4, sub: `GPU €${totalGpuAllTime.toFixed(4)} + fissi €${(mesiDallInizio * FIXED_MONTHLY_EUR).toFixed(2)} (${mesiDallInizio} mes${mesiDallInizio === 1 ? 'e' : 'i'})` },
   ]
@@ -849,16 +861,16 @@ export default function AdminPage() {
           ))}
         </motion.div>
 
-        {/* P&L row — Fatturato lordo / netto / Utile + Chart button */}
-        <motion.div variants={cardAnim} className="flex gap-3 mb-4 justify-center" style={{ flexWrap: 'wrap' }}>
-          {plCards.map((s, i) => (
+        {/* P&L riga 1 — Fatturato lordo + netto */}
+        <motion.div variants={cardAnim} className="flex gap-3 mb-3 justify-center" style={{ flexWrap: 'wrap' }}>
+          {plCards.slice(0, 2).map((s, i) => (
             <motion.div
               key={s.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.56 + i * 0.08, duration: 0.5 }}
               className="card flex items-center gap-4"
-              style={{ flex: '1 1 180px', maxWidth: 260 }}
+              style={{ flex: '1 1 200px', maxWidth: 280 }}
             >
               <div style={{ width: 38, height: 38, background: `${s.color}18`, border: `1px solid ${s.color}40`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0 }}>
                 {s.icon}
@@ -891,17 +903,37 @@ export default function AdminPage() {
               </div>
             </motion.div>
           ))}
+        </motion.div>
 
-          {/* P&L chart button */}
+        {/* P&L riga 2 — Utile (grande) + Grafico */}
+        <motion.div variants={cardAnim} className="flex gap-3 mb-4 justify-center" style={{ flexWrap: 'wrap' }}>
+          {/* Utile — card grande */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.72, duration: 0.5 }}
+            className="card flex items-center gap-5"
+            style={{ flex: '1 1 300px', maxWidth: 460 }}
+          >
+            <div style={{ width: 48, height: 48, background: `${plCards[2].color}18`, border: `1px solid ${plCards[2].color}40`, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: plCards[2].color, flexShrink: 0 }}>
+              <TrendingUp size={22} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 4 }}>{plCards[2].label}</div>
+              <div style={{ fontSize: '2rem', fontWeight: 800, color: plCards[2].color, letterSpacing: '-0.04em', lineHeight: 1 }}>
+                € {plCards[2].value.toFixed(2)}
+              </div>
+              <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 4 }}>{plCards[2].sub}</div>
+            </div>
+          </motion.div>
+
+          {/* Grafico P&L */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.5 }}
-            className="card flex items-center justify-center" style={{ flex: '0 0 auto', minWidth: 120 }}>
+            className="card flex items-center justify-center" style={{ flex: '0 0 auto', minWidth: 130 }}>
             <button onClick={loadProfitChart}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0.5rem 1rem', borderRadius: 10, border: '1px solid rgba(245,158,11,0.25)', background: 'rgba(245,158,11,0.08)', color: '#f59e0b', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>
-              <BarChart2 size={22} />
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0.6rem 1.2rem', borderRadius: 10, border: '1px solid rgba(245,158,11,0.25)', background: 'rgba(245,158,11,0.08)', color: '#f59e0b', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>
+              <BarChart2 size={24} />
               Grafico P&L
             </button>
           </motion.div>
-
         </motion.div>
 
         {/* Tabs */}
@@ -1894,35 +1926,45 @@ export default function AdminPage() {
                 )
               })()}
 
+              {/* Month filter */}
+              {gpuMonths.length > 0 && (
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                  <button
+                    onClick={() => setGpuMonthFilter('all')}
+                    style={{ padding: '0.2rem 0.75rem', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: gpuMonthFilter === 'all' ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.05)', color: gpuMonthFilter === 'all' ? '#f59e0b' : '#475569' }}
+                  >Tutti</button>
+                  {gpuMonths.map(m => (
+                    <button key={m} onClick={() => setGpuMonthFilter(m)}
+                      style={{ padding: '0.2rem 0.75rem', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: gpuMonthFilter === m ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.05)', color: gpuMonthFilter === m ? '#f59e0b' : '#475569' }}
+                    >{new Date(m + '-01').toLocaleDateString('it-IT', { month: 'short', year: 'numeric' })}</button>
+                  ))}
+                </div>
+              )}
+
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Azienda</th>
                       <th>Email</th>
-                      <th style={{ textAlign: 'right' }}>Job completati</th>
+                      <th style={{ textAlign: 'right' }}>Job</th>
                       <th style={{ textAlign: 'right' }}>Tempo GPU</th>
                       <th style={{ textAlign: 'right' }}>Costo stimato</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {gpuCosts.length === 0 && (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem' }}>Nessun job completato</td></tr>
+                    {filteredGpuCosts.length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', color: '#64748b', padding: '1.5rem' }}>Nessun job{gpuMonthFilter !== 'all' ? ' per questo mese' : ''}</td></tr>
                     )}
-                    {gpuCosts.map((r, i) => {
+                    {filteredGpuCosts.map((r, i) => {
                       const h = Math.floor(r.total_seconds / 3600)
                       const m = Math.floor((r.total_seconds % 3600) / 60)
                       const s = r.total_seconds % 60
                       const hms = `${h > 0 ? h + 'h ' : ''}${m > 0 ? m + 'm ' : ''}${s}s`
                       const isOpen = expandedGpuCompany === r.company_name
-                      const detailJobs = r.jobs
                       return (
                         <>
-                          <tr
-                            key={i}
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => setExpandedGpuCompany(isOpen ? null : r.company_name)}
-                          >
+                          <tr key={i} style={{ cursor: 'pointer' }} onClick={() => setExpandedGpuCompany(isOpen ? null : r.company_name)}>
                             <td>
                               <div className="flex items-center gap-2">
                                 {isOpen ? <ChevronDown size={13} style={{ color: '#f59e0b', flexShrink: 0 }} /> : <ChevronRight size={13} style={{ color: '#64748b', flexShrink: 0 }} />}
@@ -1932,11 +1974,11 @@ export default function AdminPage() {
                             <td style={{ color: '#64748b' }}>{r.company_email}</td>
                             <td style={{ textAlign: 'right' }}>{r.job_count}</td>
                             <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{hms}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#f59e0b', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                               € {r.cost_eur.toFixed(4)}
                             </td>
                           </tr>
-                          {isOpen && detailJobs && detailJobs.map((j, ji) => {
+                          {isOpen && r.jobs.map((j, ji) => {
                             const jh = Math.floor(j.seconds / 3600)
                             const jm = Math.floor((j.seconds % 3600) / 60)
                             const js2 = j.seconds % 60
@@ -1959,11 +2001,11 @@ export default function AdminPage() {
                       )
                     })}
                   </tbody>
-                  {gpuCosts.length > 0 && (
+                  {filteredGpuCosts.length > 0 && (
                     <tfoot>
                       <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                         <td colSpan={5} style={{ textAlign: 'center', fontWeight: 700, color: '#f59e0b', paddingTop: 10, fontSize: '1rem' }}>
-                          Totale &nbsp;·&nbsp; € {gpuCosts.reduce((acc, r) => acc + r.cost_eur, 0).toFixed(4)}
+                          Totale{gpuMonthFilter !== 'all' ? ` ${new Date(gpuMonthFilter + '-01').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}` : ''} &nbsp;·&nbsp; € {filteredGpuCosts.reduce((acc, r) => acc + r.cost_eur, 0).toFixed(4)}
                         </td>
                       </tr>
                     </tfoot>
