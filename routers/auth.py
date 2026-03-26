@@ -29,6 +29,12 @@ _LOGIN_LOCK = threading.Lock()
 _MAX_FAILURES   = 10
 _WINDOW_SECONDS = 600  # 10 minuti
 
+# ── Register rate limiting ──────────────────────────────────────────────────
+_REGISTER_ATTEMPTS: dict[str, list[float]] = collections.defaultdict(list)
+_REGISTER_LOCK = threading.Lock()
+_MAX_REGISTER   = 5
+_REGISTER_WINDOW = 3600  # 1 ora
+
 
 def _extract_ipv4(request: Request) -> Optional[str]:
     """Return the client IPv4 address, ignoring IPv6 addresses (they contain ':')."""
@@ -107,6 +113,14 @@ class RegisterRequest(BaseModel):
 
 @router.post("/register")
 def register(req: RegisterRequest, response: Response, request: Request, db: Session = Depends(get_db)):
+    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    now = time.time()
+    with _REGISTER_LOCK:
+        _REGISTER_ATTEMPTS[client_ip] = [t for t in _REGISTER_ATTEMPTS[client_ip] if now - t < _REGISTER_WINDOW]
+        if len(_REGISTER_ATTEMPTS[client_ip]) >= _MAX_REGISTER:
+            raise HTTPException(status_code=429, detail="Troppe registrazioni dallo stesso IP. Riprova tra un'ora.")
+        _REGISTER_ATTEMPTS[client_ip].append(now)
+
     email = req.email.lower().strip()
     rs    = req.ragione_sociale.strip()
 
