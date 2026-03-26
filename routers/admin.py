@@ -288,7 +288,12 @@ def add_credit(
     db: Session = Depends(get_db),
     _: models.Company = Depends(auth_utils._verify_priv),
 ):
-    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    company = (
+        db.query(models.Company)
+        .filter(models.Company.id == company_id)
+        .with_for_update()
+        .first()
+    )
     if not company:
         raise HTTPException(status_code=404, detail="Azienda non trovata")
     company.credits += 1

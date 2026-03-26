@@ -2345,29 +2345,23 @@ export default function AdminPage() {
                 )}
 
                 <h3 style={{
-                  color: confirmCreditStep === 0 ? '#f1f5f9' : confirmCreditStep === 1 ? '#f59e0b' : '#ef4444',
+                  color: confirmCreditStep === 0 ? '#f1f5f9' : '#f59e0b',
                   fontWeight: 900,
-                  fontSize: confirmCreditStep >= 2 ? '1.25rem' : '1.05rem',
+                  fontSize: '1.05rem',
                   marginBottom: 8,
-                  letterSpacing: confirmCreditStep >= 3 ? '0.05em' : 'normal',
-                  textTransform: confirmCreditStep >= 3 ? 'uppercase' : 'none',
                 }}>
                   {confirmCreditStep === 0 && 'Regalare 1 credito?'}
                   {confirmCreditStep === 1 && 'Sicuro?'}
-                  {confirmCreditStep === 2 && 'Sicuro sicuro?'}
-                  {confirmCreditStep === 3 && '⚠ Sicuro sicuro sicuro? ⚠'}
                 </h3>
 
                 <p style={{
-                  color: confirmCreditStep >= 2 ? '#fca5a5' : '#64748b',
+                  color: '#64748b',
                   fontSize: '0.875rem',
                   lineHeight: 1.6,
                   marginBottom: 24,
                 }}>
                   {confirmCreditStep === 0 && "Verrà aggiunto 1 credito all'azienda selezionata."}
                   {confirmCreditStep === 1 && 'Questa azienda ha già dei crediti. Vuoi davvero aggiungerne un altro?'}
-                  {confirmCreditStep === 2 && 'Stai regalando un credito extra a un cliente già attivo.'}
-                  {confirmCreditStep === 3 && 'ULTIMA CHANCE. Questa azione è irreversibile. Sei proprio sicuro?'}
                 </p>
 
                 <div className="flex gap-3 justify-center">
@@ -2383,13 +2377,13 @@ export default function AdminPage() {
                       padding: '0.6rem 1.4rem',
                       fontWeight: 700,
                       borderRadius: 10,
-                      border: `2px solid ${confirmCreditStep >= 2 ? '#ef4444' : 'rgba(245,158,11,0.5)'}`,
-                      background: confirmCreditStep >= 3 ? 'rgba(239,68,68,0.15)' : 'transparent',
-                      color: confirmCreditStep >= 2 ? '#ef4444' : '#f59e0b',
+                      border: '2px solid rgba(245,158,11,0.5)',
+                      background: 'transparent',
+                      color: '#f59e0b',
                       cursor: 'pointer',
                     }}
                     onClick={() => {
-                      if (confirmCreditStep < 3) {
+                      if (confirmCreditStep < 1) {
                         setConfirmCreditStep(confirmCreditStep + 1)
                       } else {
                         addCredit(confirmCreditId)
