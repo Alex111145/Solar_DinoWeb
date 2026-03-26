@@ -741,7 +741,7 @@ export default function AdminPage() {
                           <div
                             key={t.id}
                             style={{ padding: '0.7rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}
-                            onClick={() => { setTab('tickets'); setShowBellDropdown(false) }}
+                            onClick={() => { openAdminTicket(t.id); setShowBellDropdown(false) }}
                           >
                             <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#f1f5f9', marginBottom: 2 }}>{t.subject}</div>
                             <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 2 }}>{t.company_name || t.company_email || '—'}</div>
@@ -1941,6 +1941,14 @@ export default function AdminPage() {
                 </div>
               )}
 
+              {filteredGpuCosts.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                  <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '0.4rem 1.2rem', fontWeight: 700, color: '#f59e0b', fontSize: '0.95rem' }}>
+                    Totale{gpuMonthFilter !== 'all' ? ` ${new Date(gpuMonthFilter + '-01').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}` : ''} &nbsp;·&nbsp; € {filteredGpuCosts.reduce((acc, r) => acc + r.cost_eur, 0).toFixed(4)}
+                  </div>
+                </div>
+              )}
+
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table">
                   <thead>
@@ -2001,15 +2009,6 @@ export default function AdminPage() {
                       )
                     })}
                   </tbody>
-                  {filteredGpuCosts.length > 0 && (
-                    <tfoot>
-                      <tr style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                        <td colSpan={5} style={{ textAlign: 'center', fontWeight: 700, color: '#f59e0b', paddingTop: 10, fontSize: '1rem' }}>
-                          Totale{gpuMonthFilter !== 'all' ? ` ${new Date(gpuMonthFilter + '-01').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}` : ''} &nbsp;·&nbsp; € {filteredGpuCosts.reduce((acc, r) => acc + r.cost_eur, 0).toFixed(4)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
                 </table>
               </div>
             </motion.div>
