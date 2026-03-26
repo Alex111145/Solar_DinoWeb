@@ -293,6 +293,11 @@ def add_credit(
         raise HTTPException(status_code=404, detail="Azienda non trovata")
     company.credits += 1
     sync_credits_by_vat(db, company.vat_number, company.credits, company.ragione_sociale)
+    db.add(models.Notification(
+        company_id=company.id,
+        title="🎁 Elaborazione gratuita in regalo!",
+        message="Complimenti! Sei stato selezionato per ricevere un'elaborazione gratuita. Il credito è già disponibile nel tuo account.",
+    ))
     db.commit()
     return {"message": f"+1 credito aggiunto a {company.name}", "credits": company.credits}
 
