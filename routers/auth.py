@@ -242,7 +242,6 @@ def register(req: RegisterRequest, response: Response, request: Request, db: Ses
             models.Company.deleted_at.is_(None),
         ).first()
         if admin_acc:
-            from datetime import datetime, timezone
             now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
             db.add(models.Notification(
                 company_id=admin_acc.id,
