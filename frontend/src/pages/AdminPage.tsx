@@ -797,39 +797,14 @@ export default function AdminPage() {
         </AnimatePresence>
 
         {/* Stats row */}
-        <motion.div variants={cardAnim} className="flex flex-wrap justify-center gap-4 mb-3">
-          {statCards.map((s, i) => (
+        {/* Riga 1: Aziende + Fatturato + Spese mese + Spese dall'inizio */}
+        <motion.div variants={cardAnim} className="flex gap-3 mb-3 justify-center" style={{ flexWrap: 'wrap' }}>
+          {[...statCards, ...costCards].map((s, i) => (
             <motion.div
               key={s.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.08, duration: 0.5 }}
-              className="card flex flex-col gap-3"
-              style={{ minWidth: 180, flex: '1 1 200px', maxWidth: 260 }}
-            >
-              <div
-                style={{ width: 36, height: 36, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}
-              >
-                {s.icon}
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 3 }}>{s.label}</div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.03em' }}>
-                  <AnimatedNumber value={s.value} prefix={s.prefix} decimals={(s as any).decimals} />
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Cost row */}
-        <motion.div variants={cardAnim} className="flex gap-3 mb-3 justify-center" style={{ flexWrap: 'wrap' }}>
-          {costCards.map((s, i) => (
-            <motion.div
-              key={s.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.32 + i * 0.08, duration: 0.5 }}
               className="card flex items-center gap-4"
               style={{ flex: '1 1 180px', maxWidth: 240 }}
             >
@@ -842,7 +817,6 @@ export default function AdminPage() {
                   <AnimatedNumber value={s.value} prefix={s.prefix} decimals={(s as any).decimals} />
                 </div>
                 {(s as any).sub && <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 2 }}>{(s as any).sub}</div>}
-                {/* Date picker for "Spese dall'inizio" */}
                 {s.label === "Spese dall'inizio" && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                     <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Dal:</span>
@@ -861,16 +835,16 @@ export default function AdminPage() {
           ))}
         </motion.div>
 
-        {/* P&L riga 1 — Fatturato lordo + netto */}
-        <motion.div variants={cardAnim} className="flex gap-3 mb-3 justify-center" style={{ flexWrap: 'wrap' }}>
+        {/* Riga 2: Fatturato lordo + netto + Utile + Grafico */}
+        <motion.div variants={cardAnim} className="flex gap-3 mb-4 justify-center" style={{ flexWrap: 'wrap' }}>
           {plCards.slice(0, 2).map((s, i) => (
             <motion.div
               key={s.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.56 + i * 0.08, duration: 0.5 }}
+              transition={{ delay: 0.32 + i * 0.08, duration: 0.5 }}
               className="card flex items-center gap-4"
-              style={{ flex: '1 1 200px', maxWidth: 280 }}
+              style={{ flex: '1 1 180px', maxWidth: 240 }}
             >
               <div style={{ width: 38, height: 38, background: `${s.color}18`, border: `1px solid ${s.color}40`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0 }}>
                 {s.icon}
@@ -903,31 +877,28 @@ export default function AdminPage() {
               </div>
             </motion.div>
           ))}
-        </motion.div>
 
-        {/* P&L riga 2 — Utile (grande) + Grafico */}
-        <motion.div variants={cardAnim} className="flex gap-3 mb-4 justify-center" style={{ flexWrap: 'wrap' }}>
-          {/* Utile — card grande */}
+          {/* Utile */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.72, duration: 0.5 }}
-            className="card flex items-center gap-5"
-            style={{ flex: '1 1 300px', maxWidth: 460 }}
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.48, duration: 0.5 }}
+            className="card flex items-center gap-4"
+            style={{ flex: '1 1 180px', maxWidth: 240 }}
           >
-            <div style={{ width: 48, height: 48, background: `${plCards[2].color}18`, border: `1px solid ${plCards[2].color}40`, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: plCards[2].color, flexShrink: 0 }}>
-              <TrendingUp size={22} />
+            <div style={{ width: 38, height: 38, background: `${plCards[2].color}18`, border: `1px solid ${plCards[2].color}40`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: plCards[2].color, flexShrink: 0 }}>
+              <TrendingUp size={18} />
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 4 }}>{plCards[2].label}</div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: plCards[2].color, letterSpacing: '-0.04em', lineHeight: 1 }}>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 2 }}>{plCards[2].label}</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: plCards[2].color, letterSpacing: '-0.03em' }}>
                 € {plCards[2].value.toFixed(2)}
               </div>
-              <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 4 }}>{plCards[2].sub}</div>
+              <div style={{ fontSize: '0.62rem', color: '#475569', marginTop: 2 }}>{plCards[2].sub}</div>
             </div>
           </motion.div>
 
           {/* Grafico P&L */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.5 }}
-            className="card flex items-center justify-center" style={{ flex: '0 0 auto', minWidth: 130 }}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.56, duration: 0.5 }}
+            className="card flex items-center justify-center" style={{ flex: '1 1 180px', maxWidth: 240 }}>
             <button onClick={loadProfitChart}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0.6rem 1.2rem', borderRadius: 10, border: '1px solid rgba(245,158,11,0.25)', background: 'rgba(245,158,11,0.08)', color: '#f59e0b', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>
               <BarChart2 size={24} />

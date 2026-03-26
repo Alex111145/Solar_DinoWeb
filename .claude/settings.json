@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(head -5 grep -rn \"pec_verification_tokens\\\\|PecVerification\" /Users/alessiogervasini/Desktop/solardino_web/routers/ --include=\"*.py\")",
+      "Bash(head -5 grep -rn \"enterprise_inference_logs\\\\|EnterpriseInference\" /Users/alessiogervasini/Desktop/solardino_web/routers/ --include=\"*.py\")",
+      "Bash(head -5 grep -rn \"usage_logs\\\\|UsageLog\" /Users/alessiogervasini/Desktop/solardino_web/routers/ --include=\"*.py\")"
+    ]
+  }
+}
