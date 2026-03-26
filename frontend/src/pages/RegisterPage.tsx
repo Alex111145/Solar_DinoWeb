@@ -88,10 +88,7 @@ export default function RegisterPage() {
         return
       }
       const data = await res.json()
-      localStorage.setItem('name', data.name || form.ragione_sociale)
-      localStorage.setItem('email', data.email || form.email)
-      localStorage.setItem('credits', String(data.credits ?? 0))
-      if (data.ip_already_used) localStorage.setItem('show_ip_warning', 'true')
+      if (data.ip_already_used) sessionStorage.setItem('show_ip_warning', 'true')
       navigate('/dashboard')
     } catch {
       setError('Errore di connessione al server')

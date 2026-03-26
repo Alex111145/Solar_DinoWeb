@@ -1173,11 +1173,11 @@ function SupportCard({ onOpenTicket, refreshKey }: { onOpenTicket: (id: number) 
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  // User state
-  const [userName, setUserName] = useState(localStorage.getItem('name') || '')
-  const [userEmail, setUserEmail] = useState(localStorage.getItem('email') || '')
-  const [credits, setCredits] = useState(parseInt(localStorage.getItem('credits') || '0'))
-  const [ragioneSociale, setRagioneSociale] = useState(localStorage.getItem('ragione_sociale') || '')
+  // User state — caricato da /auth/me, niente in localStorage
+  const [userName, setUserName] = useState('')
+  const [userEmail, setUserEmail] = useState('')
+  const [credits, setCredits] = useState(0)
+  const [ragioneSociale, setRagioneSociale] = useState('')
   const [subscriptionActive, setSubscriptionActive] = useState(false)
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
@@ -1205,8 +1205,8 @@ export default function DashboardPage() {
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false)
   // IP warning modal — show once on load if ip is flagged
   const [showIpModal, setShowIpModal] = useState(() => {
-    const v = localStorage.getItem('show_ip_warning') === 'true'
-    if (v) localStorage.removeItem('show_ip_warning')
+    const v = sessionStorage.getItem('show_ip_warning') === 'true'
+    if (v) sessionStorage.removeItem('show_ip_warning')
     return v
   })
 
@@ -1299,14 +1299,11 @@ export default function DashboardPage() {
         setUserEmail(d.email || d.user?.email || userEmail)
         const c = d.credits ?? d.user?.credits ?? credits
         setCredits(c)
-        if (d.ragione_sociale) { setRagioneSociale(d.ragione_sociale); localStorage.setItem('ragione_sociale', d.ragione_sociale) }
+        if (d.ragione_sociale) setRagioneSociale(d.ragione_sociale)
         if (d.subscription_active !== undefined) setSubscriptionActive(!!d.subscription_active)
         if (d.subscription_plan !== undefined) setSubscriptionPlan(d.subscription_plan ?? null)
         if (d.subscription_end_date !== undefined) setSubscriptionEndDate(d.subscription_end_date ?? null)
         if (d.subscription_cancelled !== undefined) setSubscriptionCancelled(!!d.subscription_cancelled)
-        localStorage.setItem('name', d.name || d.user?.name || userName)
-        localStorage.setItem('email', d.email || d.user?.email || userEmail)
-        localStorage.setItem('credits', String(c))
       })
       .catch(() => {})
 
@@ -1374,7 +1371,6 @@ export default function DashboardPage() {
             .then((ud) => {
               const c = ud.credits ?? ud.user?.credits ?? credits
               setCredits(c)
-              localStorage.setItem('credits', String(c))
             })
             .catch(() => {})
         }

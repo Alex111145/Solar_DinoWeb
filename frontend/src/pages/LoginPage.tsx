@@ -131,10 +131,7 @@ export default function LoginPage() {
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setRegError(d.detail || 'Errore durante la registrazione'); setRegLoading(false); return }
       const data = await res.json()
-      localStorage.setItem('name', data.name || regForm.ragione_sociale)
-      localStorage.setItem('email', data.email || regForm.email)
-      localStorage.setItem('credits', String(data.credits ?? 0))
-      localStorage.setItem('ip_already_used', String(!!data.ip_already_used))
+      if (data.ip_already_used) sessionStorage.setItem('show_ip_warning', 'true')
       setShowRegister(false)
       window.scrollTo(0, 0)
       navigate('/dashboard')
@@ -181,9 +178,6 @@ export default function LoginPage() {
         return
       }
       const data = await res.json()
-      localStorage.setItem('name', data.name || data.user?.name || '')
-      localStorage.setItem('email', data.email || data.user?.email || email)
-      localStorage.setItem('credits', String(data.credits ?? data.user?.credits ?? 0))
       setLoading(false)
       window.scrollTo(0, 0)
       if (data._priv || data.user?._priv) { navigate('/sys-ctrl'); return }
