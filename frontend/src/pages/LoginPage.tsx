@@ -109,11 +109,16 @@ export default function LoginPage() {
     else if (!LEGAL_FORM_RE.test(rs)) e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc...)'
     if (!regForm.email.trim()) e.email = 'Obbligatoria'
     else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(regForm.email)) e.email = 'Email non valida'
-    if (!regForm.password) e.password = 'Obbligatoria'
-    else if (regForm.password.length < 8) e.password = 'Min 8 caratteri'
-    else if (!/[A-Z]/.test(regForm.password)) e.password = 'Serve almeno una maiuscola'
-    else if (!/[0-9]/.test(regForm.password)) e.password = 'Serve almeno un numero'
-    else if (!/[^A-Za-z0-9]/.test(regForm.password)) e.password = 'Serve almeno un simbolo (!@#$...)'
+    if (!regForm.password) {
+      e.password = 'Obbligatoria'
+    } else {
+      const issues: string[] = []
+      if (regForm.password.length < 8)             issues.push('min 8 caratteri')
+      if (!/[A-Z]/.test(regForm.password))         issues.push('almeno una maiuscola')
+      if (!/[0-9]/.test(regForm.password))         issues.push('almeno un numero')
+      if (!/[^A-Za-z0-9]/.test(regForm.password))  issues.push('almeno un simbolo (!@#$...)')
+      if (issues.length) e.password = 'La password deve contenere: ' + issues.join(', ')
+    }
     return e
   }
 
@@ -129,7 +134,16 @@ export default function LoginPage() {
         credentials: 'include',
         body: JSON.stringify(regForm),
       })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setRegError(d.detail || 'Errore durante la registrazione'); setRegLoading(false); return }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        const detail = d.detail || 'Errore durante la registrazione'
+        if (detail.toLowerCase().includes('email')) {
+          setRegErrors(prev => ({ ...prev, email: detail }))
+        } else {
+          setRegError(detail)
+        }
+        setRegLoading(false); return
+      }
       const data = await res.json()
       if (data.ip_already_used) sessionStorage.setItem('show_ip_warning', 'true')
       setShowRegister(false)

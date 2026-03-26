@@ -53,14 +53,13 @@ export default function RegisterPage() {
 
     if (!form.password) {
       e.password = 'Password obbligatoria'
-    } else if (form.password.length < 8) {
-      e.password = 'Minimo 8 caratteri'
-    } else if (!/[A-Z]/.test(form.password)) {
-      e.password = 'Deve contenere almeno una lettera maiuscola'
-    } else if (!/[0-9]/.test(form.password)) {
-      e.password = 'Deve contenere almeno un numero'
-    } else if (!/[^A-Za-z0-9]/.test(form.password)) {
-      e.password = 'Deve contenere almeno un carattere speciale (!@#$...)'
+    } else {
+      const issues: string[] = []
+      if (form.password.length < 8)          issues.push('min 8 caratteri')
+      if (!/[A-Z]/.test(form.password))      issues.push('almeno una maiuscola')
+      if (!/[0-9]/.test(form.password))      issues.push('almeno un numero')
+      if (!/[^A-Za-z0-9]/.test(form.password)) issues.push('almeno un simbolo (!@#$...)')
+      if (issues.length) e.password = 'La password deve contenere: ' + issues.join(', ')
     }
 
     return e
@@ -83,7 +82,12 @@ export default function RegisterPage() {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError(data.detail || 'Errore durante la registrazione')
+        const detail = data.detail || 'Errore durante la registrazione'
+        if (detail.toLowerCase().includes('email')) {
+          setErrors(prev => ({ ...prev, email: detail }))
+        } else {
+          setError(detail)
+        }
         setLoading(false)
         return
       }
