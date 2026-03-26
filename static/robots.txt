@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /sys-ctrl
+Disallow: /auth/
+Disallow: /payments/
+Disallow: /missions/
+Disallow: /flighthub/
+Disallow: /reviews/
+
+Sitemap: https://solardino.it/sitemap.xml

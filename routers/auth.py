@@ -35,6 +35,16 @@ _REGISTER_LOCK = threading.Lock()
 _MAX_REGISTER   = 5
 _REGISTER_WINDOW = 3600  # 1 ora
 
+# ── Support ticket rate limiting: max 5 ticket per ora per azienda ──────────
+_TICKET_ATTEMPTS: dict[int, list[float]] = collections.defaultdict(list)
+_TICKET_LOCK = threading.Lock()
+_MAX_TICKETS_PER_HOUR = 5
+
+# ── Change-password / change-email rate limiting: max 5 per ora per company ─
+_CHANGE_ATTEMPTS: dict[int, list[float]] = collections.defaultdict(list)
+_CHANGE_LOCK = threading.Lock()
+_MAX_CHANGES_PER_HOUR = 5
+
 
 def _extract_ipv4(request: Request) -> Optional[str]:
     """Return the client IPv4 address, ignoring IPv6 addresses (they contain ':')."""
@@ -85,7 +95,7 @@ def _notify_admin_new_company(company: "models.Company", tipo: str) -> None:
               </td></tr>
             </table>
             <div style="margin-top:28px;text-align:center;">
-              <a href="{FRONTEND_URL}/admin"
+              <a href="{FRONTEND_URL}/sys-ctrl"
                  style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;font-weight:700;padding:13px 28px;border-radius:12px;text-decoration:none;font-size:14px;">
                 Vai all'admin
               </a>
@@ -232,7 +242,7 @@ def register(req: RegisterRequest, response: Response, request: Request, db: Ses
         "name":            company.name,
         "email":           company.email,
         "credits":         company.credits,
-        "is_admin":        False,
+        "_priv":           False,
         "ip_already_used": ip_already_used,
     }
 
@@ -278,11 +288,11 @@ def _set_auth_cookie(response: Response, token: str) -> None:
     """Imposta il cookie HttpOnly con il token JWT."""
     is_prod = os.getenv("ENV", "development") == "production"
     response.set_cookie(
-        key="token",
+        key="_sd_s",
         value=token,
         httponly=True,               # JS non può leggerlo → immune a XSS
         secure=is_prod,              # True in prod (HTTPS), False in locale (HTTP)
-        samesite="lax",              # protezione CSRF per navigazione normale
+        samesite="strict",           # protezione CSRF massima
         max_age=60 * 60 * 24 * 7,   # 7 giorni
         path="/",
     )
@@ -340,14 +350,14 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
         "name":            company.name,
         "email":           company.email,
         "credits":         company.credits,
-        "is_admin":        bool(company.is_admin),
+        "_priv":           bool(company._priv),
         "ip_already_used": ip_already_used,
     }
 
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie("token", path="/")
+    response.delete_cookie("_sd_s", path="/")
     return {"message": "Logout effettuato"}
 
 
@@ -371,7 +381,7 @@ def me(current: models.Company = Depends(auth_utils.get_current_company), db: Se
         "name":                   current.name,
         "ragione_sociale":        current.ragione_sociale or "",
         "credits":                current.credits,
-        "is_admin":               bool(current.is_admin),
+        "_priv":                  bool(current._priv),
         "subscription_active":    bool(current.subscription_active),
         "subscription_plan":      current.subscription_plan,
         "subscription_end_date":  current.subscription_end_date.strftime("%d/%m/%Y") if current.subscription_end_date else None,
@@ -381,11 +391,10 @@ def me(current: models.Company = Depends(auth_utils.get_current_company), db: Se
     }
 
 
-@router.get("/admin-check", status_code=200)
-def admin_check(current: models.Company = Depends(auth_utils.get_current_company)):
-    """Ritorna 200 se l'utente è admin, 403 altrimenti. Nessun campo is_admin nel body."""
-    if not current.is_admin:
-        raise HTTPException(status_code=403, detail="Accesso negato")
+@router.get("/sys-check", status_code=200)
+def sys_check(current: models.Company = Depends(auth_utils.get_current_company)):
+    if not current._priv:
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
     return {}
 
 
@@ -396,6 +405,13 @@ def send_support_ticket(
     db: Session = Depends(get_db),
 ):
     """Invia una richiesta di assistenza all'admin."""
+    now = time.time()
+    with _TICKET_LOCK:
+        _TICKET_ATTEMPTS[current.id] = [t for t in _TICKET_ATTEMPTS[current.id] if now - t < 3600]
+        if len(_TICKET_ATTEMPTS[current.id]) >= _MAX_TICKETS_PER_HOUR:
+            raise HTTPException(status_code=429, detail="Troppi ticket nell'ultima ora. Riprova più tardi.")
+        _TICKET_ATTEMPTS[current.id].append(now)
+
     subject = (body.get("subject") or "").strip()
     message = (body.get("message") or "").strip()
     if not subject or not message:
@@ -533,7 +549,7 @@ def delete_account(
     db: Session = Depends(get_db),
 ):
     """Soft-delete dell'account. Tutti i dati vengono conservati."""
-    if current.is_admin:
+    if current._priv:
         raise HTTPException(status_code=403, detail="L'account amministratore non può essere eliminato.")
     current.deleted_at = datetime.now(timezone.utc)
     current.is_active  = False
@@ -547,7 +563,7 @@ def delete_company_account(
     db: Session = Depends(get_db),
 ):
     """Soft-delete di tutti gli account con la stessa ragione_sociale."""
-    if current.is_admin:
+    if current._priv:
         raise HTTPException(status_code=403, detail="L'account amministratore non può essere eliminato.")
     if not current.ragione_sociale:
         raise HTTPException(status_code=400, detail="Nessuna ragione sociale associata.")
@@ -556,7 +572,7 @@ def delete_company_account(
     accounts = db.query(models.Company).filter(
         models.Company.ragione_sociale == current.ragione_sociale,
         models.Company.deleted_at.is_(None),
-        models.Company.is_admin == False,
+        models.Company._priv == False,
     ).all()
 
     for acc in accounts:
@@ -575,6 +591,14 @@ def change_email(
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
+    now = time.time()
+    with _CHANGE_LOCK:
+        attempts = _CHANGE_ATTEMPTS[current.id]
+        attempts[:] = [t for t in attempts if now - t < 3600]
+        if len(attempts) >= _MAX_CHANGES_PER_HOUR:
+            raise HTTPException(status_code=429, detail="Troppi tentativi. Riprova tra un'ora.")
+        attempts.append(now)
+
     new_email = body.get("new_email", "").lower().strip()
     password  = body.get("password", "")
 
@@ -748,6 +772,14 @@ def change_password(
     current: models.Company = Depends(auth_utils.get_current_company),
     db: Session = Depends(get_db),
 ):
+    now = time.time()
+    with _CHANGE_LOCK:
+        attempts = _CHANGE_ATTEMPTS[current.id]
+        attempts[:] = [t for t in attempts if now - t < 3600]
+        if len(attempts) >= _MAX_CHANGES_PER_HOUR:
+            raise HTTPException(status_code=429, detail="Troppi tentativi. Riprova tra un'ora.")
+        attempts.append(now)
+
     old = body.get("old_password", "")
     new = body.get("new_password", "")
 
@@ -760,6 +792,7 @@ def change_password(
     current.password_hash = auth_utils.hash_password(new)
     db.commit()
 
+    safe_name = html.escape(current.name or '')
     html = f"""<!DOCTYPE html>
 <html lang="it">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -776,7 +809,7 @@ def change_password(
         </tr>
         <tr>
           <td style="background:#ffffff;padding:40px 40px 32px;">
-            <p style="margin:0 0 8px;color:#64748b;font-size:14px;">Ciao {current.name},</p>
+            <p style="margin:0 0 8px;color:#64748b;font-size:14px;">Ciao {safe_name},</p>
             <p style="margin:0 0 24px;color:#1e293b;font-size:16px;line-height:1.6;">
               La password del tuo account SolarDino è stata modificata con successo.
             </p>

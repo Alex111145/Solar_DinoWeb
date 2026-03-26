@@ -1,6 +1,9 @@
+import collections
 import html as html_mod
 import os
 import shutil
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -8,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from typing import Optional
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import httpx
 
 import auth_utils
@@ -20,6 +24,15 @@ from email_utils import send_email
 router = APIRouter(prefix="/missions", tags=["Missions"])
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://solar-dinoweb.fly.dev")
+
+# ── Upload rate limiting: max 10 upload per company per ora ────────────────
+_UPLOAD_ATTEMPTS: dict[int, list[float]] = collections.defaultdict(list)
+_UPLOAD_LOCK = threading.Lock()
+_MAX_UPLOADS_PER_HOUR = 10
+_UPLOAD_WINDOW = 3600
+
+# ── Limite dimensione file: 500 MB per file ────────────────────────────────
+_MAX_FILE_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB
 
 _LOCAL_TMP         = os.getenv("UPLOAD_DIR", "/tmp/elaborazioni")
 MODAL_ENDPOINT_URL  = os.getenv("MODAL_ENDPOINT_URL", "")
@@ -129,6 +142,23 @@ async def upload_mission(
     if current.credits <= 0:
         raise HTTPException(status_code=402, detail="Crediti esauriti. Acquista nuovi crediti per continuare.")
 
+    # Rate limiting upload per azienda
+    now = time.time()
+    with _UPLOAD_LOCK:
+        _UPLOAD_ATTEMPTS[current.id] = [t for t in _UPLOAD_ATTEMPTS[current.id] if now - t < _UPLOAD_WINDOW]
+        if len(_UPLOAD_ATTEMPTS[current.id]) >= _MAX_UPLOADS_PER_HOUR:
+            raise HTTPException(status_code=429, detail="Troppi upload nell'ultima ora. Riprova più tardi.")
+        _UPLOAD_ATTEMPTS[current.id].append(now)
+
+    # Controllo dimensione file
+    for uf in [tif_termico, tfw_termico, tif_rgb, tfw_rgb]:
+        if uf and uf.filename:
+            uf.file.seek(0, 2)
+            size = uf.file.tell()
+            uf.file.seek(0)
+            if size > _MAX_FILE_BYTES:
+                raise HTTPException(status_code=413, detail=f"File {uf.filename} supera il limite di 5 GB.")
+
     job_id  = str(uuid.uuid4())
     job_dir = os.path.join(_LOCAL_TMP, job_id)
     os.makedirs(job_dir, exist_ok=True)
@@ -137,7 +167,9 @@ async def upload_mission(
     _ALLOWED_TFW = {".tfw", ".tifw", ".wld"}
 
     def _norm(filename: str) -> str:
-        name, ext = os.path.splitext(filename.strip())
+        # os.path.basename rimuove qualsiasi "../" o path traversal
+        safe = os.path.basename(filename.strip())
+        name, ext = os.path.splitext(safe)
         return name.strip() + ext.lower()
 
     def _check_ext(filename: str, allowed: set) -> None:
@@ -172,14 +204,24 @@ async def upload_mission(
         with open(os.path.join(job_dir, "rgb_" + _norm(tfw_rgb.filename)), "wb") as f:
             shutil.copyfileobj(tfw_rgb.file, f)
 
-    # ── Determina se è un job bonus (usa il credito di benvenuto) ────────────
-    is_bonus = bool(current.bonus_credits and current.bonus_credits > 0)
-    if is_bonus:
-        current.bonus_credits -= 1
+    # ── Scala credito con lock a livello DB (previene race condition) ─────────
+    # with_for_update() acquisisce un row-level lock: se 2 richieste arrivano
+    # simultaneamente, la seconda aspetta il commit della prima.
+    locked = (
+        db.query(models.Company)
+        .filter(models.Company.id == current.id)
+        .with_for_update()
+        .first()
+    )
+    if not locked or locked.credits <= 0:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(status_code=402, detail="Crediti esauriti.")
 
-    # Scala credito
-    current.credits -= 1
-    sync_credits_by_vat(db, None, current.credits, current.ragione_sociale)
+    is_bonus = bool(locked.bonus_credits and locked.bonus_credits > 0)
+    if is_bonus:
+        locked.bonus_credits -= 1
+    locked.credits -= 1
+    sync_credits_by_vat(db, None, locked.credits, locked.ragione_sociale)
 
     job = models.Job(
         id               = job_id,
@@ -245,7 +287,7 @@ def job_status(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and not current.is_admin:
+    if job.company_id != current.id and not current._priv:
         raise HTTPException(status_code=403, detail="Accesso negato")
     d = _job_dict(job)
     d["progress"] = STATUS_PROGRESS.get(job.status, 0)
@@ -262,11 +304,11 @@ def download_result(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and not current.is_admin:
+    if job.company_id != current.id and not current._priv:
         raise HTTPException(status_code=403, detail="Accesso negato")
     if job.status != "completato":
         raise HTTPException(status_code=400, detail="Analisi non ancora completata")
-    if job.is_bonus_job and not current.is_admin:
+    if job.is_bonus_job and not current._priv:
         raise HTTPException(
             status_code=403,
             detail="I file di output non sono scaricabili con il credito di benvenuto. Acquista crediti per sbloccare i download.",
@@ -285,8 +327,8 @@ def download_result(
     storage_path = f"{job.result_path}/{FILE_MAP[file_type]}"
     try:
         signed_url = storage_utils.get_signed_url(storage_path, expires_in=300)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
+    except Exception:
+        raise HTTPException(status_code=404, detail="File non disponibile")
     return RedirectResponse(url=signed_url)
 
 
@@ -299,15 +341,15 @@ def download_input(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and not current.is_admin:
+    if job.company_id != current.id and not current._priv:
         raise HTTPException(status_code=403, detail="Accesso negato")
     if not job.tif_filename:
         raise HTTPException(status_code=404, detail="File input non disponibile")
     storage_path = f"jobs/{job_id}/{job.tif_filename}"
     try:
         signed_url = storage_utils.get_signed_url(storage_path, expires_in=300)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
+    except Exception:
+        raise HTTPException(status_code=404, detail="File non disponibile")
     return RedirectResponse(url=signed_url)
 
 
@@ -321,7 +363,7 @@ def list_input_files(
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job non trovato")
-    if job.company_id != current.id and not current.is_admin:
+    if job.company_id != current.id and not current._priv:
         raise HTTPException(status_code=403, detail="Accesso negato")
 
     all_files = storage_utils.list_files(f"jobs/{job_id}")
@@ -430,7 +472,7 @@ def request_trial(
               {"" if not message else f'<tr><td style="padding:12px 0;"><span style="color:#64748b;font-size:13px;">Messaggio</span><br><p style="color:#1e293b;font-size:14px;line-height:1.6;margin:6px 0 0;background:#f8fafc;border-left:3px solid #f59e0b;padding:12px;">{msg_safe}</p></td></tr>'}
             </table>
             <div style="margin-top:28px;text-align:center;">
-              <a href="{FRONTEND_URL}/admin"
+              <a href="{FRONTEND_URL}/sys-ctrl"
                  style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f172a;font-weight:700;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:15px;">
                 Vai all'admin → aggiungi 1 credito
               </a>

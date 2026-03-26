@@ -14,7 +14,7 @@ import models
 import storage_utils
 from database import get_db
 
-router = APIRouter(prefix="/admin", tags=["Admin"])
+router = APIRouter(prefix="/sys-ctrl", tags=["Admin"])
 
 PRICE_PER_PANEL      = float(os.getenv("PRICE_PER_PANEL", "0.01"))      # € per pannello rilevato
 UPLOAD_DIR           = os.getenv("UPLOAD_DIR", "elaborazioni")
@@ -28,12 +28,12 @@ RUNPOD_COST_PER_SEC  = float(os.getenv("RUNPOD_COST_PER_SEC", "0.000306"))  # �
 @router.get("/stats")
 def get_stats(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     total_companies = (
         db.query(func.count(models.Company.id))
         .filter(
-            models.Company.is_admin == False,
+            models.Company._priv == False,
             models.Company.is_active == True,
             models.Company.deleted_at.is_(None),
         )
@@ -125,12 +125,12 @@ def get_stats(
 @router.get("/companies")
 def list_companies(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     companies = (
         db.query(models.Company)
         .filter(
-            models.Company.is_admin == False,
+            models.Company._priv == False,
             models.Company.deleted_at.is_(None),
         )
         .order_by(models.Company.created_at.desc())
@@ -208,7 +208,7 @@ class CreateCompanyBody(BaseModel):
 def create_company(
     body: CreateCompanyBody,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     if db.query(models.Company).filter(models.Company.email == body.email.lower()).first():
         raise HTTPException(status_code=400, detail="Email già registrata")
@@ -236,7 +236,7 @@ def update_company(
     company_id: int,
     body: UpdateCompanyBody,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
@@ -258,7 +258,7 @@ def update_company(
 def activate_company(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
@@ -272,7 +272,7 @@ def activate_company(
 def deactivate_company(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
@@ -286,7 +286,7 @@ def deactivate_company(
 def add_credit(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
@@ -306,12 +306,12 @@ def add_credit(
 def delete_company(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     company = db.query(models.Company).filter(models.Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Azienda non trovata")
-    if company.is_admin:
+    if company._priv:
         raise HTTPException(status_code=403, detail="L'account amministratore non può essere eliminato.")
 
     company.deleted_at = datetime.now(timezone.utc)
@@ -324,7 +324,7 @@ def delete_company(
 def company_jobs(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     jobs = (
         db.query(models.Job)
@@ -352,7 +352,7 @@ def company_jobs(
 def company_stats(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
@@ -392,7 +392,7 @@ def company_stats(
 def company_history(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Restituisce i job completati per mese negli ultimi 12 mesi."""
     from sqlalchemy import extract
@@ -425,13 +425,13 @@ def company_history(
 @router.get("/billing")
 def billing_report(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Billing raggruppato per P.IVA: tutte le aziende sotto la stessa P.IVA appaiono come un'unica riga."""
     companies = (
         db.query(models.Company)
         .filter(
-            models.Company.is_admin == False,
+            models.Company._priv == False,
             models.Company.deleted_at.is_(None),
         )
         .order_by(models.Company.created_at.asc())
@@ -516,7 +516,7 @@ def billing_report(
 def download_receipt(
     req_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     from fastapi.responses import RedirectResponse
     req = db.query(models.BonificoRequest).filter(models.BonificoRequest.id == req_id).first()
@@ -524,15 +524,15 @@ def download_receipt(
         raise HTTPException(status_code=404, detail="Ricevuta non trovata")
     try:
         signed_url = storage_utils.get_signed_url(req.receipt_path, expires_in=300)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
+    except Exception:
+        raise HTTPException(status_code=404, detail="File non disponibile")
     return RedirectResponse(url=signed_url)
 
 
 @router.get("/usage")
 def usage_report(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     logs = (
         db.query(models.UsageLog)
@@ -564,7 +564,7 @@ def usage_report(
 @router.get("/bonifico-requests")
 def list_bonifico_requests(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     reqs = (
         db.query(models.BonificoRequest)
@@ -594,15 +594,25 @@ def list_bonifico_requests(
 def approve_bonifico(
     req_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
-    req = db.query(models.BonificoRequest).filter(models.BonificoRequest.id == req_id).first()
+    req = (
+        db.query(models.BonificoRequest)
+        .filter(models.BonificoRequest.id == req_id)
+        .with_for_update()
+        .first()
+    )
     if not req:
         raise HTTPException(status_code=404, detail="Richiesta non trovata")
     if req.status != "pending":
         raise HTTPException(status_code=400, detail="Richiesta già elaborata")
 
-    company = db.query(models.Company).filter(models.Company.id == req.company_id).first()
+    company = (
+        db.query(models.Company)
+        .filter(models.Company.id == req.company_id)
+        .with_for_update()
+        .first()
+    )
     if company:
         company.credits += req.credits
         sync_credits_by_vat(db, None, company.credits, company.ragione_sociale)
@@ -617,7 +627,7 @@ def approve_bonifico(
 def reject_bonifico(
     req_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     req = db.query(models.BonificoRequest).filter(models.BonificoRequest.id == req_id).first()
     if not req:
@@ -635,7 +645,7 @@ def reject_bonifico(
 @router.get("/reviews")
 def list_reviews(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     reviews = (
         db.query(models.Review)
@@ -659,7 +669,7 @@ def list_reviews(
 def approve_review(
     review_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     r = db.query(models.Review).filter(models.Review.id == review_id).first()
     if not r:
@@ -673,7 +683,7 @@ def approve_review(
 def reject_review(
     review_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     r = db.query(models.Review).filter(models.Review.id == review_id).first()
     if not r:
@@ -687,7 +697,7 @@ def reject_review(
 def delete_review(
     review_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     r = db.query(models.Review).filter(models.Review.id == review_id).first()
     if not r:
@@ -704,13 +714,13 @@ def delete_review(
 @router.get("/uploads")
 def list_uploads(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Per ogni azienda, lista tutti i job con i file caricati."""
     companies = (
         db.query(models.Company)
         .filter(
-            models.Company.is_admin == False,
+            models.Company._priv == False,
             models.Company.deleted_at.is_(None),
         )
         .order_by(models.Company.created_at.desc())
@@ -760,7 +770,7 @@ def download_uploaded_file(
     job_id:   str,
     filename: str,
     db:       Session = Depends(get_db),
-    _:        models.Company = Depends(auth_utils.require_admin),
+    _:        models.Company = Depends(auth_utils._verify_priv),
 ):
     """Scarica un file del job da Supabase Storage."""
     from fastapi.responses import RedirectResponse
@@ -774,8 +784,8 @@ def download_uploaded_file(
     storage_path = f"{job.result_path}/{filename}"
     try:
         signed_url = storage_utils.get_signed_url(storage_path, expires_in=300)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"File non disponibile: {e}")
+    except Exception:
+        raise HTTPException(status_code=404, detail="File non disponibile")
     return RedirectResponse(url=signed_url)
 
 
@@ -786,12 +796,13 @@ def download_uploaded_file(
 @router.get("/tickets")
 def all_tickets(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Tutti i ticket di assistenza con info azienda."""
     tickets = (
         db.query(models.SupportTicket)
         .order_by(models.SupportTicket.created_at.desc())
+        .limit(1000)
         .all()
     )
     result = []
@@ -814,7 +825,7 @@ def all_tickets(
 def get_ticket_detail(
     ticket_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Dettaglio ticket con storico messaggi (per chat modal admin)."""
     ticket = db.query(models.SupportTicket).filter(models.SupportTicket.id == ticket_id).first()
@@ -846,7 +857,7 @@ def update_ticket_status(
     ticket_id: int,
     body: dict,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Aggiorna lo stato di un ticket. Un ticket risolto non può essere riaperto."""
     ticket = db.query(models.SupportTicket).filter(models.SupportTicket.id == ticket_id).first()
@@ -877,7 +888,7 @@ def reply_ticket(
     ticket_id: int,
     body: dict,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Invia una risposta al ticket: notifica in-app + email al cliente."""
     ticket = db.query(models.SupportTicket).filter(models.SupportTicket.id == ticket_id).first()
@@ -926,7 +937,7 @@ def reply_ticket(
 def company_tickets(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     tickets = (
         db.query(models.SupportTicket)
@@ -953,12 +964,13 @@ def company_tickets(
 @router.get("/enterprise-logs")
 def enterprise_logs(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Lista di tutti i clienti Enterprise che hanno avviato l'elaborazione (con consenso dati)."""
     logs = (
         db.query(models.EnterpriseInferenceLog)
         .order_by(models.EnterpriseInferenceLog.created_at.desc())
+        .limit(1000)
         .all()
     )
     return [
@@ -979,7 +991,7 @@ def enterprise_logs(
 @router.get("/enterprise-logs/csv")
 def enterprise_logs_csv(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Scarica tutti i log Enterprise in formato CSV."""
     import csv, io
@@ -1021,7 +1033,7 @@ def enterprise_logs_csv(
 @router.get("/gpu-costs")
 def gpu_costs(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Costo GPU stimato per azienda basato sulla durata dei job completati."""
     from collections import defaultdict
@@ -1075,7 +1087,7 @@ def gpu_costs(
 def gpu_cost_detail(
     company_id: int,
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Dettaglio job GPU per singola azienda."""
     jobs = (
@@ -1103,7 +1115,7 @@ def gpu_cost_detail(
 @router.get("/monthly-summary")
 def monthly_summary(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Riepilogo mensile (ultimi 12 mesi): fatturato + costo GPU."""
     from dateutil.relativedelta import relativedelta
@@ -1162,7 +1174,7 @@ def monthly_summary(
 @router.get("/monthly-stats")
 def monthly_stats(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Revenue e costo GPU mensili (ultimi 12 mesi) per grafico P&L."""
     now = datetime.now(timezone.utc)
@@ -1231,7 +1243,7 @@ def monthly_stats(
 @router.get("/db-size")
 def db_size_info(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Ritorna la dimensione attuale del database PostgreSQL in MB."""
     try:
@@ -1247,7 +1259,7 @@ def db_size_info(
 @router.get("/supabase-storage")
 def supabase_storage_info(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Calcola lo spazio usato su Supabase Storage sommando tutti i file dei job."""
     jobs = db.query(models.Job).filter(models.Job.status == "completato").all()
@@ -1271,7 +1283,7 @@ def supabase_storage_info(
 @router.get("/cleanup-preview")
 def cleanup_preview(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Anteprima dei file dei 10 job più vecchi con URL di download firmati."""
     SKIP_EXTENSIONS = {".pth", ".mp4", ".mov", ".avi", ".mkv", ".webm"}
@@ -1316,7 +1328,7 @@ def cleanup_preview(
 @router.post("/cleanup-oldest")
 def cleanup_oldest_jobs(
     db: Session = Depends(get_db),
-    _: models.Company = Depends(auth_utils.require_admin),
+    _: models.Company = Depends(auth_utils._verify_priv),
 ):
     """Elimina i file Supabase dei 10 job più vecchi (esclusi model_best.pth e video)."""
     SKIP_EXTENSIONS = {".pth", ".mp4", ".mov", ".avi", ".mkv", ".webm"}

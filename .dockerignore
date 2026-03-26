@@ -14,3 +14,10 @@ venv_ml/
 *.md
 oracle_retry.sh
 .claude/
+elaborazioni/
+seed*.py
+populate_db.py
+cleanup_companies.py
+delete_*.py
+migrate_*.py
+migrate_rename.sql

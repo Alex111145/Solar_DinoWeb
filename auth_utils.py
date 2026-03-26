@@ -11,13 +11,19 @@ from database import get_db
 import models
 
 ALGORITHM   = "HS256"
-TOKEN_HOURS = 24 * 7   # 7 giorni (durata cookie)
+TOKEN_HOURS = 24       # 24 ore — ridotto per sicurezza (era 7 giorni)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Letti dinamicamente ad ogni chiamata — robusti a reload uvicorn e dotenv tardivo
 def _secret_key() -> str:
-    return os.getenv("SECRET_KEY", "solardino-secret-change-in-production")
+    key = os.getenv("SECRET_KEY", "")
+    if not key:
+        raise RuntimeError(
+            "SECRET_KEY env var non configurata. "
+            "Impostare un segreto casuale prima del deploy: fly secrets set SECRET_KEY=..."
+        )
+    return key
 
 def _admin_email() -> str:
     return os.getenv("ADMIN_EMAIL", "admin@solardino.it")
@@ -49,7 +55,7 @@ def _decode_token(token: str):
 
 def _extract_token(request: Request) -> Optional[str]:
     """Legge il token prima dal cookie HttpOnly, poi dall'header Authorization."""
-    token = request.cookies.get("token")
+    token = request.cookies.get("_sd_s")
     if token:
         return token
     auth = request.headers.get("authorization", "")
@@ -91,9 +97,9 @@ def sync_credits_by_vat(db: Session, vat_number: str, new_credits: int, ragione_
         ).update({"credits": new_credits}, synchronize_session=False)
 
 
-def require_admin(
+def _verify_priv(
     company: models.Company = Depends(get_current_company),
 ) -> models.Company:
-    if not company.is_admin:
-        raise HTTPException(status_code=403, detail="Accesso riservato all'amministratore")
+    if not company._priv:
+        raise HTTPException(status_code=403, detail="Accesso non autorizzato")
     return company

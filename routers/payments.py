@@ -114,7 +114,19 @@ async def stripe_webhook(
         if company_id:
             db = SessionLocal()
             try:
-                company = db.query(models.Company).filter(models.Company.id == company_id).first()
+                # Controlla idempotenza PRIMA di modificare i crediti
+                existing = db.query(models.StripePayment).filter(
+                    models.StripePayment.stripe_session == sess.get("id")
+                ).first()
+                if existing:
+                    return Response(status_code=200)
+
+                company = (
+                    db.query(models.Company)
+                    .filter(models.Company.id == company_id)
+                    .with_for_update()
+                    .first()
+                )
                 if company:
                     company.credits += credits
                     if is_subscription:
@@ -128,10 +140,7 @@ async def stripe_webhook(
                             company.subscription_end_date = now + relativedelta(months=1)
                     sync_credits_by_vat(db, None, company.credits, company.ragione_sociale)
                     amount_eur = (sess.get("amount_total") or 0) / 100
-                    existing = db.query(models.StripePayment).filter(
-                        models.StripePayment.stripe_session == sess.get("id")
-                    ).first()
-                    if not existing:
+                    if True:
                         sp = models.StripePayment(
                             company_id     = company_id,
                             stripe_session = sess.get("id"),

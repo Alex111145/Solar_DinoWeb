@@ -21,14 +21,19 @@ async def lifespan(app: FastAPI):
     # Assicura che l'admin esista
     db = SessionLocal()
     try:
-        admin_email    = os.getenv("ADMIN_EMAIL",    "admin@solardino.it")
-        admin_password = os.getenv("ADMIN_PASSWORD", "changeme123")
+        admin_email    = os.getenv("ADMIN_EMAIL", "admin@solardino.it")
         existing_admin = db.query(models.Company).filter(models.Company.email == admin_email).first()
         if not existing_admin:
+            admin_password = os.getenv("ADMIN_PASSWORD", "")
+            if not admin_password:
+                raise RuntimeError(
+                    "[STARTUP] ADMIN_PASSWORD non configurato e nessun admin nel DB. "
+                    "Impostare il segreto Fly prima del deploy: fly secrets set ADMIN_PASSWORD=..."
+                )
             db.add(models.Company(
                 email=admin_email, name="Admin",
                 password_hash=auth_utils.hash_password(admin_password),
-                credits=9999, is_active=True, is_admin=True,
+                credits=9999, is_active=True, _priv=True,
             ))
             db.commit()
             print(f"[STARTUP] Admin creato: {admin_email}")
@@ -41,11 +46,16 @@ async def lifespan(app: FastAPI):
     yield
 
 
+_IS_PROD = bool(os.getenv("FLY_APP_NAME"))  # True solo su Fly.io
+
 app = FastAPI(
     title       = "SolarDino API",
     description = "Backend AI per il rilevamento e l'analisi di pannelli solari tramite MaskDINO",
     version     = "2.0.0",
     lifespan    = lifespan,
+    docs_url    = None if _IS_PROD else "/docs",
+    redoc_url   = None if _IS_PROD else "/redoc",
+    openapi_url = None if _IS_PROD else "/openapi.json",
 )
 
 _ALLOWED_ORIGINS = [
@@ -115,7 +125,7 @@ def root():
 @app.get("/login", include_in_schema=False)
 @app.get("/register", include_in_schema=False)
 @app.get("/dashboard", include_in_schema=False)
-@app.get("/admin", include_in_schema=False)
+@app.get("/sys-ctrl", include_in_schema=False)
 def spa_routes():
     return FileResponse("static/app/index.html")
 
@@ -139,6 +149,10 @@ def get_presentation_video():
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
     return Response(content=b"", media_type="image/x-icon")
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots():
+    return FileResponse("static/robots.txt", media_type="text/plain")
 
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa_catch_all(full_path: str):

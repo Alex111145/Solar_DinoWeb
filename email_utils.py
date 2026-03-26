@@ -1,3 +1,4 @@
+import html as _html
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -162,23 +163,27 @@ def notify_stripe_payment(company_name: str, company_email: str, package: str, a
 # ── Template 2: Nuovo ticket di supporto (admin) ──────────────────────────────
 
 def notify_support_ticket(company_name: str, company_email: str, subject: str, message: str):
-    email_subject = f"SolarDino — Nuova segnalazione da {company_name}"
+    safe_name    = _html.escape(company_name)
+    safe_email   = _html.escape(company_email)
+    safe_subject = _html.escape(subject)
+    safe_message = _html.escape(message)
+    email_subject = f"SolarDino — Nuova segnalazione da {safe_name}"
     body = f"""
     <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#0f172a;">Nuova richiesta di assistenza</p>
     <p style="margin:0 0 20px;font-size:14px;color:#64748b;line-height:1.6;">
       Un cliente ha aperto una nuova segnalazione. Accedi al pannello admin per rispondere.
     </p>
     {_info_table(
-        _info_row("Azienda", company_name),
-        _info_row("Email", company_email),
-        _info_row("Oggetto", f"<strong>{subject}</strong>"),
+        _info_row("Azienda", safe_name),
+        _info_row("Email", safe_email),
+        _info_row("Oggetto", f"<strong>{safe_subject}</strong>"),
     )}
     <div style="margin-top:4px;">
       <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Messaggio del cliente</div>
-      {_message_box(message, "#3b82f6")}
+      {_message_box(safe_message, "#3b82f6")}
     </div>
     """
-    send_email(ADMIN_NOTIFY_EMAIL, email_subject, _wrap("Nuova Segnalazione", body, f"Segnalazione da {company_name}: {subject}"))
+    send_email(ADMIN_NOTIFY_EMAIL, email_subject, _wrap("Nuova Segnalazione", body, f"Segnalazione da {safe_name}: {safe_subject}"))
 
 
 # ── Template 3: Richiesta bonifico (admin) ────────────────────────────────────

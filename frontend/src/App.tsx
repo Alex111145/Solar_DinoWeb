@@ -29,7 +29,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>('loading')
 
   useEffect(() => {
-    fetch('/auth/admin-check', { credentials: 'include' })
+    fetch('/auth/sys-check', { credentials: 'include' })
       .then((r) => {
         if (r.ok) { setState('ok'); return }
         setState(r.status === 403 ? 'not_admin' : 'unauth')
@@ -60,7 +60,7 @@ export default function App() {
         }
       />
       <Route
-        path="/admin"
+        path="/sys-ctrl"
         element={
           <AdminRoute>
             <AdminPage />

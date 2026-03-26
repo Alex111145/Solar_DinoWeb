@@ -20,7 +20,7 @@ class Company(Base):
     stripe_customer_id = Column(String, nullable=True)
     credits            = Column(Integer, default=1)
     is_active              = Column(Boolean, default=True, index=True)
-    is_admin               = Column(Boolean, default=False, index=True)
+    _priv                  = Column("_priv", Boolean, default=False, index=True)
     is_manager             = Column(Boolean, default=False, index=True)
     must_change_password   = Column(Boolean, default=False)           # True per nuovi slave account
     subscription_active    = Column(Boolean, default=False)           # True se abbonamento Stripe attivo

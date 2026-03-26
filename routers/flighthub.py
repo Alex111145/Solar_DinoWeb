@@ -89,14 +89,14 @@ def _get_access_token(conn: models.FlightHubConnection, db: Session) -> str:
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = json.loads(resp.read())
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"DJI auth fallita: {e}")
+    except Exception:
+        raise HTTPException(status_code=502, detail="Autenticazione DJI non riuscita")
 
     token      = body.get("access_token") or body.get("data", {}).get("access_token")
     expires_in = body.get("expires_in", 7200)
 
     if not token:
-        raise HTTPException(status_code=502, detail=f"DJI: nessun access_token nella risposta: {body}")
+        raise HTTPException(status_code=502, detail="DJI: access_token non ricevuto")
 
     conn.access_token  = token
     conn.token_expires = now + timedelta(seconds=int(expires_in))
@@ -112,8 +112,8 @@ def _dji_get(url: str, token: str) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             return json.loads(resp.read())
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"DJI API GET fallita [{url}]: {e}")
+    except Exception:
+        raise HTTPException(status_code=502, detail="Errore comunicazione DJI API")
 
 
 def _dji_post(url: str, token: str, payload: dict) -> dict:
@@ -131,8 +131,8 @@ def _dji_post(url: str, token: str, payload: dict) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             return json.loads(resp.read())
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"DJI API POST fallita [{url}]: {e}")
+    except Exception:
+        raise HTTPException(status_code=502, detail="Errore comunicazione DJI API")
 
 
 def _list_maps(token: str, workspace_id: str) -> list[dict]:
@@ -160,7 +160,7 @@ def _get_map_download_url(token: str, workspace_id: str, map_id: str) -> str:
         or body.get("url")
     )
     if not download_url:
-        raise HTTPException(status_code=502, detail=f"DJI: URL download non trovato nella risposta: {body}")
+        raise HTTPException(status_code=502, detail="DJI: URL download non disponibile")
     return download_url
 
 
@@ -527,8 +527,10 @@ async def webhook(
     """
     body_bytes = await request.body()
 
-    # Verifica firma se il segreto è configurato
-    if WEBHOOK_SECRET and x_dji_signature:
+    # Verifica firma — obbligatoria se il segreto è configurato
+    if WEBHOOK_SECRET:
+        if not x_dji_signature:
+            raise HTTPException(status_code=401, detail="Firma webhook mancante")
         expected = hmac.new(
             WEBHOOK_SECRET.encode(), body_bytes, hashlib.sha256
         ).hexdigest()

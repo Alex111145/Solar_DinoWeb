@@ -164,11 +164,11 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
   const [history, setHistory] = useState<HistoryPoint[]>([])
 
   useEffect(() => {
-    apiFetch(`/admin/companies/${company.id}/tickets`)
+    apiFetch(`/sys-ctrl/companies/${company.id}/tickets`)
       .then((r) => r.ok ? r.json() : [])
       .then((d) => setTickets(Array.isArray(d) ? d : []))
       .catch(() => {})
-    apiFetch(`/admin/companies/${company.id}/history`)
+    apiFetch(`/sys-ctrl/companies/${company.id}/history`)
       .then((r) => r.ok ? r.json() : [])
       .then((d) => setHistory(Array.isArray(d) ? d : []))
       .catch(() => {})
@@ -399,33 +399,33 @@ export default function AdminPage() {
 
   // ── Load data ────────────────────────────────────────────────────────
   function loadData() {
-    apiFetch('/admin/stats').then((r) => r.ok ? r.json() : null).then((d) => { if (d) setStats(d) }).catch(() => {})
-    apiFetch('/admin/companies').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/stats').then((r) => r.ok ? r.json() : null).then((d) => { if (d) setStats(d) }).catch(() => {})
+    apiFetch('/sys-ctrl/companies').then((r) => r.ok ? r.json() : null).then((d) => {
       if (!d) return
       setCompanies(Array.isArray(d) ? d : d.companies || [])
     }).catch(() => {})
-    apiFetch('/admin/billing').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/billing').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setBilling(Array.isArray(d) ? d : d.billing || [])
     }).catch(() => {})
-    apiFetch('/admin/reviews').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/reviews').then((r) => r.ok ? r.json() : null).then((d) => {
       if (!d) return
       const arr = Array.isArray(d) ? d : d.reviews || []
       setAdminReviews(arr)
       setPendingReviews(arr.filter((r: ReviewItem) => r.status !== 'approved' && r.status !== 'approvata' && r.status !== 'rejected').length)
     }).catch(() => {})
-    apiFetch('/admin/uploads').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/uploads').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setUploads(Array.isArray(d) ? d : [])
     }).catch(() => {})
-    apiFetch('/admin/gpu-costs').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/gpu-costs').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setGpuCosts(Array.isArray(d) ? d : [])
     }).catch(() => {})
-    apiFetch('/admin/supabase-storage').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/supabase-storage').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setStorageInfo(d)
     }).catch(() => {})
-    apiFetch('/admin/db-size').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/db-size').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) setDbInfo(d)
     }).catch(() => {})
-    apiFetch('/admin/tickets').then((r) => r.ok ? r.json() : null).then((d) => {
+    apiFetch('/sys-ctrl/tickets').then((r) => r.ok ? r.json() : null).then((d) => {
       if (d) {
         const arr = Array.isArray(d) ? d : []
         setTickets(arr)
@@ -454,7 +454,7 @@ export default function AdminPage() {
 
   // ── Actions ──────────────────────────────────────────────────────────
   async function toggleCompany(id: string, activate: boolean) {
-    const path = activate ? `/admin/companies/${id}/activate` : `/admin/companies/${id}/deactivate`
+    const path = activate ? `/sys-ctrl/companies/${id}/activate` : `/sys-ctrl/companies/${id}/deactivate`
     try {
       const res = await apiFetch(path, { method: 'POST' })
       if (res.ok) {
@@ -485,7 +485,7 @@ export default function AdminPage() {
 
   async function addCredit(id: string) {
     try {
-      const res = await apiFetch(`/admin/companies/${id}/add-credit`, { method: 'POST' })
+      const res = await apiFetch(`/sys-ctrl/companies/${id}/add-credit`, { method: 'POST' })
       if (res.ok) {
         const data = await res.json()
         setCompanies((prev) => prev.map((c) => c.id === id ? { ...c, credits: data.credits } : c))
@@ -497,13 +497,13 @@ export default function AdminPage() {
 
   async function deleteCompany(id: string) {
     try {
-      const res = await apiFetch(`/admin/companies/${id}`, { method: 'DELETE' })
+      const res = await apiFetch(`/sys-ctrl/companies/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setCompanies((prev) => prev.filter((c) => c.id !== id))
         setMsg('Azienda eliminata')
         setTimeout(() => setMsg(''), 3000)
         // Reload from server to keep state consistent
-        apiFetch('/admin/companies').then((r) => r.ok ? r.json() : null).then((d) => {
+        apiFetch('/sys-ctrl/companies').then((r) => r.ok ? r.json() : null).then((d) => {
           if (d) setCompanies(Array.isArray(d) ? d : d.companies || [])
         }).catch(() => {})
       }
@@ -513,7 +513,7 @@ export default function AdminPage() {
 
   async function handleReview(id: string, action: 'approve' | 'reject') {
     try {
-      const res = await apiFetch(`/admin/reviews/${id}/${action}`, { method: 'POST' })
+      const res = await apiFetch(`/sys-ctrl/reviews/${id}/${action}`, { method: 'POST' })
       if (res.ok) {
         if (action === 'approve') {
           setAdminReviews((prev) => prev.map((r) => r.id === id ? { ...r, status: 'approved' } : r))
@@ -530,7 +530,7 @@ export default function AdminPage() {
 
   async function deleteReview(id: string) {
     try {
-      const res = await apiFetch(`/admin/reviews/${id}`, { method: 'DELETE' })
+      const res = await apiFetch(`/sys-ctrl/reviews/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setAdminReviews((prev) => prev.filter((r) => r.id !== id))
         setMsg('Recensione eliminata')
@@ -542,7 +542,7 @@ export default function AdminPage() {
 
   async function updateTicketStatus(id: number, status: 'in_elaborazione' | 'risolto') {
     try {
-      const res = await apiFetch(`/admin/tickets/${id}/status`, {
+      const res = await apiFetch(`/sys-ctrl/tickets/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -559,7 +559,7 @@ export default function AdminPage() {
 
   async function openAdminTicket(ticketId: number) {
     try {
-      const res = await apiFetch(`/admin/tickets/${ticketId}`)
+      const res = await apiFetch(`/sys-ctrl/tickets/${ticketId}`)
       if (res.ok) {
         const d = await res.json()
         setAdminTicketDetail(d)
@@ -572,7 +572,7 @@ export default function AdminPage() {
     if (!adminTicketDetail || !adminReplyText.trim()) return
     setAdminReplyLoading(true)
     try {
-      const res = await apiFetch(`/admin/tickets/${adminTicketDetail.id}/reply`, {
+      const res = await apiFetch(`/sys-ctrl/tickets/${adminTicketDetail.id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reply: adminReplyText.trim() }),
@@ -594,7 +594,7 @@ export default function AdminPage() {
     if (monthlyChartData.length === 0) {
       setChartLoading(true)
       try {
-        const r = await apiFetch('/admin/monthly-summary')
+        const r = await apiFetch('/sys-ctrl/monthly-summary')
         if (r.ok) setMonthlyChartData(await r.json())
       } catch {}
       setChartLoading(false)
@@ -1245,7 +1245,7 @@ export default function AdminPage() {
                                         className="btn-ghost flex items-center gap-1"
                                         style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem' }}
                                         onClick={async () => {
-                                          const res = await fetch(`/admin/bonifico-requests/${p.receipt_id}/receipt`, { credentials: 'include' })
+                                          const res = await fetch(`/sys-ctrl/bonifico-requests/${p.receipt_id}/receipt`, { credentials: 'include' })
                                           if (!res.ok) return
                                           const blob = await res.blob()
                                           const url = URL.createObjectURL(blob)
@@ -1666,7 +1666,7 @@ export default function AdminPage() {
                                               </div>
                                               <button
                                                 onClick={async () => {
-                                                  const res = await fetch(`/admin/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`, {
+                                                  const res = await fetch(`/sys-ctrl/jobs/${job.job_id}/files/${encodeURIComponent(file.name)}`, {
                                                     credentials: 'include',
                                                   })
                                                   if (!res.ok) return
@@ -1769,7 +1769,7 @@ export default function AdminPage() {
                   setCleanupMsg('')
                   try {
                     // 1. Scarica i file prima di cancellare
-                    const prev = await apiFetch('/admin/cleanup-preview')
+                    const prev = await apiFetch('/sys-ctrl/cleanup-preview')
                     if (prev.ok) {
                       const jobs: Array<{ job_id: string; company_name: string; files: Array<{ name: string; url: string | null }> }> = await prev.json()
                       const allFiles = jobs.flatMap(j => j.files.filter(f => f.url))
@@ -1794,10 +1794,10 @@ export default function AdminPage() {
                       }
                     }
                     // 2. Elimina
-                    const res = await apiFetch('/admin/cleanup-oldest', { method: 'POST' })
+                    const res = await apiFetch('/sys-ctrl/cleanup-oldest', { method: 'POST' })
                     const d   = await res.json()
                     setCleanupMsg(`Eliminati ${d.deleted_files} file · liberati ${d.freed_mb} MB`)
-                    apiFetch('/admin/supabase-storage').then(r => r.ok ? r.json() : null).then(d => { if (d) setStorageInfo(d) })
+                    apiFetch('/sys-ctrl/supabase-storage').then(r => r.ok ? r.json() : null).then(d => { if (d) setStorageInfo(d) })
                   } finally {
                     setCleanupLoading(false)
                   }
@@ -2434,7 +2434,7 @@ export default function AdminPage() {
                     <button
                       style={{ flexShrink: 0, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '0.45rem 0.9rem', color: '#ef4444', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
                       onClick={async () => {
-                        await apiFetch(`/admin/companies/${c.id}/deactivate`, { method: 'POST' })
+                        await apiFetch(`/sys-ctrl/companies/${c.id}/deactivate`, { method: 'POST' })
                         setCompanies(prev => prev.map(co => co.id === c.id ? { ...co, is_active: false } : co))
                         setMsg(`Azienda "${c.ragione_sociale || c.name}" bloccata`)
                         setTimeout(() => setMsg(''), 3000)

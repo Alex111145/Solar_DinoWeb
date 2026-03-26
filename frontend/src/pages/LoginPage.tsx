@@ -134,7 +134,7 @@ export default function LoginPage() {
       localStorage.setItem('name', data.name || regForm.ragione_sociale)
       localStorage.setItem('email', data.email || regForm.email)
       localStorage.setItem('credits', String(data.credits ?? 0))
-      localStorage.setItem('is_admin', 'false')
+      localStorage.setItem('_priv', 'false')
       localStorage.setItem('ip_already_used', String(!!data.ip_already_used))
       setShowRegister(false)
       window.scrollTo(0, 0)
@@ -185,10 +185,10 @@ export default function LoginPage() {
       localStorage.setItem('name', data.name || data.user?.name || '')
       localStorage.setItem('email', data.email || data.user?.email || email)
       localStorage.setItem('credits', String(data.credits ?? data.user?.credits ?? 0))
-      localStorage.setItem('is_admin', String(data.is_admin ?? data.user?.is_admin ?? false))
+      localStorage.setItem('_priv', String(data._priv ?? data.user?._priv ?? false))
       setLoading(false)
       window.scrollTo(0, 0)
-      if (data.is_admin || data.user?.is_admin) { navigate('/admin'); return }
+      if (data._priv || data.user?._priv) { navigate('/sys-ctrl'); return }
       navigate('/dashboard')
     } catch (err) {
       setError('Errore di connessione al server')
