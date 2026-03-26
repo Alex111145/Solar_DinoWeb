@@ -684,13 +684,12 @@ export default function LoginPage() {
       {/* ── Register modal ──────────────────────────────────────── */}
       <AnimatePresence>
         {showRegister && (
-          <div className="modal-overlay" style={{ zIndex: 200 }} onClick={() => setShowRegister(false)}>
+          <div className="modal-overlay" style={{ zIndex: 200 }} onClick={(e) => { if (e.target === e.currentTarget) setShowRegister(false); }}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 16 }}
               transition={{ duration: 0.22 }}
-              onClick={(e) => e.stopPropagation()}
               style={{ width: '100%', maxWidth: 500, background: t.formBg, border: `1px solid ${t.formBorder}`, borderRadius: 24, padding: '2.5rem', boxShadow: '0 24px 80px rgba(0,0,0,0.5)', maxHeight: '90vh', overflowY: 'auto' }}
             >
               <div className="flex items-center justify-between mb-2">
