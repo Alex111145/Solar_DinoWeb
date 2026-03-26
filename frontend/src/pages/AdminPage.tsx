@@ -351,6 +351,7 @@ export default function AdminPage() {
   const [pendingReviews, setPendingReviews] = useState(0)
   const [tickets, setTickets] = useState<AdminTicket[]>([])
   const [pendingTickets, setPendingTickets] = useState(0)
+  const [adminNotifs, setAdminNotifs] = useState<{id:number,title:string,message:string,is_read:boolean,created_at:string}[]>([])
   const [showBellDropdown, setShowBellDropdown] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
 
@@ -431,6 +432,9 @@ export default function AdminPage() {
         setTickets(arr)
         setPendingTickets(arr.filter((t: AdminTicket) => t.status === 'in_elaborazione').length)
       }
+    }).catch(() => {})
+    apiFetch('/auth/notifications').then((r) => r.ok ? r.json() : null).then((d) => {
+      if (Array.isArray(d)) setAdminNotifs(d.filter((n: {title:string}) => n.title === '🆕 Nuova registrazione'))
     }).catch(() => {})
   }
 
@@ -699,7 +703,7 @@ export default function AdminPage() {
                 title="Segnalazioni aperte"
               >
                 <Bell size={17} />
-                {pendingTickets > 0 && (
+                {(pendingTickets + adminNotifs.filter(n => !n.is_read).length) > 0 && (
                   <span style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 16, height: 16, borderRadius: '50%',
@@ -708,7 +712,7 @@ export default function AdminPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     border: '2px solid #060912',
                   }}>
-                    {pendingTickets}
+                    {pendingTickets + adminNotifs.filter(n => !n.is_read).length}
                   </span>
                 )}
               </button>
@@ -726,8 +730,34 @@ export default function AdminPage() {
                       boxShadow: '0 8px 32px rgba(0,0,0,0.4)', overflow: 'hidden',
                     }}
                   >
-                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f1f5f9' }}>
+                    {/* Nuove registrazioni */}
+                    {adminNotifs.length > 0 && (
+                      <>
+                        <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(16,185,129,0.05)' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#34d399' }}>
+                            Nuove registrazioni ({adminNotifs.filter(n => !n.is_read).length} non lette)
+                          </span>
+                        </div>
+                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                          {adminNotifs.map((n) => (
+                            <div
+                              key={n.id}
+                              style={{ padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: n.is_read ? 'transparent' : 'rgba(16,185,129,0.04)', opacity: n.is_read ? 0.6 : 1 }}
+                              onClick={() => {
+                                apiFetch(`/auth/notifications/${n.id}/read`, { method: 'POST' }).catch(() => {})
+                                setAdminNotifs(prev => prev.map(x => x.id === n.id ? {...x, is_read: true} : x))
+                              }}
+                            >
+                              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#f1f5f9', marginBottom: 2 }}>{n.message.split(' — ')[0]}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{n.message.split(' — ').slice(1).join(' — ')}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {/* Ticket aperti */}
+                    <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f1f5f9' }}>
                         Segnalazioni aperte {pendingTickets > 0 && `(${pendingTickets})`}
                       </span>
                     </div>
@@ -736,7 +766,7 @@ export default function AdminPage() {
                         Nessuna segnalazione aperta
                       </div>
                     ) : (
-                      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                         {tickets.filter((t) => t.status === 'in_elaborazione').map((t) => (
                           <div
                             key={t.id}

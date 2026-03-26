@@ -235,6 +235,24 @@ def register(req: RegisterRequest, response: Response, request: Request, db: Ses
     except Exception:
         pass
 
+    # Notifica campanella admin
+    try:
+        admin_acc = db.query(models.Company).filter(
+            models.Company._priv == True,
+            models.Company.deleted_at.is_(None),
+        ).first()
+        if admin_acc:
+            from datetime import datetime, timezone
+            now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+            db.add(models.Notification(
+                company_id=admin_acc.id,
+                title="🆕 Nuova registrazione",
+                message=f"{company.ragione_sociale or company.name} — {company.email} — {now_str}",
+            ))
+            db.commit()
+    except Exception:
+        pass
+
     token = auth_utils.create_token({"sub": str(company.id)})
     _set_auth_cookie(response, token)
     return {
