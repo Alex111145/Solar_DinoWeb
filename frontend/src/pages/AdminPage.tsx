@@ -351,6 +351,7 @@ export default function AdminPage() {
   const [pendingReviews, setPendingReviews] = useState(0)
   const [tickets, setTickets] = useState<AdminTicket[]>([])
   const [pendingTickets, setPendingTickets] = useState(0)
+  const [repliedTicketIds, setRepliedTicketIds] = useState<Set<number>>(new Set())
   const [adminNotifs, setAdminNotifs] = useState<{id:number,title:string,message:string,is_read:boolean,created_at:string}[]>([])
   const [showBellDropdown, setShowBellDropdown] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
@@ -585,6 +586,7 @@ export default function AdminPage() {
         const newMsg: AdminTicketMsg = { id: Date.now(), sender: 'admin', text: adminReplyText.trim(), created_at: new Date().toISOString() }
         setAdminTicketDetail((prev) => prev ? { ...prev, status: 'in_elaborazione', messages: [...prev.messages, newMsg] } : prev)
         setTickets((prev) => prev.map((t) => t.id === adminTicketDetail.id ? { ...t, status: 'in_elaborazione' } : t))
+        setRepliedTicketIds((prev) => new Set([...prev, adminTicketDetail.id]))
         setAdminReplyText('')
         setMsg('Risposta inviata al cliente')
         setTimeout(() => setMsg(''), 3000)
@@ -703,7 +705,7 @@ export default function AdminPage() {
                 title="Segnalazioni aperte"
               >
                 <Bell size={17} />
-                {(pendingTickets + adminNotifs.filter(n => !n.is_read).length) > 0 && (
+                {(pendingTickets - repliedTicketIds.size + adminNotifs.filter(n => !n.is_read).length) > 0 && (
                   <span style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 16, height: 16, borderRadius: '50%',
@@ -712,7 +714,7 @@ export default function AdminPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     border: '2px solid #060912',
                   }}>
-                    {pendingTickets + adminNotifs.filter(n => !n.is_read).length}
+                    {pendingTickets - repliedTicketIds.size + adminNotifs.filter(n => !n.is_read).length}
                   </span>
                 )}
               </button>
@@ -761,13 +763,13 @@ export default function AdminPage() {
                         Segnalazioni aperte {pendingTickets > 0 && `(${pendingTickets})`}
                       </span>
                     </div>
-                    {tickets.filter((t) => t.status === 'in_elaborazione').length === 0 ? (
+                    {tickets.filter((t) => t.status === 'in_elaborazione' && !repliedTicketIds.has(t.id)).length === 0 ? (
                       <div style={{ padding: '1rem', fontSize: '0.82rem', color: '#64748b', textAlign: 'center' }}>
                         Nessuna segnalazione aperta
                       </div>
                     ) : (
                       <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-                        {tickets.filter((t) => t.status === 'in_elaborazione').map((t) => (
+                        {tickets.filter((t) => t.status === 'in_elaborazione' && !repliedTicketIds.has(t.id)).map((t) => (
                           <div
                             key={t.id}
                             style={{ padding: '0.7rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}
