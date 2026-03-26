@@ -2381,12 +2381,8 @@ export default function DashboardPage() {
             onClose={() => setShowEnterpriseConsent(false)}
             onConfirm={async () => {
               setShowEnterpriseConsent(false)
-              const token = localStorage.getItem('token')
               try {
-                const res = await fetch('/flighthub/avvia-inferenza', {
-                  method: 'POST',
-                  headers: { Authorization: `Bearer ${token}` },
-                })
+                const res = await apiFetch('/flighthub/avvia-inferenza', { method: 'POST' })
                 const data = await res.json()
                 if (res.ok) {
                   setFhMsg(data.message)

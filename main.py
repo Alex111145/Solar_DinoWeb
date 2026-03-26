@@ -75,6 +75,25 @@ app.add_middleware(
 )
 
 
+_CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+_CSRF_EXEMPT_PATHS = {"/payments/webhook", "/flighthub/webhook"}  # webhook firmati — non usano cookie
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method not in _CSRF_SAFE_METHODS and request.url.path not in _CSRF_EXEMPT_PATHS:
+            origin  = request.headers.get("origin", "")
+            referer = request.headers.get("referer", "")
+            source  = origin or referer
+            allowed = any(source.startswith(o) for o in _ALLOWED_ORIGINS)
+            # In locale (no origin header) lasciamo passare
+            if source and not allowed:
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "CSRF check fallito"}, status_code=403)
+        return await call_next(request)
+
+app.add_middleware(CSRFMiddleware)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)

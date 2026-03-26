@@ -91,7 +91,6 @@ export default function RegisterPage() {
       localStorage.setItem('name', data.name || form.ragione_sociale)
       localStorage.setItem('email', data.email || form.email)
       localStorage.setItem('credits', String(data.credits ?? 0))
-      localStorage.setItem('_priv', String(data._priv ?? false))
       if (data.ip_already_used) localStorage.setItem('show_ip_warning', 'true')
       navigate('/dashboard')
     } catch {
