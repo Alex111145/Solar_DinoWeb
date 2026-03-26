@@ -1,7 +1,7 @@
 
 cd frontend && npm run build && cd ..
-git add static/app && git commit -m "Build frontend" && git push
-fly deploy
+git add -A && git commit -m "Feat: security HSTS + CORS solardino.it + layout 4 card"
+fly deploy -a solar-dinoweb
 
 
 
