@@ -2137,18 +2137,18 @@ export default function AdminPage() {
                         <thead>
                           <tr>
                             <th>Mese</th>
-                            <th style={{ textAlign: 'right', color: '#22c55e' }}>Utile</th>
+                            <th style={{ textAlign: 'right', color: '#22c55e' }}>Fatturato netto</th>
                             <th style={{ textAlign: 'right', color: '#ef4444' }}>Spese</th>
-                            <th style={{ textAlign: 'right', color: '#f59e0b' }}>Utile netto</th>
+                            <th style={{ textAlign: 'right', color: '#f59e0b' }}>Utile (netto−spese)</th>
                           </tr>
                         </thead>
                         <tbody>
                           {bars.map((b, i) => (
                             <tr key={i}>
                               <td style={{ color: '#94a3b8' }}>{monthlyChartData[i].label}</td>
-                              <td style={{ textAlign: 'right', color: b.utile >= 0 ? '#22c55e' : '#ef4444' }}>€ {b.utile.toFixed(2)}</td>
+                              <td style={{ textAlign: 'right', color: '#22c55e' }}>€ {b.netto.toFixed(2)}</td>
                               <td style={{ textAlign: 'right', color: '#ef4444' }}>€ {b.spese.toFixed(4)}</td>
-                              <td style={{ textAlign: 'right', fontWeight: 700, color: b.netto > 0 ? '#22c55e' : b.netto < 0 ? '#ef4444' : '#f59e0b' }}>€ {b.netto.toFixed(2)}</td>
+                              <td style={{ textAlign: 'right', fontWeight: 700, color: b.utile > 0 ? '#22c55e' : b.utile < 0 ? '#ef4444' : '#f59e0b' }}>€ {b.utile.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
