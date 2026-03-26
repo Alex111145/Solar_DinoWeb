@@ -49,6 +49,8 @@ app = FastAPI(
 )
 
 _ALLOWED_ORIGINS = [
+    "https://solardino.it",
+    "https://www.solardino.it",
     "https://solar-dinoweb.fly.dev",
     "http://localhost:5173",
     "http://localhost:8000",
@@ -66,6 +68,7 @@ app.add_middleware(
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"]        = "DENY"
         response.headers["X-XSS-Protection"]       = "1; mode=block"
