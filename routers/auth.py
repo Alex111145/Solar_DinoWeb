@@ -362,7 +362,6 @@ def me(current: models.Company = Depends(auth_utils.get_current_company), db: Se
         "subscription_plan":      current.subscription_plan,
         "subscription_end_date":  current.subscription_end_date.strftime("%d/%m/%Y") if current.subscription_end_date else None,
         "subscription_cancelled": bool(current.subscription_cancelled) if hasattr(current, 'subscription_cancelled') else False,
-        "welcome_bonus_requested":bool(current.welcome_bonus_requested) if hasattr(current, 'welcome_bonus_requested') else False,
         "ip_already_used":        ip_already_used,
         "created_at":             current.created_at.isoformat(),
     }
@@ -874,27 +873,3 @@ def mark_notification_read(
 
 
 
-
-@router.post("/request-welcome-bonus", status_code=201)
-def request_welcome_bonus(
-    request: Request,
-    current: models.Company = Depends(auth_utils.get_current_company),
-    db: Session = Depends(get_db),
-):
-    """Il cliente richiede il bonus di benvenuto (una sola volta)."""
-    if current.welcome_bonus_requested:
-        raise HTTPException(status_code=400, detail="Bonus già richiesto")
-    if current.welcome_bonus_used:
-        raise HTTPException(status_code=400, detail="Bonus già utilizzato")
-    if current.subscription_active:
-        raise HTTPException(status_code=400, detail="Hai già un abbonamento attivo")
-
-    ip = request.client.host if request.client else None
-    req = models.WelcomeBonusRequest(
-        company_id=current.id,
-        ip=ip,
-    )
-    current.welcome_bonus_requested = True
-    db.add(req)
-    db.commit()
-    return {"message": "Richiesta inviata. Sarai contattato a breve."}

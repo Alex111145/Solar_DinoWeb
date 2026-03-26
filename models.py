@@ -30,7 +30,6 @@ class Company(Base):
     deleted_at             = Column(DateTime, nullable=True, index=True) # Soft delete — usato in quasi ogni query
     last_ip            = Column(String, nullable=True)               # Ultimo IP di accesso
     welcome_bonus_used      = Column(Boolean, default=False)
-    welcome_bonus_requested = Column(Boolean, default=False)    # True dopo aver richiesto il bonus di benvenuto
     bonus_credits           = Column(Integer, default=0)        # Crediti di benvenuto ancora disponibili (0 o 1)
     subscription_cancelled  = Column(Boolean, default=False)    # True dopo cancellazione abbonamento (stop rinnovo)
     last_login_at        = Column(DateTime, nullable=True)
@@ -41,7 +40,6 @@ class Company(Base):
     jobs               = relationship("Job", back_populates="company", cascade="all, delete")
     usage_logs         = relationship("UsageLog", back_populates="company", cascade="all, delete")
     bonifico_requests  = relationship("BonificoRequest", back_populates="company", cascade="all, delete")
-    welcome_bonus_requests = relationship("WelcomeBonusRequest", back_populates="company", cascade="all, delete")
 
 
 class Job(Base):
@@ -270,14 +268,3 @@ class EnterpriseInferenceLog(Base):
     company = relationship("Company")
 
 
-class WelcomeBonusRequest(Base):
-    """Richiesta bonus di benvenuto da parte di un'azienda."""
-    __tablename__ = "welcome_bonus_requests"
-
-    id         = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
-    status     = Column(String, default="pending", index=True)  # pending | approved | rejected
-    ip         = Column(String, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-    company = relationship("Company", back_populates="welcome_bonus_requests")

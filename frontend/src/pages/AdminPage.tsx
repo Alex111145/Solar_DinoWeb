@@ -291,7 +291,7 @@ function CompanyModal({ company, onClose }: { company: Company; onClose: () => v
 // ── Main Admin Page ────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'tickets' | 'uploads' | 'bonus' | 'gpu'>('companies')
+  const [tab, setTab] = useState<'companies' | 'billing' | 'reviews' | 'tickets' | 'uploads' | 'gpu'>('companies')
 
   const [stats, setStats] = useState<Stats>({})
   const [companies, setCompanies] = useState<Company[]>([])
@@ -1123,7 +1123,7 @@ export default function AdminPage() {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {[
-                                  { label: '+1 credito', color: '#f59e0b', action: () => { setConfirmCreditId(c.id); setConfirmCreditStep((c.credits ?? 0) > 0 || c.welcome_bonus_used ? 1 : 0); setOpenDropdown(null) } },
+                                  { label: '+1 credito (regalo)', color: '#f59e0b', action: () => { setConfirmCreditId(c.id); setConfirmCreditStep(0); setOpenDropdown(null) } },
                                   { label: 'Cancella azienda', color: '#ef4444', action: () => { setConfirmDeleteId(c.id); setOpenDropdown(null) } },
                                 ].map((item) => (
                                   <button
