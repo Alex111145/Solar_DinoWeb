@@ -1,6 +1,6 @@
 
-cd frontend && npm run build && cd ..
-git add -A && git commit -m "Feat: security HSTS + CORS solardino.it + layout 4 card"
+cd frontend && npm run build && cd .. &&
+git add -A && git commit -m "Feat: security HSTS + CORS solardino.it + layout 4 card" &&
 fly deploy -a solar-dinoweb
 
 
