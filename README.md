@@ -4,6 +4,9 @@ git add -A && git commit -m "Feat: security HSTS + CORS solardino.it + layout 4 
 fly deploy -a solar-dinoweb
 
 
+pkill -f "uvicorn"; pkill -f "vite"; pkill -f "npm run dev"
+
+
 
 
 
