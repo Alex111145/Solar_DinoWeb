@@ -109,7 +109,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob: https:; "
-            "connect-src 'self' https://api.stripe.com https://checkout.stripe.com; "
+            "media-src 'self' blob: https://*.supabase.co; "
+            "connect-src 'self' https://api.stripe.com https://checkout.stripe.com https://*.supabase.co; "
             "frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com; "
             "font-src 'self' data:;"
         )
