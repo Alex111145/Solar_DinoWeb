@@ -104,9 +104,8 @@ export default function LoginPage() {
     const e: Record<string, string> = {}
     const rs = regForm.ragione_sociale.trim()
     if (!rs) e.ragione_sociale = 'Campo obbligatorio'
-    else if (rs.length < 3) e.ragione_sociale = 'Minimo 3 caratteri'
+    else if (rs.length < 3 || !LEGAL_FORM_RE.test(rs)) e.ragione_sociale = 'Minimo 3 caratteri e deve contenere un prefisso (es. Srl, Spa, Snc...)'
     else if (rs.length > 150) e.ragione_sociale = 'Massimo 150 caratteri'
-    else if (!LEGAL_FORM_RE.test(rs)) e.ragione_sociale = 'Inserire la forma giuridica (es. Srl, Spa, Snc...)'
     if (!regForm.email.trim()) e.email = 'Obbligatoria'
     else if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(regForm.email)) e.email = 'Email non valida'
     if (!regForm.password) {

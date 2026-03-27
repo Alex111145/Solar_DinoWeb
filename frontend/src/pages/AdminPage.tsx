@@ -433,7 +433,7 @@ export default function AdminPage() {
       }
     }).catch(() => {})
     apiFetch('/auth/notifications').then((r) => r.ok ? r.json() : null).then((d) => {
-      if (Array.isArray(d)) setAdminNotifs(d.filter((n: {title:string}) => n.title === '🆕 Nuova registrazione'))
+      if (Array.isArray(d)) setAdminNotifs(d.filter((n: {title:string, is_read:boolean}) => n.title === '🆕 Nuova registrazione' && !n.is_read))
     }).catch(() => {})
   }
 
@@ -1766,7 +1766,7 @@ export default function AdminPage() {
                   Costi GPU stimati per azienda
                 </h3>
                 <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                  Durata job × <code style={{ color: '#f59e0b' }}>RUNPOD_COST_PER_SEC</code> (default NVIDIA A10 ≈ €0.000306/s)
+                  Durata job × <code style={{ color: '#f59e0b' }}>MODAL_COST_PER_SEC</code> (default GPU Modal ≈ €0.000306/s)
                 </span>
               </div>
               {/* Supabase plan selector + storage + cleanup */}

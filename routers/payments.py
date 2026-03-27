@@ -206,12 +206,12 @@ def create_subscription_checkout(
     if not plan:
         raise HTTPException(status_code=400, detail="Piano non valido")
 
-    if not current.stripe_customer_id:
-        customer = stripe.Customer.create(email=current.email, name=current.name)
-        current.stripe_customer_id = customer.id
-        db.commit()
-
     try:
+        if not current.stripe_customer_id:
+            customer = stripe.Customer.create(email=current.email, name=current.name)
+            current.stripe_customer_id = customer.id
+            db.commit()
+
         session = stripe.checkout.Session.create(
             customer=current.stripe_customer_id,
             payment_method_types=["card", "sepa_debit"],
@@ -311,11 +311,6 @@ def buy_credits_checkout(
     unit_price = credit_unit_price(qty, subscription_plan=active_plan)
     unit_cents = round(unit_price * 100)
 
-    if not current.stripe_customer_id:
-        customer = stripe.Customer.create(email=current.email, name=current.name)
-        current.stripe_customer_id = customer.id
-        db.commit()
-
     # Use a fixed Stripe Price ID for subscriber loyalty rates, price_data for everyone else
     subscriber_price_id = CREDIT_PRICE_ID_BY_PLAN.get(active_plan) if active_plan else None
 
@@ -335,6 +330,11 @@ def buy_credits_checkout(
         }
 
     try:
+        if not current.stripe_customer_id:
+            customer = stripe.Customer.create(email=current.email, name=current.name)
+            current.stripe_customer_id = customer.id
+            db.commit()
+
         session = stripe.checkout.Session.create(
             customer=current.stripe_customer_id,
             payment_method_types=["card", "sepa_debit"],

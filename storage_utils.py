@@ -73,7 +73,8 @@ def list_files(folder_path: str) -> list[dict]:
     result = []
     for item in items:
         name = item.get("name", "")
-        size_bytes = (item.get("metadata") or {}).get("size", 0) or 0
+        meta = item.get("metadata") or {}
+        size_bytes = meta.get("size") or item.get("size") or 0
         result.append({"name": name, "size_mb": round(size_bytes / (1024 * 1024), 2)})
     return result
 

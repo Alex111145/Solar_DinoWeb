@@ -1278,6 +1278,7 @@ export default function DashboardPage() {
   const [starValue, setStarValue] = useState(0)
   const [reviewComment, setReviewComment] = useState('')
   const [reviewMsg, setReviewMsg] = useState('')
+  const [showReviewSuccess, setShowReviewSuccess] = useState(false)
 
   // Modalità elaborazione
   const [strada, setStrada] = useState<'A' | 'B' | null>(null)
@@ -1529,7 +1530,7 @@ export default function DashboardPage() {
         const created = await res.json().catch(() => ({ id: '', stars: starValue, comment: reviewComment }))
         setMyReview(created)
         setStarValue(0); setReviewComment('')
-        setReviewMsg('Recensione inviata! Sarà pubblicata dopo approvazione.')
+        setShowReviewSuccess(true)
       } else setReviewMsg('Errore invio')
     } catch { setReviewMsg('Errore') }
   }
@@ -2766,10 +2767,31 @@ export default function DashboardPage() {
       </AnimatePresence>
 
 
+      {/* ── Review success popup ──────────────────────────────────────── */}
+      <AnimatePresence>
+        {showReviewSuccess && (
+          <div className="modal-overlay" style={{ zIndex: 400 }} onClick={() => setShowReviewSuccess(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => { if (e.target === e.currentTarget) setShowReviewSuccess(false) }}
+              style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 20, padding: '2.5rem 2rem', maxWidth: 380, width: '100%', textAlign: 'center', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' }}
+            >
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⭐</div>
+              <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.2rem', marginBottom: '0.5rem' }}>Grazie per la recensione!</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>Sarà pubblicata dopo approvazione del nostro team.</p>
+              <button className="btn-amber w-full" onClick={() => setShowReviewSuccess(false)}>Chiudi</button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* ── Ticket Conversation Modal ─────────────────────────────────── */}
       <AnimatePresence>
         {showTicketModal && ticketDetail && (
-          <div className="modal-overlay" style={{ zIndex: 300 }} onClick={() => setShowTicketModal(false)}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={(e) => { if (e.target === e.currentTarget) setShowTicketModal(false) }}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
