@@ -119,6 +119,7 @@ interface AdminTicket {
   message: string
   status: 'in_elaborazione' | 'risolto'
   created_at: string
+  last_sender: string
 }
 
 
@@ -350,8 +351,6 @@ export default function AdminPage() {
 
   const [pendingReviews, setPendingReviews] = useState(0)
   const [tickets, setTickets] = useState<AdminTicket[]>([])
-  const [pendingTickets, setPendingTickets] = useState(0)
-  const [repliedTicketIds, setRepliedTicketIds] = useState<Set<number>>(new Set())
   const [adminNotifs, setAdminNotifs] = useState<{id:number,title:string,message:string,is_read:boolean,created_at:string}[]>([])
   const [showBellDropdown, setShowBellDropdown] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
@@ -431,7 +430,6 @@ export default function AdminPage() {
       if (d) {
         const arr = Array.isArray(d) ? d : []
         setTickets(arr)
-        setPendingTickets(arr.filter((t: AdminTicket) => t.status === 'in_elaborazione').length)
       }
     }).catch(() => {})
     apiFetch('/auth/notifications').then((r) => r.ok ? r.json() : null).then((d) => {
@@ -555,7 +553,6 @@ export default function AdminPage() {
       if (res.ok) {
         setTickets((prev) => prev.map((t) => t.id === id ? { ...t, status } : t))
         if (adminTicketDetail?.id === id) setAdminTicketDetail((prev) => prev ? { ...prev, status } : prev)
-        setPendingTickets(() => tickets.filter((t) => (t.id === id ? status : t.status) === 'in_elaborazione').length)
         setMsg('Stato aggiornato')
         setTimeout(() => setMsg(''), 3000)
       }
@@ -585,8 +582,7 @@ export default function AdminPage() {
       if (res.ok) {
         const newMsg: AdminTicketMsg = { id: Date.now(), sender: 'admin', text: adminReplyText.trim(), created_at: new Date().toISOString() }
         setAdminTicketDetail((prev) => prev ? { ...prev, status: 'in_elaborazione', messages: [...prev.messages, newMsg] } : prev)
-        setTickets((prev) => prev.map((t) => t.id === adminTicketDetail.id ? { ...t, status: 'in_elaborazione' } : t))
-        setRepliedTicketIds((prev) => new Set([...prev, adminTicketDetail.id]))
+        setTickets((prev) => prev.map((t) => t.id === adminTicketDetail.id ? { ...t, status: 'in_elaborazione', last_sender: 'admin' } : t))
         setAdminReplyText('')
         setMsg('Risposta inviata al cliente')
         setTimeout(() => setMsg(''), 3000)
@@ -705,7 +701,7 @@ export default function AdminPage() {
                 title="Segnalazioni aperte"
               >
                 <Bell size={17} />
-                {(pendingTickets - repliedTicketIds.size + adminNotifs.filter(n => !n.is_read).length) > 0 && (
+                {(tickets.filter(t => t.last_sender === 'client' && t.status !== 'risolto').length + adminNotifs.length) > 0 && (
                   <span style={{
                     position: 'absolute', top: 4, right: 4,
                     width: 16, height: 16, borderRadius: '50%',
@@ -714,7 +710,7 @@ export default function AdminPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     border: '2px solid #060912',
                   }}>
-                    {pendingTickets - repliedTicketIds.size + adminNotifs.filter(n => !n.is_read).length}
+                    {tickets.filter(t => t.last_sender === 'client' && t.status !== 'risolto').length + adminNotifs.length}
                   </span>
                 )}
               </button>
@@ -737,17 +733,17 @@ export default function AdminPage() {
                       <>
                         <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(16,185,129,0.05)' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#34d399' }}>
-                            Nuove registrazioni ({adminNotifs.filter(n => !n.is_read).length} non lette)
+                            Nuove registrazioni ({adminNotifs.length})
                           </span>
                         </div>
                         <div style={{ maxHeight: 180, overflowY: 'auto' }}>
                           {adminNotifs.map((n) => (
                             <div
                               key={n.id}
-                              style={{ padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: n.is_read ? 'transparent' : 'rgba(16,185,129,0.04)', opacity: n.is_read ? 0.6 : 1 }}
+                              style={{ padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(16,185,129,0.04)' }}
                               onClick={() => {
                                 apiFetch(`/auth/notifications/${n.id}/read`, { method: 'POST' }).catch(() => {})
-                                setAdminNotifs(prev => prev.map(x => x.id === n.id ? {...x, is_read: true} : x))
+                                setAdminNotifs(prev => prev.filter(x => x.id !== n.id))
                               }}
                             >
                               <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#f1f5f9', marginBottom: 2 }}>{n.message.split(' — ')[0]}</div>
@@ -760,16 +756,16 @@ export default function AdminPage() {
                     {/* Ticket aperti */}
                     <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f1f5f9' }}>
-                        Segnalazioni aperte {pendingTickets > 0 && `(${pendingTickets})`}
+                        Segnalazioni aperte {tickets.filter(t => t.last_sender === 'client' && t.status !== 'risolto').length > 0 && `(${tickets.filter(t => t.last_sender === 'client' && t.status !== 'risolto').length})`}
                       </span>
                     </div>
-                    {tickets.filter((t) => t.status === 'in_elaborazione' && !repliedTicketIds.has(t.id)).length === 0 ? (
+                    {tickets.filter((t) => t.last_sender === 'client' && t.status !== 'risolto').length === 0 ? (
                       <div style={{ padding: '1rem', fontSize: '0.82rem', color: '#64748b', textAlign: 'center' }}>
                         Nessuna segnalazione aperta
                       </div>
                     ) : (
                       <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-                        {tickets.filter((t) => t.status === 'in_elaborazione' && !repliedTicketIds.has(t.id)).map((t) => (
+                        {tickets.filter((t) => t.last_sender === 'client' && t.status !== 'risolto').map((t) => (
                           <div
                             key={t.id}
                             style={{ padding: '0.7rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: 'rgba(245,158,11,0.04)' }}
@@ -946,7 +942,7 @@ export default function AdminPage() {
               { key: 'companies', label: 'Aziende', icon: <Users size={14} /> },
               { key: 'billing', label: 'Utilizzo & Fatturazione', icon: <BarChart2 size={14} /> },
               { key: 'reviews', label: 'Recensioni', icon: <Star size={14} />, badge: pendingReviews },
-              { key: 'tickets', label: 'Segnalazioni', icon: <MessageSquare size={14} />, badge: pendingTickets },
+              { key: 'tickets', label: 'Segnalazioni', icon: <MessageSquare size={14} />, badge: tickets.filter(t => t.last_sender === 'client' && t.status !== 'risolto').length },
               { key: 'uploads', label: 'Dati caricati', icon: <FolderOpen size={14} /> },
               { key: 'gpu', label: 'Costi GPU', icon: <Zap size={14} /> },
             ].map((t) => (

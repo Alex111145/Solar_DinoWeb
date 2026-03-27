@@ -94,26 +94,40 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 app.add_middleware(CSRFMiddleware)
 
 
+_API_PREFIXES = ("/auth/", "/missions/", "/payments/", "/sys-ctrl/", "/flighthub/", "/reviews/", "/api/")
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        response.headers["Strict-Transport-Security"]       = "max-age=31536000; includeSubDomains"
-        response.headers["X-Content-Type-Options"]          = "nosniff"
-        response.headers["X-Frame-Options"]                 = "DENY"
-        response.headers["X-XSS-Protection"]                = "1; mode=block"
-        response.headers["Referrer-Policy"]                 = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"]         = "max-age=63072000; includeSubDomains; preload"
+        response.headers["X-Content-Type-Options"]            = "nosniff"
+        response.headers["X-Frame-Options"]                   = "DENY"
+        response.headers["X-XSS-Protection"]                  = "1; mode=block"
+        response.headers["Referrer-Policy"]                   = "strict-origin-when-cross-origin"
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
-        response.headers["Permissions-Policy"]              = "camera=(), microphone=(), geolocation=(), payment=(self)"
+        response.headers["X-DNS-Prefetch-Control"]            = "off"
+        response.headers["Cross-Origin-Opener-Policy"]        = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"]      = "same-site"
+        response.headers["Permissions-Policy"]                = (
+            "camera=(), microphone=(), geolocation=(), "
+            "payment=(self), usb=(), bluetooth=(), serial=()"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
+            "script-src 'self' https://js.stripe.com; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob: https:; "
             "media-src 'self' blob: https://*.supabase.co; "
             "connect-src 'self' https://api.stripe.com https://checkout.stripe.com https://*.supabase.co; "
             "frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com; "
-            "font-src 'self' data:;"
+            "font-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'self';"
         )
+        # Le risposte API non devono mai essere messe in cache da proxy/browser
+        if any(request.url.path.startswith(p) for p in _API_PREFIXES):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+            response.headers["Pragma"]        = "no-cache"
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)

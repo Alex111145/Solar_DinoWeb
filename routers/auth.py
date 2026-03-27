@@ -45,15 +45,47 @@ _CHANGE_ATTEMPTS: dict[int, list[float]] = collections.defaultdict(list)
 _CHANGE_LOCK = threading.Lock()
 _MAX_CHANGES_PER_HOUR = 5
 
+# ── Pulizia periodica dei dizionari rate-limit (evita memory leak) ──────────
+def _rate_limit_cleanup():
+    """Rimuove ogni ora le entry scadute da tutti i dizionari di rate limiting."""
+    while True:
+        time.sleep(3600)
+        now = time.time()
+        for lock, store, window in [
+            (_LOGIN_LOCK,    _LOGIN_FAILURES,    _WINDOW_SECONDS),
+            (_REGISTER_LOCK, _REGISTER_ATTEMPTS, _REGISTER_WINDOW),
+            (_TICKET_LOCK,   _TICKET_ATTEMPTS,   3600),
+            (_CHANGE_LOCK,   _CHANGE_ATTEMPTS,   3600),
+        ]:
+            with lock:
+                dead = [k for k, v in store.items() if not any(now - t < window for t in v)]
+                for k in dead:
+                    del store[k]
+
+threading.Thread(target=_rate_limit_cleanup, daemon=True).start()
+
+
+_IPV4_RE = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$")
 
 def _extract_ipv4(request: Request) -> Optional[str]:
-    """Return the client IPv4 address, ignoring IPv6 addresses (they contain ':')."""
+    """Restituisce l'IPv4 del client, validato e senza possibilità di spoofing tramite header multipli."""
     forwarded = request.headers.get("x-forwarded-for")
+    # Prende solo il primo IP della catena (client originale) e lo valida
     raw = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
-    if raw and ":" in raw:
-        # IPv6 address — not used for duplicate detection
+    if not raw:
         return None
-    return raw or None
+    # Scarta IPv6
+    if ":" in raw:
+        return None
+    # Valida formato IPv4 e range ottetti
+    m = _IPV4_RE.match(raw)
+    if not m or any(int(g) > 255 for g in m.groups()):
+        return None
+    # Scarta IP privati/locali (non utili per rilevamento duplicati)
+    first = int(m.group(1))
+    if first in (10, 127) or (first == 172 and 16 <= int(m.group(2)) <= 31) or (first == 192 and m.group(2) == "168"):
+        return None
+    return raw
 
 
 ADMIN_EMAIL_NOTIFY = os.getenv("ADMIN_EMAIL", "agervasini1@gmail.com")
@@ -152,8 +184,15 @@ def register(req: RegisterRequest, response: Response, request: Request, db: Ses
             status_code=400,
             detail="La ragione sociale deve includere la forma giuridica (es. Srl, Spa, Snc, Sas...).",
         )
-    if len(req.password) < 8:
+    pwd = req.password
+    if len(pwd) < 8:
         raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri")
+    if not re.search(r"[A-Z]", pwd):
+        raise HTTPException(status_code=400, detail="La password deve contenere almeno una lettera maiuscola")
+    if not re.search(r"[0-9]", pwd):
+        raise HTTPException(status_code=400, detail="La password deve contenere almeno un numero")
+    if not re.search(r"[^A-Za-z0-9]", pwd):
+        raise HTTPException(status_code=400, detail="La password deve contenere almeno un carattere speciale")
 
     # ── Email già in uso ─────────────────────────────────────────────────────
     if db.query(models.Company).filter(

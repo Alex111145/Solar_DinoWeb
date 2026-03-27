@@ -227,8 +227,8 @@ def create_subscription_checkout(
             locale="it",
         )
         return {"checkout_url": session.url}
-    except stripe.error.StripeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except stripe.error.StripeError:
+        raise HTTPException(status_code=400, detail="Errore durante il pagamento. Riprova più tardi.")
 
 
 # ---------------------------------------------------------------------------
@@ -249,8 +249,8 @@ def create_portal_session(
             return_url=f"{FRONTEND_URL}/dashboard",
         )
         return {"portal_url": session.url}
-    except stripe.error.StripeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except stripe.error.StripeError:
+        raise HTTPException(status_code=400, detail="Errore durante il pagamento. Riprova più tardi.")
 
 
 # ---------------------------------------------------------------------------
@@ -351,5 +351,5 @@ def buy_credits_checkout(
             locale="it",
         )
         return {"checkout_url": session.url}
-    except stripe.error.StripeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except stripe.error.StripeError:
+        raise HTTPException(status_code=400, detail="Errore durante il pagamento. Riprova più tardi.")

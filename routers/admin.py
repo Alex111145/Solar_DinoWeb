@@ -813,6 +813,7 @@ def all_tickets(
     result = []
     for t in tickets:
         company = db.query(models.Company).filter(models.Company.id == t.company_id).first()
+        last_sender = t.messages[-1].sender if t.messages else "client"
         result.append({
             "id":              t.id,
             "subject":         t.subject,
@@ -822,6 +823,7 @@ def all_tickets(
             "company_id":      t.company_id,
             "company_name":    (company.ragione_sociale or company.name) if company else "—",
             "company_email":   company.email if company else "—",
+            "last_sender":     last_sender,
         })
     return result
 

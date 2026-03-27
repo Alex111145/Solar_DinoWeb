@@ -157,7 +157,7 @@ async def upload_mission(
             size = uf.file.tell()
             uf.file.seek(0)
             if size > _MAX_FILE_BYTES:
-                raise HTTPException(status_code=413, detail=f"File {uf.filename} supera il limite di 5 GB.")
+                raise HTTPException(status_code=413, detail="File troppo grande. Limite massimo: 5 GB.")
 
     job_id  = str(uuid.uuid4())
     job_dir = os.path.join(_LOCAL_TMP, job_id)
@@ -175,7 +175,7 @@ async def upload_mission(
     def _check_ext(filename: str, allowed: set) -> None:
         _, ext = os.path.splitext(filename.strip())
         if ext.lower() not in allowed:
-            raise HTTPException(status_code=400, detail=f"Formato file non supportato: {ext or '(nessuna estensione)'}")
+            raise HTTPException(status_code=400, detail="Formato file non supportato. Usa .tif/.tiff per immagini e .tfw/.wld per i worldfile.")
 
     _check_ext(tif_termico.filename, _ALLOWED_TIF)
     if tfw_termico and tfw_termico.filename:
